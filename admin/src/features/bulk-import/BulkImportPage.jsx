@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { UserPlus, UserMinus, Copy, AlertTriangle, CheckCircle2, ChevronDown } from 'lucide-react'
+import { UserPlus, UserMinus, Copy, AlertTriangle, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react'
 import { uploadBulkImportCsv, fetchBulkImportBatch, confirmBulkImport, cancelBulkImport, PENDING_BATCH_KEY, UPLOAD_IN_PROGRESS_KEY } from './api'
 import MetricTile from './MetricTile'
 import EditPanel from './EditPanel'
@@ -210,6 +210,7 @@ export default function BulkImportPage() {
           <>
             <span className="font-medium text-text-primary">{confirmResult.created}</span> account
             {confirmResult.created === 1 ? '' : 's'} created,{' '}
+            <span className="font-medium text-text-primary">{confirmResult.updated}</span> updated,{' '}
             <span className="font-medium text-text-primary">{confirmResult.deactivated}</span> deactivated, and{' '}
             <span className="font-medium text-text-primary">{confirmResult.skipped}</span> skipped as duplicates.
             These changes are already live in Accounts.
@@ -236,8 +237,9 @@ export default function BulkImportPage() {
         )
       ) : (
         <>
-          <motion.div className="grid grid-cols-4 gap-4 mb-4" {...staggerContainer}>
+          <motion.div className="grid grid-cols-5 gap-4 mb-4" {...staggerContainer}>
             <MetricTile label="New accounts" value={counts.create ?? 0} tone="open" icon={UserPlus} dimmed={hasError} />
+            <MetricTile label="Updates" value={counts.update ?? 0} tone="open" icon={RefreshCw} dimmed={hasError} />
             <MetricTile label="Deactivations" value={counts.deactivate ?? 0} tone="claimed" icon={UserMinus} dimmed={hasError} />
             <MetricTile label="Duplicates" value={counts.skip_duplicate ?? 0} tone="muted" icon={Copy} dimmed={hasError} />
             <MetricTile label="Errors" value={counts.error ?? 0} tone="rejected" icon={AlertTriangle} />

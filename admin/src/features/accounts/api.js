@@ -1,38 +1,32 @@
-import { supabase } from '../../shared/lib/supabaseClient'
+const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
-export async function fetchAccounts({ limit = 50 } = {}) {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, student_id, first_name, last_name, role, status, trust_score')
-    .order('last_name', { ascending: true })
-    .limit(limit)
-
-  if (error) throw error
-  return data.map((u) => ({
-    id: u.id,
-    student_id: u.student_id,
-    name: `${u.first_name} ${u.last_name}`,
-    role: u.role,
-    status: u.status,
-    trust_score: u.trust_score,
-  }))
+export async function fetchAccounts({ limit = 50, offset = 0, search = '' } = {}) {
+  const params = new URLSearchParams({ limit, offset })
+  if (search) params.set('search', search)
+  const res = await fetch(`${SERVER_URL}/accounts?${params}`)
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Could not load accounts.')
+  return body
 }
 
 export async function createSingleAccount({ studentId, enrollmentNumber, lastName, firstName }) {
-  const { data, error } = await supabase
-    .from('users')
-    .insert({
-      student_id: studentId,
-      enrollment_number: enrollmentNumber,
-      last_name: lastName,
-      first_name: firstName,
-      role: 'student',
-      status: 'active',
-      force_password_change: true,
-    })
-    .select()
-    .single()
+  const res = await fetch(`${SERVER_URL}/accounts/single`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, enrollmentNumber, lastName, firstName }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Could not create account.')
+  return body
+}
 
-  if (error) throw error
-  return data
+export async function toggleAccountStatus(id, status) {
+  const res = await fetch(`${SERVER_URL}/accounts/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Could not update status.')
+  return body
 }

@@ -7,7 +7,7 @@ const TONE_CONFIG = {
   info: { icon: Info, iconClass: 'bg-status-claimed-bg text-status-claimed-text' },
 }
 
-export default function Dialog({ open, onClose, tone = 'info', title, children, primaryAction }) {
+export default function Dialog({ open, onClose, tone = 'info', title, children, primaryAction, secondaryAction }) {
   const { icon: Icon, iconClass } = TONE_CONFIG[tone]
 
   return (
@@ -55,10 +55,22 @@ export default function Dialog({ open, onClose, tone = 'info', title, children, 
             </div>
 
             <div className="flex justify-end gap-2">
+              {secondaryAction && (
+                <button
+                  onClick={secondaryAction.onClick ?? onClose}
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-border-strong hover:bg-surface-muted transition-colors"
+                >
+                  {secondaryAction.label}
+                </button>
+              )}
               {primaryAction ? (
                 <button
                   onClick={primaryAction.onClick ?? onClose}
-                  className="px-4 py-2 text-sm font-medium rounded-md bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    primaryAction.destructive
+                      ? 'bg-status-rejected-text text-white hover:opacity-90'
+                      : 'bg-brand-600 text-white hover:bg-brand-700'
+                  }`}
                 >
                   {primaryAction.label}
                 </button>
