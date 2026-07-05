@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #f0f7f5;
+  --color-brand-100: #d0eae4;
+  --color-brand-200: #a1d5c9;
+  --color-brand-400: #3a9080;
+  --color-brand-600: #06433C;
+  --color-brand-700: #053630;
+  --color-brand-900: #021f1b;
+
+  --color-surface-page: #F5F6F5;
+  --color-surface-card: #FFFFFF;
+  --color-surface-muted: #F0F2F1;
+
+  --color-text-primary: #111817;
+  --color-text-secondary: #4B5857;
+  --color-text-muted: #8A9796;
+
+  --color-border: #E2E8E6;
+  --color-border-strong: #C8D4D2;
+
+  --color-status-open-bg: #E8F5F1;
+  --color-status-open-text: #0F6E56;
+  --color-status-claimed-bg: #FEF3E2;
+  --color-status-claimed-text: #854F0B;
+  --color-status-approved-bg: #EBF2FF;
+  --color-status-approved-text: #1D4ED8;
+  --color-status-resolved-bg: #F3F4F6;
+  --color-status-resolved-text: #374151;
+  --color-status-rejected-bg: #FEF2F2;
+  --color-status-rejected-text: #B91C1C;
+}
+
+* { -webkit-tap-highlight-color: transparent; }
+
+body {
+  background-color: var(--color-surface-page);
+  color: var(--color-text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
+  overscroll-behavior: none;
+}
+
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

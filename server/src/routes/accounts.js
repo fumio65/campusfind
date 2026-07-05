@@ -59,9 +59,21 @@ router.post('/single', async (req, res) => {
     })
   }
 
+  const email = `${studentId.replace('-', '')}@nwssu.local`
+  const initialPassword = enrollmentNumber // per SRS FR-1: enrollment number is the initial password
+
+  const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: initialPassword,
+    email_confirm: true,
+  })
+
+  if (authError) return res.status(500).json({ error: authError.message })
+
   const { data, error } = await supabaseAdmin
     .from('users')
     .insert({
+      id: authUser.user.id,
       student_id: studentId,
       enrollment_number: enrollmentNumber,
       last_name: lastName,
@@ -73,11 +85,15 @@ router.post('/single', async (req, res) => {
     .select()
     .single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) {
+    await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+    return res.status(500).json({ error: error.message })
+  }
+
   res.status(201).json(data)
 })
 
-// PATCH /accounts/:id/status — deactivate or reactivate a single account
+// PATCH /accounts/:id/status
 router.patch('/:id/status', async (req, res) => {
   const { id } = req.params
   const { status } = req.body

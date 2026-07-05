@@ -57,10 +57,6 @@ router.post('/bulk-import', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: headerError })
   }
 
-  // Pull existing users once so duplicate/update checks across hundreds of
-  // rows don't each round-trip to the DB. We need full records (not just IDs)
-  // so classifyRows can compare field values and distinguish real updates
-  // from unchanged re-imports.
   const { data: existingUsers, error: fetchError } = await supabaseAdmin
     .from('users')
     .select('student_id, enrollment_number, last_name, first_name, middle_name, program, year_level')
@@ -200,11 +196,26 @@ router.post('/bulk-import/:batchId/confirm', async (req, res) => {
   const toDeactivate = rows.filter((r) => r.action === 'deactivate')
 
   const createdIds = []
+  const createdAuthIds = []
   try {
     for (const row of toCreate) {
+      // per SRS FR-1: enrollment number is the initial password
+      const email = `${row.student_id.replace('-', '')}@nwssu.local`
+      const initialPassword = row.enrollment_number
+
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: initialPassword,
+        email_confirm: true,
+      })
+
+      if (authError) throw new Error(`Row ${row.row_number} auth: ${authError.message}`)
+      createdAuthIds.push(authUser.user.id)
+
       const { data: created, error: createError } = await supabaseAdmin
         .from('users')
         .insert({
+          id: authUser.user.id,
           student_id: row.student_id,
           enrollment_number: row.enrollment_number,
           last_name: row.last_name,
@@ -251,6 +262,9 @@ router.post('/bulk-import/:batchId/confirm', async (req, res) => {
   } catch (err) {
     if (createdIds.length > 0) {
       await supabaseAdmin.from('users').delete().in('id', createdIds)
+    }
+    for (const authId of createdAuthIds) {
+      await supabaseAdmin.auth.admin.deleteUser(authId)
     }
     return res.status(500).json({
       error: `Import failed and was rolled back: ${err.message}`,

@@ -9,7 +9,8 @@ import analyticsRouter from './routes/analytics.js'
 const app = express()
 const PORT = process.env.PORT || 3001
 
-app.use(cors({ origin: process.env.ADMIN_ORIGIN || 'http://localhost:5173' }))
+const allowedOrigins = (process.env.ADMIN_ORIGIN || 'http://localhost:5173').split(',')
+app.use(cors({ origin: allowedOrigins }))
 app.use(express.json())
 
 app.get('/health', (req, res) => res.json({ ok: true }))
