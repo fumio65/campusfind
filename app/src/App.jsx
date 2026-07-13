@@ -2,13 +2,18 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './shared/lib/AuthContext'
 import AppShell from './shared/components/AppShell'
 
+// Auth screens
 import LoginPage from './features/auth/LoginPage'
 import ChangePasswordPage from './features/auth/ChangePasswordPage'
+
+// App screens
 import HomePage from './features/home/HomePage'
 import ReportDetailPage from './features/reports/ReportDetailPage'
 import NewReportPage from './features/reports/NewReportPage'
+import EditReportPage from './features/reports/EditReportPage'
 import ActivityPage from './features/activity/ActivityPage'
 import ProfilePage from './features/profile/ProfilePage'
+import HistoryPage from './features/history/HistoryPage'
 import ClaimPage from './features/claims/ClaimPage'
 
 import './index.css'
@@ -32,21 +37,16 @@ function ProtectedRoutes() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/reports/new" element={<NewReportPage />} />
+        <Route path="/reports/:id/edit" element={<EditReportPage />} />
         <Route path="/reports/:id" element={<ReportDetailPage />} />
         <Route path="/reports/:id/claim" element={<ClaimPage />} />
         <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/history" element={<HistoryPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>
   )
-}
-
-function PublicOnlyRoute({ children }) {
-  const { session, loading } = useAuth()
-  if (loading) return null
-  if (session) return <Navigate to="/" replace />
-  return children
 }
 
 export default function App() {
@@ -61,4 +61,11 @@ export default function App() {
       </AuthProvider>
     </BrowserRouter>
   )
+}
+
+function PublicOnlyRoute({ children }) {
+  const { session, loading } = useAuth()
+  if (loading) return null
+  if (session) return <Navigate to="/" replace />
+  return children
 }

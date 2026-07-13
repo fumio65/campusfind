@@ -51,6 +51,7 @@ export default function ClaimPage() {
     setSubmitting(true)
 
     try {
+      // 1. Create the claim
       const { data: claim, error: claimError } = await supabase
         .from('claims')
         .insert({
@@ -63,7 +64,8 @@ export default function ClaimPage() {
 
       if (claimError) throw claimError
 
-      const uploadedUrls = []
+      // 2. Upload photos and insert into claim_photos table (mandatory per FR-4)
+      let position = 0
       for (const photo of photos) {
         const ext = photo.file.name.split('.').pop()
         const path = `claims/${claim.id}/${Date.now()}.${ext}`
@@ -71,34 +73,38 @@ export default function ClaimPage() {
           .from('report-photos')
           .upload(path, photo.file, { cacheControl: '3600', upsert: false })
         if (!uploadError) {
-          const { data: { publicUrl } } = supabase.storage
-            .from('report-photos')
-            .getPublicUrl(path)
-          uploadedUrls.push(publicUrl)
+          await supabase
+            .from('claim_photos')
+            .insert({ claim_id: claim.id, storage_path: path, position })
+          position++
         }
       }
 
-      if (uploadedUrls.length > 0) {
-        await supabase
-          .from('claims')
-          .update({ photos: uploadedUrls })
-          .eq('id', claim.id)
-      }
-
+      // 3. Update the report status to 'claimed'
       await supabase
         .from('reports')
         .update({ status: 'claimed' })
         .eq('id', reportId)
 
+      // 4. Send an initial message in the claim thread
       await supabase
-        .from('messages')
+        .from('claim_messages')
         .insert({
           claim_id: claim.id,
           sender_id: session.user.id,
-          content: message.trim(),
+          sender_role: 'claimant',
+          body: message.trim(),
         })
 
       setDone(true)
+
+      // Notify reporter via server
+      await fetch(`${import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'}/claims`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId, claimantId: session.user.id }),
+      })
+
       setTimeout(() => navigate(`/reports/${reportId}`), 1500)
     } catch (err) {
       setError(err.message)
@@ -126,6 +132,7 @@ export default function ClaimPage() {
 
   return (
     <div className="min-h-screen bg-surface-page safe-top safe-bottom">
+      {/* Header */}
       <div className="bg-surface-card border-b border-border px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
         <button
           onClick={() => navigate(-1)}
@@ -138,6 +145,8 @@ export default function ClaimPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 py-5 flex flex-col gap-5 pb-10">
+
+        {/* Info banner */}
         <div className="flex items-start gap-2.5 bg-status-approved-bg text-status-approved-text text-xs rounded-xl px-3 py-3">
           <Info size={14} className="shrink-0 mt-0.5" aria-hidden="true" />
           <span>
@@ -153,6 +162,7 @@ export default function ClaimPage() {
           </div>
         )}
 
+        {/* Photo proof — mandatory */}
         <div>
           <label className="text-xs font-semibold text-text-secondary block mb-1">
             Photo proof <span className="text-status-rejected-text">*</span>
@@ -185,7 +195,9 @@ export default function ClaimPage() {
                 } hover:border-brand-400`}
               >
                 <Camera size={20} />
-                <span className="text-[10px]">{photos.length === 0 ? 'Required' : 'Add more'}</span>
+                <span className="text-[10px]">
+                  {photos.length === 0 ? 'Required' : 'Add more'}
+                </span>
               </button>
             )}
           </div>
@@ -199,6 +211,7 @@ export default function ClaimPage() {
           />
         </div>
 
+        {/* Message */}
         <div>
           <label className="text-xs font-semibold text-text-secondary block mb-1.5">
             How did you find it? <span className="text-status-rejected-text">*</span>

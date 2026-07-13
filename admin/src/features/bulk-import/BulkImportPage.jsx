@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '../../shared/lib/AuthContext'
 import { motion } from 'framer-motion'
 import { UserPlus, UserMinus, Copy, AlertTriangle, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react'
 import { uploadBulkImportCsv, fetchBulkImportBatch, confirmBulkImport, cancelBulkImport, PENDING_BATCH_KEY, UPLOAD_IN_PROGRESS_KEY } from './api'
@@ -29,6 +30,7 @@ export default function BulkImportPage() {
   const [resumingUpload, setResumingUpload] = useState(false)
   const [justFixedRowId, setJustFixedRowId] = useState(null)
   const uploadAbortRef = useRef(null)
+  const { session } = useAuth()
 
   const hasBatch = !!batch
   const counts = rows.reduce((acc, row) => ({ ...acc, [row.action]: (acc[row.action] ?? 0) + 1 }), {})
@@ -105,7 +107,7 @@ export default function BulkImportPage() {
     const controller = new AbortController()
     uploadAbortRef.current = controller
     try {
-      const result = await uploadBulkImportCsv(file, 'f6f110cc-a6b3-4ed0-9d98-170307c8dfbc', {
+      const result = await uploadBulkImportCsv(file, session?.user?.id, {
         signal: controller.signal,
       })
       setBatch(result.batch)

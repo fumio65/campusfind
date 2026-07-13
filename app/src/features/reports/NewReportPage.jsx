@@ -20,7 +20,7 @@ export default function NewReportPage() {
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
   const [category, setCategory] = useState('')
-  const [photos, setPhotos] = useState([])
+  const [photos, setPhotos] = useState([]) // { file, preview }
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
@@ -51,15 +51,17 @@ export default function NewReportPage() {
     if (!title.trim()) return setError('Please give your item a title so others know what to look for.')
     if (!description.trim()) return setError('Please describe the item — color, brand, or any details that help identify it.')
     if (!location.trim()) return setError('Please enter where you last had the item.')
+    if (!category) return setError('Please select a category to help others find your report.')
 
     setSubmitting(true)
 
     try {
+      // 1. Insert the report
       const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert({
           title: title.trim(),
-          description: description.trim(),
+          description: description.trim() || null,
           location: location.trim(),
           category: category || null,
           type: 'lost',
@@ -71,8 +73,10 @@ export default function NewReportPage() {
 
       if (reportError) throw reportError
 
+      // 2. Upload photos if any
+      // 2. Upload photos to storage and insert into report_photos table
       if (photos.length > 0) {
-        const uploadedUrls = []
+        let position = 0
         for (const photo of photos) {
           const ext = photo.file.name.split('.').pop()
           const path = `reports/${report.id}/${Date.now()}.${ext}`
@@ -80,22 +84,28 @@ export default function NewReportPage() {
             .from('report-photos')
             .upload(path, photo.file, { cacheControl: '3600', upsert: false })
           if (!uploadError) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('report-photos')
-              .getPublicUrl(path)
-            uploadedUrls.push(publicUrl)
+            await supabase
+              .from('report_photos')
+              .insert({ report_id: report.id, storage_path: path, position })
+            position++
           }
-        }
-
-        if (uploadedUrls.length > 0) {
-          await supabase
-            .from('reports')
-            .update({ photos: uploadedUrls })
-            .eq('id', report.id)
         }
       }
 
       setDone(true)
+
+      // Notify all users about the new report
+      fetch(`${import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'}/reports/${report.id}/announce`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reporterId: session.user.id,
+          title: report.title,
+          location: report.location,
+          category: report.category,
+        }),
+      }).catch(() => {}) // fire and forget
+
       setTimeout(() => navigate(`/reports/${report.id}`), 1200)
     } catch (err) {
       setError(err.message)
@@ -123,6 +133,7 @@ export default function NewReportPage() {
 
   return (
     <div className="min-h-screen bg-surface-page safe-top safe-bottom">
+      {/* Header */}
       <div className="bg-surface-card border-b border-border px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
         <button
           onClick={() => navigate(-1)}
@@ -142,6 +153,7 @@ export default function NewReportPage() {
           </div>
         )}
 
+        {/* Title */}
         <div>
           <label className="text-xs font-semibold text-text-secondary block mb-1.5">
             What did you lose? <span className="text-status-rejected-text">*</span>
@@ -152,19 +164,23 @@ export default function NewReportPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={80}
+            required
             className="w-full h-11 px-4 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
           />
         </div>
 
+        {/* Category */}
         <div>
-          <label className="text-xs font-semibold text-text-secondary block mb-1.5">Category</label>
+          <label className="text-xs font-semibold text-text-secondary block mb-1.5">
+            Category
+          </label>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setCategory(cat === category ? '' : cat)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors active:scale-95 ${
                   category === cat
                     ? 'bg-brand-600 text-white border-brand-600'
                     : 'bg-surface-card text-text-secondary border-border-strong'
@@ -176,15 +192,19 @@ export default function NewReportPage() {
           </div>
         </div>
 
+        {/* Location */}
         <div>
-          <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-            Last seen location <span className="text-status-rejected-text">*</span>
+          <label className="text-xs font-semibold text-text-secondary block mb-1">
+            Last known location or area <span className="text-status-rejected-text">*</span>
           </label>
+          <p className="text-[11px] text-text-muted mb-1.5">
+            If unsure, describe the general area — e.g. "Near the cafeteria" or "Somewhere in the library".
+          </p>
           <div className="relative">
             <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
-              placeholder="e.g. Library 2nd floor"
+              placeholder="e.g. Library 2nd floor or Near the cafeteria"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="w-full h-11 pl-10 pr-4 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
@@ -192,6 +212,7 @@ export default function NewReportPage() {
           </div>
         </div>
 
+        {/* Description */}
         <div>
           <label className="text-xs font-semibold text-text-secondary block mb-1.5">
             Description <span className="text-status-rejected-text">*</span>
@@ -207,6 +228,7 @@ export default function NewReportPage() {
           <p className="text-[11px] text-text-muted text-right mt-1">{description.length}/500</p>
         </div>
 
+        {/* Photos */}
         <div>
           <label className="text-xs font-semibold text-text-secondary block mb-1.5">
             Photos <span className="text-text-muted font-normal">(optional, up to {MAX_PHOTOS})</span>
@@ -246,6 +268,7 @@ export default function NewReportPage() {
           />
         </div>
 
+        {/* Submit */}
         <button
           type="submit"
           disabled={submitting}

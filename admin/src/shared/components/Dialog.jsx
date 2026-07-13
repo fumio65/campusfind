@@ -25,14 +25,14 @@ export default function Dialog({ open, onClose, tone = 'info', title, children, 
             role="dialog"
             aria-modal="true"
             aria-labelledby="dialog-title"
-            className="bg-surface-card rounded-xl shadow-xl w-full max-w-md p-6"
+            className="bg-surface-card rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start gap-3 mb-2">
+            <div className="flex items-start gap-3 mb-4">
               <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${iconClass}`}>
                 <Icon size={18} aria-hidden="true" />
               </div>
@@ -50,7 +50,7 @@ export default function Dialog({ open, onClose, tone = 'info', title, children, 
               </button>
             </div>
 
-            <div className="text-sm text-text-secondary leading-relaxed pl-12 -mt-1 mb-5">
+            <div className="text-sm text-text-secondary leading-relaxed mb-5">
               {children}
             </div>
 
@@ -66,7 +66,8 @@ export default function Dialog({ open, onClose, tone = 'info', title, children, 
               {primaryAction ? (
                 <button
                   onClick={primaryAction.onClick ?? onClose}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  disabled={primaryAction.disabled}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                     primaryAction.destructive
                       ? 'bg-status-rejected-text text-white hover:opacity-90'
                       : 'bg-brand-600 text-white hover:bg-brand-700'

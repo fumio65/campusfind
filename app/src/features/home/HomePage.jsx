@@ -15,7 +15,9 @@ const STATUS_STYLES = {
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime()
+  if (diff < 0) return 'just now'
   const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
   if (mins < 60) return `${mins}m ago`
   const hrs = Math.floor(mins / 60)
   if (hrs < 24) return `${hrs}h ago`
@@ -23,36 +25,48 @@ function timeAgo(dateStr) {
 }
 
 function ReportCard({ report }) {
+  const thumbnail = report.thumbnail
+
   return (
     <motion.div {...staggerItem}>
       <Link
         to={`/reports/${report.id}`}
-        className="block bg-surface-card rounded-2xl border border-border p-4 active:scale-[0.98] transition-transform"
+        className="flex gap-3 bg-surface-card rounded-2xl border border-border p-3.5 active:scale-[0.98] transition-transform"
       >
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="text-sm font-semibold text-text-primary leading-snug flex-1">
-            {report.title}
-          </h3>
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ''}`}>
-            {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-          </span>
+        {/* Thumbnail */}
+        <div className="w-16 h-16 rounded-xl shrink-0 overflow-hidden bg-surface-muted flex items-center justify-center border border-border">
+          {thumbnail ? (
+            <img src={thumbnail} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-surface-muted flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-dashed border-border-strong rounded-md" />
+            </div>
+          )}
         </div>
 
-        {report.description && (
-          <p className="text-xs text-text-secondary line-clamp-2 mb-3">{report.description}</p>
-        )}
-
-        <div className="flex items-center gap-3 text-xs text-text-muted">
-          {report.location && (
-            <span className="flex items-center gap-1">
-              <MapPin size={11} aria-hidden="true" />
-              {report.location}
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-text-primary leading-snug flex-1 truncate">
+              {report.title}
+            </h3>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ''}`}>
+              {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
             </span>
-          )}
-          <span className="flex items-center gap-1">
-            <Clock size={11} aria-hidden="true" />
-            {timeAgo(report.created_at)}
-          </span>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-text-muted">
+            {report.location && (
+              <span className="flex items-center gap-1 truncate">
+                <MapPin size={11} aria-hidden="true" className="shrink-0" />
+                <span className="truncate">{report.location}</span>
+              </span>
+            )}
+            <span className="flex items-center gap-1 shrink-0">
+              <Clock size={11} aria-hidden="true" />
+              {timeAgo(report.created_at)}
+            </span>
+          </div>
         </div>
       </Link>
     </motion.div>
@@ -66,6 +80,7 @@ export default function HomePage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
+  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350)
     return () => clearTimeout(t)
@@ -80,7 +95,7 @@ export default function HomePage() {
     let query = supabase
       .from('reports')
       .select('id, title, description, location, status, created_at, type')
-      .in('status', ['open', 'claimed'])
+      .in('status', ['open', 'claimed', 'approved'])
       .order('created_at', { ascending: false })
       .limit(30)
 
@@ -91,7 +106,26 @@ export default function HomePage() {
     }
 
     const { data } = await query
-    setReports(data ?? [])
+    if (!data) { setReports([]); setLoading(false); return }
+
+    // Fetch first photo for each report as thumbnail
+    const reportIds = data.map((r) => r.id)
+    const { data: photos } = await supabase
+      .from('report_photos')
+      .select('report_id, storage_path')
+      .in('report_id', reportIds)
+      .order('position', { ascending: true })
+
+    // Build thumbnail map: report_id -> first photo public URL
+    const thumbMap = {}
+    for (const p of photos ?? []) {
+      if (!thumbMap[p.report_id]) {
+        const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(p.storage_path)
+        thumbMap[p.report_id] = publicUrl
+      }
+    }
+
+    setReports(data.map((r) => ({ ...r, thumbnail: thumbMap[r.id] ?? null })))
     setLoading(false)
   }
 
@@ -101,6 +135,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col min-h-full">
+      {/* Header */}
       <div className="bg-brand-600 px-5 pt-12 pb-6 safe-top">
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -111,6 +146,7 @@ export default function HomePage() {
           <h1 className="text-white text-xl font-bold mb-4">{firstName}</h1>
         </motion.div>
 
+        {/* Search bar */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -137,6 +173,7 @@ export default function HomePage() {
         </motion.div>
       </div>
 
+      {/* Content */}
       <div className="flex-1 px-4 py-5">
         {loading ? (
           <div className="flex flex-col gap-3">
