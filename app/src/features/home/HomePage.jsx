@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Search, MapPin, Clock, Plus, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search,
+  MapPin,
+  Clock,
+  Plus,
+  X,
+  SlidersHorizontal,
+} from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { staggerContainer, staggerItem } from "../../shared/lib/motion";
@@ -12,6 +19,19 @@ const STATUS_STYLES = {
   approved: "bg-status-approved-bg text-status-approved-text",
   resolved: "bg-status-resolved-bg text-status-resolved-text",
 };
+
+const CATEGORIES = [
+  "Electronics",
+  "IDs & Cards",
+  "Bags",
+  "Clothing",
+  "Books & Notes",
+  "Keys",
+  "Wallet",
+  "Jewelry",
+  "Documents",
+  "Other",
+];
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -73,6 +93,12 @@ function ReportCard({ report }) {
               {timeAgo(report.created_at)}
             </span>
           </div>
+
+          {report.category && (
+            <span className="inline-block mt-1.5 text-[10px] text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
+              {report.category}
+            </span>
+          )}
         </div>
       </Link>
     </motion.div>
@@ -85,6 +111,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [locationFilter, setLocationFilter] = useState("");
+  const [debouncedLocation, setDebouncedLocation] = useState("");
+  const [availableLocations, setAvailableLocations] = useState([]);
 
   // Debounce search
   useEffect(() => {
@@ -92,8 +123,15 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Debounce location filter
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedLocation(locationFilter), 350);
+    return () => clearTimeout(t);
+  }, [locationFilter]);
+
   useEffect(() => {
     fetchReports();
+    fetchAvailableLocations();
 
     const channelName = "home-reports";
     const existing = supabase
@@ -113,13 +151,27 @@ export default function HomePage() {
       .subscribe();
 
     return () => supabase.removeChannel(channel);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, selectedCategory, debouncedLocation]);
+
+  async function fetchAvailableLocations() {
+    const { data } = await supabase
+      .from("reports")
+      .select("location")
+      .in("status", ["open", "claimed", "approved"])
+      .not("location", "is", null);
+    const unique = [
+      ...new Set((data ?? []).map((r) => r.location).filter(Boolean)),
+    ].sort();
+    setAvailableLocations(unique);
+  }
 
   async function fetchReports() {
     setLoading(true);
     let query = supabase
       .from("reports")
-      .select("id, title, description, location, status, created_at, type")
+      .select(
+        "id, title, description, location, category, status, created_at, type",
+      )
       .in("status", ["open", "claimed", "approved"])
       .order("created_at", { ascending: false })
       .limit(30);
@@ -128,6 +180,14 @@ export default function HomePage() {
       query = query.or(
         `title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%,location.ilike.%${debouncedSearch}%`,
       );
+    }
+
+    if (selectedCategory) {
+      query = query.eq("category", selectedCategory);
+    }
+
+    if (debouncedLocation.trim()) {
+      query = query.ilike("location", `%${debouncedLocation}%`);
     }
 
     const { data } = await query;
@@ -160,6 +220,15 @@ export default function HomePage() {
     setLoading(false);
   }
 
+  function clearFilters() {
+    setSelectedCategory(null);
+    setLocationFilter("");
+  }
+
+  const activeFilterCount =
+    (selectedCategory ? 1 : 0) + (debouncedLocation.trim() ? 1 : 0);
+  const hasActiveQuery = debouncedSearch || activeFilterCount > 0;
+
   const firstName = profile?.first_name ?? "there";
   const hour = new Date().getHours();
   const greeting =
@@ -180,35 +249,130 @@ export default function HomePage() {
           <h1 className="text-white text-xl font-bold mb-4">{firstName}</h1>
         </motion.div>
 
-        {/* Search bar */}
+        {/* Search bar + filter toggle */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.08 }}
-          className="relative"
+          className="flex gap-2"
         >
-          <Search
-            size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            placeholder="Search lost items…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-11 pl-10 pr-10 text-sm rounded-xl bg-surface-card border-0 focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted"
-              aria-label="Clear search"
-            >
-              <X size={15} />
-            </button>
-          )}
+          <div className="relative flex-1">
+            <Search
+              size={16}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              placeholder="Search lost items…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-11 pl-10 pr-10 text-sm rounded-xl bg-surface-card border-0 focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted"
+                aria-label="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+              showFilters || activeFilterCount > 0
+                ? "bg-white text-brand-600"
+                : "bg-white/15 text-white"
+            }`}
+            aria-label="Filters"
+          >
+            <SlidersHorizontal size={17} />
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-status-rejected-text text-white text-[9px] font-bold flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
         </motion.div>
+
+        {/* Filter panel */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-surface-card rounded-xl p-3.5 mt-3 flex flex-col gap-3">
+                {/* Category chips */}
+                <div>
+                  <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
+                    Category
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CATEGORIES.map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() =>
+                          setSelectedCategory((c) => (c === cat ? null : cat))
+                        }
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          selectedCategory === cat
+                            ? "bg-brand-600 text-white border-brand-600"
+                            : "border-border-strong text-text-secondary hover:border-brand-400"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Location filter */}
+                <div>
+                  <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
+                    Location
+                  </p>
+                  <div className="relative">
+                    <MapPin
+                      size={14}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+                    />
+                    <input
+                      type="text"
+                      placeholder="e.g. Library, CICT Building…"
+                      value={locationFilter}
+                      onChange={(e) => setLocationFilter(e.target.value)}
+                      className="w-full h-9 pl-8 pr-3 text-sm rounded-lg border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      list="location-suggestions"
+                    />
+                    <datalist id="location-suggestions">
+                      {availableLocations.map((loc) => (
+                        <option key={loc} value={loc} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg bg-status-rejected-bg text-status-rejected-text text-xs font-semibold self-start hover:opacity-80 transition-opacity"
+                  >
+                    <X size={13} />
+                    Clear {activeFilterCount} filter
+                    {activeFilterCount > 1 ? "s" : ""}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Content */}
@@ -240,16 +404,24 @@ export default function HomePage() {
               />
             </div>
             <p className="text-sm font-semibold text-text-primary mb-1">
-              {debouncedSearch
-                ? `No results for "${debouncedSearch}"`
-                : "No open reports yet"}
+              {hasActiveQuery ? `No results found` : "No open reports yet"}
             </p>
             <p className="text-xs text-text-muted max-w-xs mb-6">
-              {debouncedSearch
-                ? "Try different keywords or check the spelling."
+              {hasActiveQuery
+                ? "Try different keywords, or adjust your filters."
                 : "Lost something? File a report and let the campus help you find it."}
             </p>
-            {!debouncedSearch && (
+            {hasActiveQuery ? (
+              <button
+                onClick={() => {
+                  setSearch("");
+                  clearFilters();
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-strong text-text-secondary text-sm font-semibold"
+              >
+                Clear search & filters
+              </button>
+            ) : (
               <Link
                 to="/reports/new"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold"
@@ -262,7 +434,7 @@ export default function HomePage() {
           <>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-text-secondary">
-                {debouncedSearch
+                {hasActiveQuery
                   ? `${reports.length} result${reports.length === 1 ? "" : "s"}`
                   : "Recent reports"}
               </p>
