@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bell, X, MapPin, CheckCircle2, UserCheck, XCircle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
@@ -28,15 +29,21 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const ref = useRef(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchNotifications()
 
+    const channelName = 'admin-notifications'
+    const existing = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`)
+    if (existing) supabase.removeChannel(existing) 
+
     const channel = supabase
-      .channel('admin-notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
-        () => fetchNotifications()
-      )
+      .channel(channelName)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => fetchNotifications())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => fetchNotifications())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'proxy_requests' }, () => fetchNotifications())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'confirmation_requests' }, () => fetchNotifications())
       .subscribe()
 
     return () => supabase.removeChannel(channel)
@@ -70,6 +77,16 @@ export default function NotificationBell() {
   async function markRead(id) {
     await fetch(`${SERVER_URL}/notifications/${id}/read`, { method: 'PATCH' })
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n))
+  }
+
+  function handleNotificationClick(n) {
+    markRead(n.id)
+    setOpen(false)
+    if (n.report_id) {
+      navigate(`/reports?highlight=${n.report_id}`)
+    } else {
+      navigate('/reports')
+    }
   }
 
   const unreadCount = notifications.filter((n) => !n.read).length
@@ -126,7 +143,7 @@ export default function NotificationBell() {
               return (
                 <button
                   key={n.id}
-                  onClick={() => markRead(n.id)}
+                  onClick={() => handleNotificationClick(n)}
                   className={`w-full flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 text-left transition-colors hover:bg-surface-muted ${
                     !n.read ? 'bg-brand-50/40' : ''
                   }`}

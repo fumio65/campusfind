@@ -1,31 +1,31 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Search, MapPin, Clock, Plus, X } from 'lucide-react'
-import { supabase } from '../../shared/lib/supabase'
-import { useAuth } from '../../shared/lib/AuthContext'
-import { staggerContainer, staggerItem } from '../../shared/lib/motion'
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Search, MapPin, Clock, Plus, X } from "lucide-react";
+import { supabase } from "../../shared/lib/supabase";
+import { useAuth } from "../../shared/lib/AuthContext";
+import { staggerContainer, staggerItem } from "../../shared/lib/motion";
 
 const STATUS_STYLES = {
-  open: 'bg-status-open-bg text-status-open-text',
-  claimed: 'bg-status-claimed-bg text-status-claimed-text',
-  approved: 'bg-status-approved-bg text-status-approved-text',
-  resolved: 'bg-status-resolved-bg text-status-resolved-text',
-}
+  open: "bg-status-open-bg text-status-open-text",
+  claimed: "bg-status-claimed-bg text-status-claimed-text",
+  approved: "bg-status-approved-bg text-status-approved-text",
+  resolved: "bg-status-resolved-bg text-status-resolved-text",
+};
 
 function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  if (diff < 0) return 'just now'
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  const diff = Date.now() - new Date(dateStr).getTime();
+  if (diff < 0) return "just now";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 function ReportCard({ report }) {
-  const thumbnail = report.thumbnail
+  const thumbnail = report.thumbnail;
 
   return (
     <motion.div {...staggerItem}>
@@ -36,7 +36,11 @@ function ReportCard({ report }) {
         {/* Thumbnail */}
         <div className="w-16 h-16 rounded-xl shrink-0 overflow-hidden bg-surface-muted flex items-center justify-center border border-border">
           {thumbnail ? (
-            <img src={thumbnail} alt="" className="w-full h-full object-cover" />
+            <img
+              src={thumbnail}
+              alt=""
+              className="w-full h-full object-cover"
+            />
           ) : (
             <div className="w-full h-full bg-surface-muted flex items-center justify-center">
               <div className="w-6 h-6 border-2 border-dashed border-border-strong rounded-md" />
@@ -50,7 +54,9 @@ function ReportCard({ report }) {
             <h3 className="text-sm font-semibold text-text-primary leading-snug flex-1 truncate">
               {report.title}
             </h3>
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ''}`}>
+            <span
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ""}`}
+            >
               {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
             </span>
           </div>
@@ -70,68 +76,94 @@ function ReportCard({ report }) {
         </div>
       </Link>
     </motion.div>
-  )
+  );
 }
 
 export default function HomePage() {
-  const { profile } = useAuth()
-  const [reports, setReports] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const { profile } = useAuth();
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350)
-    return () => clearTimeout(t)
-  }, [search])
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
-    fetchReports()
-  }, [debouncedSearch])
+    fetchReports();
+
+    const channelName = "home-reports";
+    const existing = supabase
+      .getChannels()
+      .find((c) => c.topic === `realtime:${channelName}`);
+    if (existing) supabase.removeChannel(existing);
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reports" },
+        () => {
+          setTimeout(() => fetchReports(), 1500);
+        },
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [debouncedSearch]);
 
   async function fetchReports() {
-    setLoading(true)
+    setLoading(true);
     let query = supabase
-      .from('reports')
-      .select('id, title, description, location, status, created_at, type')
-      .in('status', ['open', 'claimed', 'approved'])
-      .order('created_at', { ascending: false })
-      .limit(30)
+      .from("reports")
+      .select("id, title, description, location, status, created_at, type")
+      .in("status", ["open", "claimed", "approved"])
+      .order("created_at", { ascending: false })
+      .limit(30);
 
     if (debouncedSearch.trim()) {
       query = query.or(
-        `title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%,location.ilike.%${debouncedSearch}%`
-      )
+        `title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%,location.ilike.%${debouncedSearch}%`,
+      );
     }
 
-    const { data } = await query
-    if (!data) { setReports([]); setLoading(false); return }
+    const { data } = await query;
+    if (!data) {
+      setReports([]);
+      setLoading(false);
+      return;
+    }
 
     // Fetch first photo for each report as thumbnail
-    const reportIds = data.map((r) => r.id)
+    const reportIds = data.map((r) => r.id);
     const { data: photos } = await supabase
-      .from('report_photos')
-      .select('report_id, storage_path')
-      .in('report_id', reportIds)
-      .order('position', { ascending: true })
+      .from("report_photos")
+      .select("report_id, storage_path")
+      .in("report_id", reportIds)
+      .order("position", { ascending: true });
 
     // Build thumbnail map: report_id -> first photo public URL
-    const thumbMap = {}
+    const thumbMap = {};
     for (const p of photos ?? []) {
       if (!thumbMap[p.report_id]) {
-        const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(p.storage_path)
-        thumbMap[p.report_id] = publicUrl
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("report-photos").getPublicUrl(p.storage_path);
+        thumbMap[p.report_id] = publicUrl;
       }
     }
 
-    setReports(data.map((r) => ({ ...r, thumbnail: thumbMap[r.id] ?? null })))
-    setLoading(false)
+    setReports(data.map((r) => ({ ...r, thumbnail: thumbMap[r.id] ?? null })));
+    setLoading(false);
   }
 
-  const firstName = profile?.first_name ?? 'there'
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const firstName = profile?.first_name ?? "there";
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="flex flex-col min-h-full">
@@ -142,7 +174,9 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <p className="text-brand-200 text-xs font-medium mb-0.5">{greeting},</p>
+          <p className="text-brand-200 text-xs font-medium mb-0.5">
+            {greeting},
+          </p>
           <h1 className="text-white text-xl font-bold mb-4">{firstName}</h1>
         </motion.div>
 
@@ -153,7 +187,11 @@ export default function HomePage() {
           transition={{ duration: 0.3, delay: 0.08 }}
           className="relative"
         >
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden="true" />
+          <Search
+            size={16}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted"
+            aria-hidden="true"
+          />
           <input
             type="search"
             placeholder="Search lost items…"
@@ -163,7 +201,7 @@ export default function HomePage() {
           />
           {search && (
             <button
-              onClick={() => setSearch('')}
+              onClick={() => setSearch("")}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted"
               aria-label="Clear search"
             >
@@ -178,7 +216,10 @@ export default function HomePage() {
         {loading ? (
           <div className="flex flex-col gap-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-surface-card rounded-2xl border border-border p-4 animate-pulse">
+              <div
+                key={i}
+                className="bg-surface-card rounded-2xl border border-border p-4 animate-pulse"
+              >
                 <div className="h-4 bg-surface-muted rounded w-2/3 mb-2" />
                 <div className="h-3 bg-surface-muted rounded w-full mb-1" />
                 <div className="h-3 bg-surface-muted rounded w-1/2" />
@@ -192,15 +233,21 @@ export default function HomePage() {
             className="flex flex-col items-center justify-center text-center py-16"
           >
             <div className="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center mb-4">
-              <Search size={24} className="text-text-muted" aria-hidden="true" />
+              <Search
+                size={24}
+                className="text-text-muted"
+                aria-hidden="true"
+              />
             </div>
             <p className="text-sm font-semibold text-text-primary mb-1">
-              {debouncedSearch ? `No results for "${debouncedSearch}"` : 'No open reports yet'}
+              {debouncedSearch
+                ? `No results for "${debouncedSearch}"`
+                : "No open reports yet"}
             </p>
             <p className="text-xs text-text-muted max-w-xs mb-6">
               {debouncedSearch
-                ? 'Try different keywords or check the spelling.'
-                : 'Lost something? File a report and let the campus help you find it.'}
+                ? "Try different keywords or check the spelling."
+                : "Lost something? File a report and let the campus help you find it."}
             </p>
             {!debouncedSearch && (
               <Link
@@ -216,11 +263,16 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-text-secondary">
                 {debouncedSearch
-                  ? `${reports.length} result${reports.length === 1 ? '' : 's'}`
-                  : 'Recent reports'}
+                  ? `${reports.length} result${reports.length === 1 ? "" : "s"}`
+                  : "Recent reports"}
               </p>
             </div>
-            <motion.div className="flex flex-col gap-3" {...staggerContainer} initial="initial" animate="animate">
+            <motion.div
+              className="flex flex-col gap-3"
+              {...staggerContainer}
+              initial="initial"
+              animate="animate"
+            >
               {reports.map((report) => (
                 <ReportCard key={report.id} report={report} />
               ))}
@@ -229,5 +281,5 @@ export default function HomePage() {
         )}
       </div>
     </div>
-  )
+  );
 }

@@ -1,8 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  LayoutDashboard, Upload, ListChecks,
-  PersonStanding, BarChart3, Users, LogOut,
+  LayoutDashboard,
+  Upload,
+  ListChecks,
+  PersonStanding,
+  BarChart3,
+  Users,
+  LogOut,
 } from 'lucide-react'
 import sealSrc from '../../assets/nwssu-seal.png'
 import { supabase } from '../lib/supabaseClient'
@@ -12,7 +17,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/bulk-import', label: 'Bulk import', icon: Upload },
   { to: '/reports', label: 'Reports', icon: ListChecks },
-  { to: '/walk-in', label: 'Walk-in intake', icon: PersonStanding },
+  { to: '/walk-in', label: 'Found Item Drop-off', icon: PersonStanding },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/accounts', label: 'Accounts', icon: Users },
 ]
@@ -27,7 +32,6 @@ export default function Sidebar() {
         <span className="text-sm font-bold flex-1">CampusFind admin</span>
         <NotificationBell />
       </div>
-
       <nav className="flex flex-col flex-1">
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => {
           const isActive = end ? location.pathname === to : location.pathname.startsWith(to)

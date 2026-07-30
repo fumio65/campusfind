@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
 import { adjustTrustScore } from '../lib/trustScore.js'
+import { notifyUser } from '../lib/notifyUser.js'
 
 const router = Router()
 
@@ -14,8 +15,8 @@ router.get('/', async (req, res) => {
   let query = supabaseAdmin
     .from('reports')
     .select(`
-      id, type, title, location, status, created_at, resolved_via,
-      had_rejected_claim, last_rejected_claimant_id,
+      id, type, title, description, category, location, status, created_at, resolved_via,
+      had_rejected_claim, last_rejected_claimant_id, walkin_finder_ref,
       reporter:users!reports_reporter_id_fkey(id, first_name, last_name, student_id),
       claims(id, status, claimant_id,
         claimant:users!claims_claimant_id_fkey(first_name, last_name, student_id),
@@ -102,7 +103,6 @@ router.patch('/:id/resolve', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message })
 
   // Trust score: +5 for handoff completed
-  // Find the claimant of the approved claim
   const { data: claim } = await supabaseAdmin
     .from('claims')
     .select('claimant_id')
@@ -124,7 +124,6 @@ router.patch('/:id/resolve', async (req, res) => {
 router.post('/:id/announce', async (req, res) => {
   const { reporterId, title, location, category } = req.body
 
-  // Get all users except the reporter
   const { data: users } = await supabaseAdmin
     .from('users')
     .select('id')
@@ -133,7 +132,6 @@ router.post('/:id/announce', async (req, res) => {
 
   if (!users?.length) return res.json({ ok: true })
 
-  // Batch insert notifications
   const notifications = users.map((u) => ({
     user_id: u.id,
     type: 'new_report',
@@ -142,12 +140,43 @@ router.post('/:id/announce', async (req, res) => {
     report_id: req.params.id,
   }))
 
-  // Insert in batches of 100 to avoid payload limits
   for (let i = 0; i < notifications.length; i += 100) {
     await supabaseAdmin.from('user_notifications').insert(notifications.slice(i, i + 100))
   }
 
   res.json({ ok: true })
+})
+
+// POST /reports/:id/credit-finder — give +5 trust score to walk-in finder
+router.post('/:id/credit-finder', async (req, res) => {
+  const { finderStudentId } = req.body
+  if (!finderStudentId) return res.status(400).json({ error: 'finderStudentId required' })
+
+  const { data: finder } = await supabaseAdmin
+    .from('users')
+    .select('id, first_name')
+    .eq('student_id', finderStudentId.trim().toUpperCase())
+    .single()
+
+  if (!finder) return res.status(404).json({ error: 'Student ID not found' })
+
+  const { data: report } = await supabaseAdmin
+    .from('reports')
+    .select('title')
+    .eq('id', req.params.id)
+    .single()
+
+  await adjustTrustScore(finder.id, 5, 'dropped off a found item at ISSC')
+
+  await notifyUser({
+    userId: finder.id,
+    type: 'trust_score_increase',
+    title: 'Thank you! +5 Trust Score',
+    body: `You earned +5 trust score for dropping off "${report?.title ?? 'a found item'}" at the ISSC office. Great deed!`,
+    reportId: req.params.id,
+  })
+
+  res.json({ ok: true, finderName: finder.first_name })
 })
 
 export default router

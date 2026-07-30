@@ -21,13 +21,19 @@ export function AuthProvider({ children }) {
   // Realtime: refresh profile when trust score or any user field changes
   useEffect(() => {
     if (!session?.user?.id) return
+
+    const channelName = 'profile-updates'
+    const existing = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`)
+    if (existing) supabase.removeChannel(existing)
+
     const channel = supabase
-      .channel('profile-updates')
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'users',
         filter: `id=eq.${session.user.id}`
       }, () => fetchProfile(session.user.id))
       .subscribe()
+
     return () => supabase.removeChannel(channel)
   }, [session?.user?.id])
 
