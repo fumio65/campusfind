@@ -16,6 +16,7 @@ import {
   CornerUpLeft,
   Pencil,
   Trash2,
+  Camera,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
@@ -24,7 +25,7 @@ import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 
-function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited }) {
+function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert }) {
   const name = tip.users
     ? `${tip.users.first_name} ${tip.users.last_name}`
     : "Anonymous";
@@ -77,6 +78,11 @@ function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited }) {
                     <CheckCircle2 size={9} /> Helped recovery
                   </span>
                 )}
+                {tip.converted_to_claim_id && (
+                  <span className="flex items-center gap-0.5 text-[10px] text-brand-600 font-medium">
+                    <Camera size={9} /> Converted to claim
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {onCredit && !credited && (
@@ -87,6 +93,16 @@ function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited }) {
                   >
                     <CheckCircle2 size={10} />
                     Mark as helpful
+                  </button>
+                )}
+                {onConvert && !credited && !tip.converted_to_claim_id && (
+                  <button
+                    type="button"
+                    onClick={onConvert}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-brand-400 bg-surface-page text-[10px] font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
+                  >
+                    <Camera size={10} />
+                    I can prove this
                   </button>
                 )}
                 {!isReply && !credited && (
@@ -426,7 +442,7 @@ export default function ReportDetailPage() {
     const { data: tipsData } = await supabase
       .from("tips")
       .select(
-        "id, text, created_at, user_id, parent_tip_id, credited, users(first_name, last_name, trust_score)",
+        "id, text, created_at, user_id, parent_tip_id, credited, converted_to_claim_id, users(first_name, last_name, trust_score)",
       )
       .eq("report_id", id)
       .order("created_at", { ascending: true });
@@ -543,6 +559,10 @@ export default function ReportDetailPage() {
       console.error(err);
       setCreditedTipId(null);
     }
+  }
+
+  function handleConvertTip(tip) {
+    navigate(`/reports/${id}/claim?fromTip=${tip.id}`);
   }
 
   async function handleTipSubmit(e) {
@@ -1097,6 +1117,15 @@ export default function ReportDetailPage() {
                           : null
                       }
                       credited={creditedTipId === parent.id || parent.credited}
+                      onConvert={
+                        parent.user_id === session?.user.id &&
+                        isOpen &&
+                        claim?.status !== "pending" &&
+                        claim?.status !== "approved" &&
+                        !parent.converted_to_claim_id
+                          ? () => handleConvertTip(parent)
+                          : null
+                      }
                       onReply={() => {
                         setParentTipId(parent.id);
                         setTipText(`@${parent.users?.first_name ?? ""} `);
@@ -1108,6 +1137,15 @@ export default function ReportDetailPage() {
                         tip={reply}
                         isOwn={reply.user_id === session?.user.id}
                         isReply={true}
+                        onConvert={
+                          reply.user_id === session?.user.id &&
+                          isOpen &&
+                          claim?.status !== "pending" &&
+                          claim?.status !== "approved" &&
+                          !reply.converted_to_claim_id
+                            ? () => handleConvertTip(reply)
+                            : null
+                        }
                         onReply={() => {
                           setParentTipId(parent.id);
                           setTipText(`@${reply.users?.first_name ?? ""} `);

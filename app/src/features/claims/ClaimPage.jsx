@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Camera, X, AlertCircle, CheckCircle2, Info } from 'lucide-react'
+import { ArrowLeft, Camera, X, AlertCircle, CheckCircle2, Info, Lightbulb } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 
@@ -11,13 +11,32 @@ export default function ClaimPage() {
   const { id: reportId } = useParams()
   const navigate = useNavigate()
   const { session } = useAuth()
+  const [searchParams] = useSearchParams()
+  const fromTipId = searchParams.get('fromTip')
 
   const [message, setMessage] = useState('')
   const [photos, setPhotos] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
+  const [originalTip, setOriginalTip] = useState(null)
   const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    if (!fromTipId) return
+    async function fetchTip() {
+      const { data } = await supabase
+        .from('tips')
+        .select('id, text, user_id')
+        .eq('id', fromTipId)
+        .single()
+      if (data && data.user_id === session?.user?.id) {
+        setOriginalTip(data)
+        setMessage(data.text)
+      }
+    }
+    fetchTip()
+  }, [fromTipId, session?.user?.id])
 
   function handlePhotoChange(e) {
     const files = Array.from(e.target.files ?? [])
@@ -64,7 +83,7 @@ export default function ClaimPage() {
 
       if (claimError) throw claimError
 
-      // 2. Upload photos and insert into claim_photos table (mandatory per FR-4)
+      // 2. Upload photos
       let position = 0
       for (const photo of photos) {
         const ext = photo.file.name.split('.').pop()
@@ -95,6 +114,14 @@ export default function ClaimPage() {
           sender_role: 'claimant',
           body: message.trim(),
         })
+
+      // 5. If converting from a tip, link it back to this claim
+      if (originalTip) {
+        await supabase
+          .from('tips')
+          .update({ converted_to_claim_id: claim.id })
+          .eq('id', originalTip.id)
+      }
 
       setDone(true)
 
@@ -141,10 +168,22 @@ export default function ClaimPage() {
         >
           <ArrowLeft size={20} className="text-text-primary" />
         </button>
-        <h1 className="text-base font-bold text-text-primary">Submit a claim</h1>
+        <h1 className="text-base font-bold text-text-primary">
+          {originalTip ? 'Convert tip to claim' : 'Submit a claim'}
+        </h1>
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 py-5 flex flex-col gap-5 pb-10">
+
+        {/* Tip conversion banner */}
+        {originalTip && (
+          <div className="flex items-start gap-2.5 bg-brand-50 text-brand-700 text-xs rounded-xl px-3 py-3">
+            <Lightbulb size={14} className="shrink-0 mt-0.5" aria-hidden="true" />
+            <span>
+              You're converting your earlier tip into a formal claim. Your original note has been carried over below — add photo proof to complete it.
+            </span>
+          </div>
+        )}
 
         {/* Info banner */}
         <div className="flex items-start gap-2.5 bg-status-approved-bg text-status-approved-text text-xs rounded-xl px-3 py-3">
@@ -162,7 +201,7 @@ export default function ClaimPage() {
           </div>
         )}
 
-        {/* Photo proof — mandatory */}
+        {/* Photo proof */}
         <div>
           <label className="text-xs font-semibold text-text-secondary block mb-1">
             Photo proof <span className="text-status-rejected-text">*</span>
