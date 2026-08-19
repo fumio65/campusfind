@@ -43,3 +43,10 @@ body {
 
 .safe-top    { padding-top: env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+@media print {
+  nav, aside, header, .print\:hidden { display: none !important; }
+  body { background: white !important; }
+  .recharts-wrapper { page-break-inside: avoid; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
