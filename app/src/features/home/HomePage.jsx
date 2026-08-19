@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search,
-  MapPin,
-  Clock,
-  Plus,
-  X,
-  SlidersHorizontal,
-} from "lucide-react";
+import { Search, MapPin, Clock, Plus, X, SlidersHorizontal } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { staggerContainer, staggerItem } from "../../shared/lib/motion";
@@ -21,16 +14,8 @@ const STATUS_STYLES = {
 };
 
 const CATEGORIES = [
-  "Electronics",
-  "IDs & Cards",
-  "Bags",
-  "Clothing",
-  "Books & Notes",
-  "Keys",
-  "Wallet",
-  "Jewelry",
-  "Documents",
-  "Other",
+  "Electronics", "IDs & Cards", "Bags", "Clothing",
+  "Books & Notes", "Keys", "Wallet", "Jewelry", "Documents", "Other",
 ];
 
 function timeAgo(dateStr) {
@@ -46,7 +31,6 @@ function timeAgo(dateStr) {
 
 function ReportCard({ report }) {
   const thumbnail = report.thumbnail;
-
   return (
     <motion.div {...staggerItem}>
       <Link
@@ -56,11 +40,7 @@ function ReportCard({ report }) {
         {/* Thumbnail */}
         <div className="w-16 h-16 rounded-xl shrink-0 overflow-hidden bg-surface-muted flex items-center justify-center border border-border">
           {thumbnail ? (
-            <img
-              src={thumbnail}
-              alt=""
-              className="w-full h-full object-cover"
-            />
+            <img src={thumbnail} alt="" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-surface-muted flex items-center justify-center">
               <div className="w-6 h-6 border-2 border-dashed border-border-strong rounded-md" />
@@ -74,13 +54,10 @@ function ReportCard({ report }) {
             <h3 className="text-sm font-semibold text-text-primary leading-snug flex-1 truncate">
               {report.title}
             </h3>
-            <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ""}`}
-            >
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ""}`}>
               {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
             </span>
           </div>
-
           <div className="flex items-center gap-3 text-xs text-text-muted">
             {report.location && (
               <span className="flex items-center gap-1 truncate">
@@ -93,7 +70,6 @@ function ReportCard({ report }) {
               {timeAgo(report.created_at)}
             </span>
           </div>
-
           {report.category && (
             <span className="inline-block mt-1.5 text-[10px] text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
               {report.category}
@@ -134,23 +110,38 @@ export default function HomePage() {
     fetchAvailableLocations();
 
     const channelName = "home-reports";
-    const existing = supabase
-      .getChannels()
-      .find((c) => c.topic === `realtime:${channelName}`);
+    const existing = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`);
     if (existing) supabase.removeChannel(existing);
 
     const channel = supabase
       .channel(channelName)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "reports" },
-        () => {
-          setTimeout(() => fetchReports(), 1500);
-        },
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, () => {
+        setTimeout(() => fetchReports(true), 2000);
+        setTimeout(() => fetchReports(true), 5000);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "reports" }, () => {
+        fetchReports(true);
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "reports" }, () => {
+        fetchReports(true);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "report_photos" }, () => {
+        setTimeout(() => fetchReports(true), 800);
+      })
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    // Re-fetch when tab becomes visible again (handles WebSocket drops)
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        fetchReports(true);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [debouncedSearch, selectedCategory, debouncedLocation]);
 
   async function fetchAvailableLocations() {
@@ -159,19 +150,16 @@ export default function HomePage() {
       .select("location")
       .in("status", ["open", "claimed", "approved"])
       .not("location", "is", null);
-    const unique = [
-      ...new Set((data ?? []).map((r) => r.location).filter(Boolean)),
-    ].sort();
+    const unique = [...new Set((data ?? []).map((r) => r.location).filter(Boolean))].sort();
     setAvailableLocations(unique);
   }
 
-  async function fetchReports() {
-    setLoading(true);
+  async function fetchReports(silent = false) {
+    if (!silent) setLoading(true);
+
     let query = supabase
       .from("reports")
-      .select(
-        "id, title, description, location, category, status, created_at, type",
-      )
+      .select("id, title, description, location, category, status, created_at, type")
       .in("status", ["open", "claimed", "approved"])
       .order("created_at", { ascending: false })
       .limit(30);
@@ -197,7 +185,7 @@ export default function HomePage() {
       return;
     }
 
-    // Fetch first photo for each report as thumbnail
+    // Fetch thumbnails
     const reportIds = data.map((r) => r.id);
     const { data: photos } = await supabase
       .from("report_photos")
@@ -205,13 +193,12 @@ export default function HomePage() {
       .in("report_id", reportIds)
       .order("position", { ascending: true });
 
-    // Build thumbnail map: report_id -> first photo public URL
     const thumbMap = {};
     for (const p of photos ?? []) {
       if (!thumbMap[p.report_id]) {
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("report-photos").getPublicUrl(p.storage_path);
+        const { data: { publicUrl } } = supabase.storage
+          .from("report-photos")
+          .getPublicUrl(p.storage_path);
         thumbMap[p.report_id] = publicUrl;
       }
     }
@@ -225,14 +212,12 @@ export default function HomePage() {
     setLocationFilter("");
   }
 
-  const activeFilterCount =
-    (selectedCategory ? 1 : 0) + (debouncedLocation.trim() ? 1 : 0);
+  const activeFilterCount = (selectedCategory ? 1 : 0) + (debouncedLocation.trim() ? 1 : 0);
   const hasActiveQuery = debouncedSearch || activeFilterCount > 0;
 
   const firstName = profile?.first_name ?? "there";
   const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="flex flex-col min-h-full">
@@ -243,9 +228,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <p className="text-brand-200 text-xs font-medium mb-0.5">
-            {greeting},
-          </p>
+          <p className="text-brand-200 text-xs font-medium mb-0.5">{greeting},</p>
           <h1 className="text-white text-xl font-bold mb-4">{firstName}</h1>
         </motion.div>
 
@@ -318,9 +301,7 @@ export default function HomePage() {
                     {CATEGORIES.map((cat) => (
                       <button
                         key={cat}
-                        onClick={() =>
-                          setSelectedCategory((c) => (c === cat ? null : cat))
-                        }
+                        onClick={() => setSelectedCategory((c) => (c === cat ? null : cat))}
                         className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           selectedCategory === cat
                             ? "bg-brand-600 text-white border-brand-600"
@@ -339,10 +320,7 @@ export default function HomePage() {
                     Location
                   </p>
                   <div className="relative">
-                    <MapPin
-                      size={14}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-                    />
+                    <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                     <input
                       type="text"
                       placeholder="e.g. Library, CICT Building…"
@@ -365,8 +343,7 @@ export default function HomePage() {
                     className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg bg-status-rejected-bg text-status-rejected-text text-xs font-semibold self-start hover:opacity-80 transition-opacity"
                   >
                     <X size={13} />
-                    Clear {activeFilterCount} filter
-                    {activeFilterCount > 1 ? "s" : ""}
+                    Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
                   </button>
                 )}
               </div>
@@ -397,14 +374,10 @@ export default function HomePage() {
             className="flex flex-col items-center justify-center text-center py-16"
           >
             <div className="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center mb-4">
-              <Search
-                size={24}
-                className="text-text-muted"
-                aria-hidden="true"
-              />
+              <Search size={24} className="text-text-muted" aria-hidden="true" />
             </div>
             <p className="text-sm font-semibold text-text-primary mb-1">
-              {hasActiveQuery ? `No results found` : "No open reports yet"}
+              {hasActiveQuery ? "No results found" : "No open reports yet"}
             </p>
             <p className="text-xs text-text-muted max-w-xs mb-6">
               {hasActiveQuery
@@ -413,10 +386,7 @@ export default function HomePage() {
             </p>
             {hasActiveQuery ? (
               <button
-                onClick={() => {
-                  setSearch("");
-                  clearFilters();
-                }}
+                onClick={() => { setSearch(""); clearFilters(); }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-strong text-text-secondary text-sm font-semibold"
               >
                 Clear search & filters

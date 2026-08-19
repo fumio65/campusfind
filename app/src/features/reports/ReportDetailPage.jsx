@@ -27,7 +27,15 @@ import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 
-function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert }) {
+function TipCard({
+  tip,
+  isOwn,
+  onReply,
+  isReply,
+  onCredit,
+  credited,
+  onConvert,
+}) {
   const name = tip.users
     ? `${tip.users.first_name} ${tip.users.last_name}`
     : "Anonymous";
@@ -103,8 +111,7 @@ function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert }
                     onClick={onConvert}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-brand-400 bg-surface-page text-[10px] font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
                   >
-                    <Camera size={10} />
-                    I can prove this
+                    <Camera size={10} />I can prove this
                   </button>
                 )}
                 {!isReply && !credited && (
@@ -312,6 +319,26 @@ export default function ReportDetailPage() {
           }
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "tips",
+          filter: `report_id=eq.${id}`,
+        },
+        () => fetchAll(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tips",
+          filter: `report_id=eq.${id}`,
+        },
+        () => fetchAll(),
+      )
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -453,34 +480,37 @@ export default function ReportDetailPage() {
   }
 
   async function handleShare() {
-    const url = `${window.location.origin}/reports/${id}`
-    const title = report?.type === 'found_walkin'
-      ? `Found: ${report.title}`
-      : `Lost: ${report.title}`
+    const url = `${window.location.origin}/reports/${id}`;
+    const title =
+      report?.type === "found_walkin"
+        ? `Found: ${report.title}`
+        : `Lost: ${report.title}`;
     const text = [
-      report?.description ?? '',
-      report?.location ? `📍 ${report.location}` : '',
-      'Help find this item on CampusFind — NwSSU Lost & Found',
-    ].filter(Boolean).join('\n')
+      report?.description ?? "",
+      report?.location ? `📍 ${report.location}` : "",
+      "Help find this item on CampusFind — NwSSU Lost & Found",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     if (navigator.share) {
       try {
-        await navigator.share({ title, text, url })
+        await navigator.share({ title, text, url });
       } catch (err) {
-        if (err.name !== 'AbortError') {
-          await copyFallback(url)
+        if (err.name !== "AbortError") {
+          await copyFallback(url);
         }
       }
     } else {
-      await copyFallback(url)
+      await copyFallback(url);
     }
   }
 
   async function copyFallback(url) {
     try {
-      await navigator.clipboard.writeText(url)
-      setShareCopied(true)
-      setTimeout(() => setShareCopied(false), 2500)
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2500);
     } catch {
       // ignore
     }
@@ -1090,7 +1120,9 @@ export default function ReportDetailPage() {
           isClaimed &&
           (claim?.claimant_id === session?.user.id ? (
             <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
-              <p className="font-semibold mb-0.5">Your claim is under review.</p>
+              <p className="font-semibold mb-0.5">
+                Your claim is under review.
+              </p>
               <p>
                 Your claim is pending the reporter's review. You'll be notified
                 once a decision is made.
