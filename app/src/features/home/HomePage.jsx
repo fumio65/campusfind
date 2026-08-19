@@ -119,7 +119,7 @@ export default function HomePage() {
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    const t = setTimeout(() => setDebouncedSearch(search), 600);
     return () => clearTimeout(t);
   }, [search]);
 
