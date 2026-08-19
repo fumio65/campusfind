@@ -17,6 +17,8 @@ import {
   Pencil,
   Trash2,
   Camera,
+  Share2,
+  Link as LinkIcon,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
@@ -176,6 +178,7 @@ export default function ReportDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const claimantIdRef = useRef(null);
   const prevScoreRef = useRef(null);
@@ -341,7 +344,6 @@ export default function ReportDetailPage() {
     }
     setReport(data);
 
-    // Fetch report photos
     const { data: reportPhotos } = await supabase
       .from("report_photos")
       .select("storage_path")
@@ -353,7 +355,7 @@ export default function ReportDetailPage() {
       } = supabase.storage.from("report-photos").getPublicUrl(p.storage_path);
       return publicUrl;
     });
-    // For walk-in reports, look up finder's name from student ID
+
     let walkinFinderName = null;
     if (data.type === "found_walkin" && data.walkin_finder_ref) {
       const { data: finder } = await supabase
@@ -368,7 +370,6 @@ export default function ReportDetailPage() {
 
     setReport({ ...data, photoUrls, walkin_finder_name: walkinFinderName });
 
-    // Fetch reporter name
     if (data.reporter_id) {
       const { data: user } = await supabase
         .from("users")
@@ -378,7 +379,6 @@ export default function ReportDetailPage() {
       setReporter(user);
     }
 
-    // Fetch active claim
     let activeClaim = null;
     if (data.status === "claimed" || data.status === "approved") {
       const { data: claimData } = await supabase
@@ -424,7 +424,6 @@ export default function ReportDetailPage() {
       }
     }
 
-    // Always fetch the current user's rejected claim
     if (session?.user?.id) {
       const { data: rejectedClaim } = await supabase
         .from("claims")
@@ -438,7 +437,6 @@ export default function ReportDetailPage() {
       }
     }
 
-    // Fetch tips
     const { data: tipsData } = await supabase
       .from("tips")
       .select(
@@ -452,6 +450,40 @@ export default function ReportDetailPage() {
     if (credited) setCreditedTipId(credited.id);
 
     setLoading(false);
+  }
+
+  async function handleShare() {
+    const url = `${window.location.origin}/reports/${id}`
+    const title = report?.type === 'found_walkin'
+      ? `Found: ${report.title}`
+      : `Lost: ${report.title}`
+    const text = [
+      report?.description ?? '',
+      report?.location ? `📍 ${report.location}` : '',
+      'Help find this item on CampusFind — NwSSU Lost & Found',
+    ].filter(Boolean).join('\n')
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url })
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          await copyFallback(url)
+        }
+      }
+    } else {
+      await copyFallback(url)
+    }
+  }
+
+  async function copyFallback(url) {
+    try {
+      await navigator.clipboard.writeText(url)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2500)
+    } catch {
+      // ignore
+    }
   }
 
   async function handleClaimAction(action) {
@@ -592,6 +624,7 @@ export default function ReportDetailPage() {
   const isClaimed = report?.status === "claimed";
   const isApproved = report?.status === "approved";
   const isResolved = report?.status === "resolved";
+  const canShare = isOpen || isResolved;
 
   if (loading) {
     return (
@@ -661,6 +694,19 @@ export default function ReportDetailPage() {
         visible={trustToast.visible}
         onDismiss={() => setTrustToast((t) => ({ ...t, visible: false }))}
       />
+
+      {/* Share copied toast */}
+      {shareCopied && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-text-primary text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2"
+        >
+          <LinkIcon size={13} />
+          Link copied to clipboard
+        </motion.div>
+      )}
 
       {/* Credit tip confirmation dialog */}
       {pendingCreditTip && (
@@ -771,6 +817,18 @@ export default function ReportDetailPage() {
             >
               {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
             </span>
+
+            {/* Share button — only for open/resolved reports */}
+            {canShare && (
+              <button
+                onClick={handleShare}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-muted transition-colors"
+                aria-label="Share report"
+              >
+                <Share2 size={16} className="text-text-secondary" />
+              </button>
+            )}
+
             {isOwner && isOpen && (
               <div className="flex items-center gap-1 bg-surface-muted rounded-xl p-1">
                 <Link
@@ -999,7 +1057,7 @@ export default function ReportDetailPage() {
           </div>
         )}
 
-        {/* Non-owner: claim button */}
+        {/* Non-owner: walk-in notice */}
         {!isOwner && report?.type === "found_walkin" && isOpen && (
           <div className="bg-status-open-bg border border-status-open-text/20 rounded-2xl px-4 py-4 flex flex-col gap-1">
             <p className="text-xs font-semibold text-status-open-text">
@@ -1013,6 +1071,7 @@ export default function ReportDetailPage() {
           </div>
         )}
 
+        {/* Non-owner: claim button */}
         {!isOwner &&
           report?.type !== "found_walkin" &&
           (isOpen || report?.last_rejected_claimant_id === session?.user?.id) &&
@@ -1031,9 +1090,7 @@ export default function ReportDetailPage() {
           isClaimed &&
           (claim?.claimant_id === session?.user.id ? (
             <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
-              <p className="font-semibold mb-0.5">
-                Your claim is under review.
-              </p>
+              <p className="font-semibold mb-0.5">Your claim is under review.</p>
               <p>
                 Your claim is pending the reporter's review. You'll be notified
                 once a decision is made.
