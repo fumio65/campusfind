@@ -32,21 +32,7 @@ function ProtectedRoutes() {
   if (!session) return <Navigate to="/login" replace />
   if (needsPasswordChange) return <Navigate to="/change-password" replace />
 
-  return (
-    <AppShell>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/reports/new" element={<NewReportPage />} />
-        <Route path="/reports/:id/edit" element={<EditReportPage />} />
-        <Route path="/reports/:id" element={<ReportDetailPage />} />
-        <Route path="/reports/:id/claim" element={<ClaimPage />} />
-        <Route path="/activity" element={<ActivityPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AppShell>
-  )
+  return <AppShell />
 }
 
 export default function App() {
@@ -56,7 +42,17 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
           <Route path="/change-password" element={<ChangePasswordPage />} />
-          <Route path="/*" element={<ProtectedRoutes />} />
+          <Route path="/*" element={<ProtectedRoutes />}>
+            <Route index element={<HomePage />} />
+            <Route path="reports/new" element={<NewReportPage />} />
+            <Route path="reports/:id/edit" element={<EditReportPage />} />
+            <Route path="reports/:id" element={<ReportDetailPage />} />
+            <Route path="reports/:id/claim" element={<ClaimPage />} />
+            <Route path="activity" element={<ActivityPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
         </Routes>
       </AuthProvider>
     </BrowserRouter>

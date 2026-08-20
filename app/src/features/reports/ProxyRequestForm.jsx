@@ -1,151 +1,208 @@
-import { useState, useEffect } from 'react'
-import { UserCheck, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { useEffect, useState, useRef } from "react";
+import { supabase } from "../../shared/lib/supabase";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
-export default function ProxyRequestForm({ reportId, reporterId }) {
-  const [existing, setExisting] = useState(undefined)
-  const [showForm, setShowForm] = useState(false)
-  const [proxyName, setProxyName] = useState('')
-  const [proxyStudentId, setProxyStudentId] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState(null)
+export default function ProxyRequestForm({
+  reportId,
+  reporterId,
+  claimantStudentId,
+}) {
+  const [proxyStudentId, setProxyStudentId] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [validation, setValidation] = useState(null);
+  const [verifiedName, setVerifiedName] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(null);
+  const [existingRequest, setExistingRequest] = useState(null);
+  const validateRef = useRef(null);
 
   useEffect(() => {
-    fetchExisting()
-  }, [reportId])
+    checkExisting();
+  }, [reportId]);
 
-  async function fetchExisting() {
+  async function checkExisting() {
+    const { data } = await supabase
+      .from("proxy_requests")
+      .select("*")
+      .eq("report_id", reportId)
+      .maybeSingle();
+    if (data) setExistingRequest(data);
+  }
+
+  function handleStudentIdChange(value) {
+    setProxyStudentId(value);
+    setValidation(null);
+    setVerifiedName(null);
+    clearTimeout(validateRef.current);
+    if (!value.trim()) return;
+    validateRef.current = setTimeout(() => validateStudentId(value), 600);
+  }
+
+  async function validateStudentId(studentId) {
+    setValidating(true);
     try {
-      const res = await fetch(`${SERVER_URL}/proxy/${reportId}`)
-      const data = await res.json()
-      setExisting(data ?? null)
-      if (data) {
-        setProxyName(data.proxy_name)
-        setProxyStudentId(data.proxy_student_id)
+      const inputId = studentId.trim().toUpperCase();
+
+      // Block owner's own Student ID
+      const { data: owner } = await supabase
+        .from("users")
+        .select("student_id")
+        .eq("id", reporterId)
+        .single();
+
+      if (owner?.student_id?.toUpperCase() === inputId) {
+        setValidation("is_owner");
+        setVerifiedName(null);
+        setValidating(false);
+        return;
+      }
+
+      // Block the finder/claimant from being proxy
+      if (claimantStudentId && claimantStudentId.toUpperCase() === inputId) {
+        setValidation("is_finder");
+        setVerifiedName(null);
+        setValidating(false);
+        return;
+      }
+
+      // Look up the student
+      const res = await fetch(
+        `${SERVER_URL}/accounts?search=${encodeURIComponent(inputId)}&limit=5`,
+      );
+      const body = await res.json();
+      const exact = (body.accounts ?? []).find((a) => a.student_id === inputId);
+
+      if (exact) {
+        setValidation("valid");
+        setVerifiedName(`${exact.first_name} ${exact.last_name}`);
+      } else {
+        setValidation("invalid");
+        setVerifiedName(null);
       }
     } catch {
-      setExisting(null)
+      setValidation(null);
+      setVerifiedName(null);
+    } finally {
+      setValidating(false);
     }
   }
 
   async function handleSubmit(e) {
-    e.preventDefault()
-    setError(null)
-    if (!proxyName.trim()) return setError("Please enter the proxy's full name.")
-    if (!proxyStudentId.trim()) return setError("Please enter the proxy's student ID.")
-
-    setSubmitting(true)
+    e.preventDefault();
+    if (validation !== "valid" || !verifiedName) return;
+    setSubmitting(true);
+    setError(null);
     try {
-      const res = await fetch(`${SERVER_URL}/proxy`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reportId,
-          reporterId,
-          proxyName: proxyName.trim(),
-          proxyStudentId: proxyStudentId.trim(),
-        }),
-      })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error)
-      setExisting(body)
-      setShowForm(false)
+      const { error: insertError } = await supabase
+        .from("proxy_requests")
+        .insert({
+          report_id: reportId,
+          reporter_id: reporterId,
+          proxy_name: verifiedName,
+          proxy_student_id: proxyStudentId.trim().toUpperCase(),
+        });
+      if (insertError) throw insertError;
+      setSubmitted(true);
+      checkExisting();
     } catch (err) {
-      setError(err.message)
+      setError(err.message);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
-  if (existing === undefined) return null
+  if (existingRequest || submitted) {
+    return (
+      <div className="bg-surface-card rounded-2xl border border-border p-4">
+        <p className="text-xs font-semibold text-text-primary mb-1">
+          Proxy pickup registered
+        </p>
+        <p className="text-xs text-text-muted">
+          <span className="font-medium text-text-primary">
+            {existingRequest?.proxy_name ?? verifiedName}
+          </span>{" "}
+          ({existingRequest?.proxy_student_id ?? proxyStudentId.toUpperCase()})
+          is authorized to pick up this item on your behalf. The ISSC office has
+          been notified.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-surface-card rounded-2xl border border-border p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <UserCheck size={15} className="text-brand-600 shrink-0" />
-        <h3 className="text-sm font-semibold text-text-primary">Proxy pickup</h3>
-      </div>
+      <p className="text-xs font-semibold text-text-primary mb-0.5">
+        Send someone to pick up the item?
+      </p>
+      <p className="text-xs text-text-muted mb-3">
+        Enter their Student ID to authorize a proxy pickup at the ISSC office.
+      </p>
 
-      {existing && !showForm ? (
-        <div className="flex flex-col gap-2">
-          <div className="bg-status-open-bg rounded-xl px-3 py-2.5 text-xs text-status-open-text flex items-start gap-2">
-            <CheckCircle2 size={13} className="shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold mb-0.5">Proxy registered</p>
-              <p>
-                <span className="font-medium">{existing.proxy_name}</span>{' '}
-                ({existing.proxy_student_id}) is authorized to pick up your item at the ISSC office.
-              </p>
-            </div>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <div>
+          <label className="text-xs font-medium text-text-secondary block mb-1">
+            Proxy's Student ID{" "}
+            <span className="text-status-rejected-text">*</span>
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="e.g. 18-00045"
+              value={proxyStudentId}
+              onChange={(e) => handleStudentIdChange(e.target.value)}
+              className={`w-full h-10 px-3 text-sm rounded-xl border bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 ${
+                validation === "valid"
+                  ? "border-status-open-text"
+                  : validation === "invalid" ||
+                      validation === "is_owner" ||
+                      validation === "is_finder"
+                    ? "border-status-rejected-text"
+                    : "border-border-strong"
+              }`}
+            />
+            {validating && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted">
+                Checking…
+              </span>
+            )}
           </div>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-brand-600 transition-colors"
-          >
-            <RefreshCw size={11} />
-            Change proxy
-          </button>
-        </div>
-      ) : (
-        <>
-          <p className="text-xs text-text-secondary mb-3">
-            Can't pick up the item yourself? Register someone to collect it on your behalf. The ISSC officer will verify their ID.
-          </p>
 
-          {error && (
-            <div className="flex items-start gap-2 bg-status-rejected-bg text-status-rejected-text text-xs rounded-xl px-3 py-2.5 mb-3">
-              <AlertCircle size={13} className="shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
+          {validation === "valid" && verifiedName && (
+            <p className="text-[11px] text-status-open-text mt-1 flex items-center gap-1">
+              ✓ <span className="font-semibold">{verifiedName}</span> — verified
+            </p>
           )}
+          {validation === "invalid" && (
+            <p className="text-[11px] text-status-rejected-text mt-1">
+              Student ID not found in the system.
+            </p>
+          )}
+          {validation === "is_owner" && (
+            <p className="text-[11px] text-status-rejected-text mt-1">
+              That's your own Student ID. Enter someone else's ID.
+            </p>
+          )}
+          {validation === "is_finder" && (
+            <p className="text-[11px] text-status-rejected-text mt-1">
+              The finder cannot be the proxy — they already handed in the item.
+            </p>
+          )}
+        </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <div>
-              <label className="text-xs font-medium text-text-secondary block mb-1">
-                Proxy's full name <span className="text-status-rejected-text">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Full name of the person picking up"
-                value={proxyName}
-                onChange={(e) => setProxyName(e.target.value)}
-                className="w-full h-10 px-3 text-sm rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-text-secondary block mb-1">
-                Proxy's Student ID <span className="text-status-rejected-text">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 23-00456"
-                value={proxyStudentId}
-                onChange={(e) => setProxyStudentId(e.target.value)}
-                className="w-full h-10 px-3 text-sm rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex-1 h-10 rounded-xl bg-brand-600 text-white text-xs font-semibold disabled:opacity-50"
-              >
-                {submitting ? 'Registering…' : 'Register proxy'}
-              </button>
-              {existing && (
-                <button
-                  type="button"
-                  onClick={() => { setShowForm(false); setError(null) }}
-                  className="px-4 h-10 rounded-xl border border-border-strong text-xs text-text-secondary"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-        </>
-      )}
+        {error && (
+          <p className="text-[11px] text-status-rejected-text">{error}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting || validation !== "valid"}
+          className="w-full h-10 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+        >
+          {submitting ? "Registering…" : "Register proxy pickup"}
+        </button>
+      </form>
     </div>
-  )
+  );
 }

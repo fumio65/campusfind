@@ -1,128 +1,146 @@
-import { NavLink, useLocation } from 'react-router-dom'
-import { Home, BookOpen, PlusCircle, Bell, User } from 'lucide-react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Home, Clock, Bell, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
-export default function AppShell({ children }) {
-  const location = useLocation()
+export default function AppShell() {
   const { session } = useAuth()
+  const location = useLocation()
   const [unreadCount, setUnreadCount] = useState(0)
-
-  useEffect(() => {
-    if (!session?.user?.id) return
-    fetchUnread()
-
-    const channelName = 'appshell-notifications'
-    const existing = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`)
-    if (existing) supabase.removeChannel(existing)
-
-    const channel = supabase
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'user_notifications',
-        filter: `user_id=eq.${session.user.id}`
-      }, () => fetchUnread())
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
-  }, [session?.user?.id])
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
+  const deferredPromptRef = useRef(null)
 
   async function fetchUnread() {
     const { count } = await supabase
       .from('user_notifications')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', session.user.id)
       .eq('read', false)
     setUnreadCount(count ?? 0)
   }
 
-  // Mark as read when user visits Activity tab
   useEffect(() => {
-    if (location.pathname === '/activity' && unreadCount > 0) {
-      setUnreadCount(0)
-    }
+    fetchUnread()
+
+    const existing = supabase.getChannels().find((c) => c.topic === 'realtime:appshell-notifications')
+    if (existing) supabase.removeChannel(existing)
+
+    const channel = supabase
+      .channel('appshell-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'user_notifications',
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => fetchUnread()
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_notifications',
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => fetchUnread()
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [session.user.id])
+
+  // Re-fetch unread count on every navigation
+  useEffect(() => {
+    fetchUnread()
   }, [location.pathname])
 
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault()
+      deferredPromptRef.current = e
+      setShowInstallPrompt(true)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  async function handleInstall() {
+    const prompt = deferredPromptRef.current
+    if (!prompt) return
+    prompt.prompt()
+    const { outcome } = await prompt.userChoice
+    if (outcome === 'accepted') {
+      setShowInstallPrompt(false)
+      deferredPromptRef.current = null
+    }
+  }
+
+  const navItems = [
+    { to: '/', icon: Home, label: 'Home' },
+    { to: '/history', icon: Clock, label: 'History' },
+    { to: '/activity', icon: Bell, label: 'Activity' },
+    { to: '/profile', icon: User, label: 'Profile' },
+  ]
+
   return (
-    <div className="h-screen flex flex-col bg-surface-page overflow-hidden">
-      <main className="flex-1 overflow-y-auto overscroll-none">
-        <AnimatePresence>
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="min-h-full"
-          >
-            {children}
-          </motion.div>
-        </AnimatePresence>
+    <div className="flex flex-col min-h-screen bg-surface-page">
+      <main className="flex-1 overflow-y-auto pb-20">
+        <Outlet />
       </main>
 
-      <nav className="bg-surface-card border-t border-border safe-bottom shrink-0">
-        <div className="flex items-center justify-around px-2 pt-2 pb-2">
+      {/* Install prompt banner */}
+      {showInstallPrompt && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-brand-600 text-white px-4 py-3 flex items-center justify-between gap-3 safe-top">
+          <div>
+            <p className="text-sm font-semibold">Add CampusFind to Home Screen</p>
+            <p className="text-xs text-brand-200">Get quick access from your home screen</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowInstallPrompt(false)}
+              className="text-xs text-brand-200 px-2 py-1"
+            >
+              Later
+            </button>
+            <button
+              onClick={handleInstall}
+              className="text-xs font-semibold bg-white text-brand-600 px-3 py-1.5 rounded-lg"
+            >
+              Install
+            </button>
+          </div>
+        </div>
+      )}
 
-          <NavLink to="/" end className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg transition-colors ${isActive ? 'text-brand-600' : 'text-text-muted'}`
-          }>
-            {({ isActive }) => (
-              <>
-                <Home size={22} />
-                <span className={`text-[10px] font-medium ${isActive ? 'text-brand-600' : 'text-text-muted'}`}>Home</span>
-              </>
-            )}
-          </NavLink>
-
-          <NavLink to="/history" className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg transition-colors ${isActive ? 'text-brand-600' : 'text-text-muted'}`
-          }>
-            {({ isActive }) => (
-              <>
-                <BookOpen size={22} />
-                <span className={`text-[10px] font-medium ${isActive ? 'text-brand-600' : 'text-text-muted'}`}>History</span>
-              </>
-            )}
-          </NavLink>
-
-          <NavLink to="/reports/new" className="flex flex-col items-center -mt-5">
-            <div className="w-14 h-14 rounded-full bg-brand-600 flex items-center justify-center shadow-lg">
-              <PlusCircle size={26} className="text-white" />
-            </div>
-            <span className="text-[10px] text-text-muted mt-1">Report</span>
-          </NavLink>
-
-          <NavLink to="/activity" className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg transition-colors relative ${isActive ? 'text-brand-600' : 'text-text-muted'}`
-          }>
-            {({ isActive }) => (
-              <>
-                <div className="relative">
-                  <Bell size={22} />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-status-rejected-text text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                  )}
-                </div>
-                <span className={`text-[10px] font-medium ${isActive ? 'text-brand-600' : 'text-text-muted'}`}>Activity</span>
-              </>
-            )}
-          </NavLink>
-
-          <NavLink to="/profile" className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg transition-colors ${isActive ? 'text-brand-600' : 'text-text-muted'}`
-          }>
-            {({ isActive }) => (
-              <>
-                <User size={22} />
-                <span className={`text-[10px] font-medium ${isActive ? 'text-brand-600' : 'text-text-muted'}`}>Profile</span>
-              </>
-            )}
-          </NavLink>
-
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-surface-card border-t border-border safe-bottom z-20">
+        <div className="flex items-center justify-around px-2 py-2">
+          {navItems.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors relative ${
+                  isActive ? 'text-brand-600' : 'text-text-muted'
+                }`
+              }
+            >
+              <div className="relative">
+                <Icon size={22} />
+                {label === 'Activity' && unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-status-rejected-text text-white text-[9px] font-bold flex items-center justify-center px-1">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">{label}</span>
+            </NavLink>
+          ))}
         </div>
       </nav>
     </div>

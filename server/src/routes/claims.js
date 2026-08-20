@@ -44,10 +44,8 @@ router.patch('/:id', async (req, res) => {
       last_rejected_claimant_id: claimantId,
     }).eq('id', reportId)
 
-    // Trust score: -5 for rejected claim
     await adjustTrustScore(claimantId, -5, 'claim rejected')
 
-    // Additional -5 if 3+ rejections in last 30 days
     const repeated = await checkRepeatedRejections(claimantId)
     if (repeated) {
       await adjustTrustScore(claimantId, -5, '3+ rejections in 30 days')
@@ -85,6 +83,69 @@ router.post('/', async (req, res) => {
     title: 'Someone found your item!',
     body: `A claim has been submitted on "${report.title}". Review it and approve or reject.`,
     reportId,
+  })
+
+  res.json({ ok: true })
+})
+
+// POST /claims/:id/message — notify recipient when a message is sent
+router.post('/:id/message', async (req, res) => {
+  const { senderId, senderRole } = req.body
+  if (!senderId || !senderRole) return res.status(400).json({ error: 'senderId and senderRole required' })
+
+  const { data: claim } = await supabaseAdmin
+    .from('claims')
+    .select('id, claimant_id, report_id, reports(title, reporter_id)')
+    .eq('id', req.params.id)
+    .single()
+
+  if (!claim) return res.status(404).json({ error: 'Claim not found' })
+
+  const reportTitle = claim.reports?.title ?? 'your item'
+  const reportId = claim.report_id
+
+  const recipientId = senderRole === 'reporter'
+    ? claim.claimant_id
+    : claim.reports?.reporter_id
+
+  if (!recipientId) return res.json({ ok: true })
+
+  await notifyUser({
+    userId: recipientId,
+    type: 'new_message',
+    title: 'New message',
+    body: `${senderRole === 'reporter' ? 'The reporter' : 'The finder'} sent a message about "${reportTitle}".`,
+    reportId,
+    claimId: claim.id,
+  })
+
+  res.json({ ok: true })
+})
+
+// POST /claims/:id/dropoff — notify reporter when finder chooses drop-off
+router.post('/:id/dropoff', async (req, res) => {
+  const { reportId } = req.body
+
+  const { data: claim } = await supabaseAdmin
+    .from('claims')
+    .select('id, claimant_id, report_id, reports(title, reporter_id)')
+    .eq('id', req.params.id)
+    .single()
+
+  if (!claim) return res.status(404).json({ error: 'Claim not found' })
+
+  await supabaseAdmin
+    .from('reports')
+    .update({ drop_off_chosen: true })
+    .eq('id', claim.report_id)
+
+  await notifyUser({
+    userId: claim.reports?.reporter_id,
+    type: 'dropoff_chosen',
+    title: 'Finder chose ISSC drop-off',
+    body: `The finder will drop off "${claim.reports?.title ?? 'your item'}" at the ISSC office.`,
+    reportId: claim.report_id,
+    claimId: claim.id,
   })
 
   res.json({ ok: true })
