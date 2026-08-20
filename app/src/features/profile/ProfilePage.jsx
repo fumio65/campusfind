@@ -84,7 +84,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-surface-page safe-top pb-28">
 
       {/* Header */}
-      <div className="bg-brand-600 px-4 pt-12 pb-6">
+      <div className="bg-brand-600 px-4 pt-12 pb-6 sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center shrink-0">
             <span className="text-2xl font-bold text-white">
@@ -103,7 +103,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="px-4 -mt-3 flex flex-col gap-4">
+      <div className="px-4 mt-4 flex flex-col gap-4">
 
         {/* Trust Score card */}
         <motion.div

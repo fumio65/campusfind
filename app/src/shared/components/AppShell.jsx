@@ -1,24 +1,25 @@
-import { useEffect, useState, useRef } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Home, Clock, Bell, User } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Home, Clock, Bell, User, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
 export default function AppShell() {
   const { session } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const deferredPromptRef = useRef(null)
 
-  async function fetchUnread() {
+  const fetchUnread = useCallback(async () => {
     const { count } = await supabase
       .from('user_notifications')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', session.user.id)
       .eq('read', false)
     setUnreadCount(count ?? 0)
-  }
+  }, [session.user.id])
 
   useEffect(() => {
     fetchUnread()
@@ -51,12 +52,12 @@ export default function AppShell() {
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [session.user.id])
+  }, [fetchUnread])
 
   // Re-fetch unread count on every navigation
   useEffect(() => {
     fetchUnread()
-  }, [location.pathname])
+  }, [location.pathname, fetchUnread])
 
   useEffect(() => {
     const handler = (e) => {
@@ -88,7 +89,7 @@ export default function AppShell() {
 
   return (
     <div className="flex flex-col min-h-screen bg-surface-page">
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 pb-20">
         <Outlet />
       </main>
 
@@ -119,28 +120,74 @@ export default function AppShell() {
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-surface-card border-t border-border safe-bottom z-20">
         <div className="flex items-center justify-around px-2 py-2">
-          {navItems.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors relative ${
-                  isActive ? 'text-brand-600' : 'text-text-muted'
-                }`
-              }
-            >
-              <div className="relative">
-                <Icon size={22} />
-                {label === 'Activity' && unreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-status-rejected-text text-white text-[9px] font-bold flex items-center justify-center px-1">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] font-medium">{label}</span>
-            </NavLink>
-          ))}
+          {/* Home */}
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors ${
+                isActive ? 'text-brand-600' : 'text-text-muted'
+              }`
+            }
+          >
+            <Home size={22} />
+            <span className="text-[10px] font-medium">Home</span>
+          </NavLink>
+
+          {/* History */}
+          <NavLink
+            to="/history"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors ${
+                isActive ? 'text-brand-600' : 'text-text-muted'
+              }`
+            }
+          >
+            <Clock size={22} />
+            <span className="text-[10px] font-medium">History</span>
+          </NavLink>
+
+          {/* Center + button */}
+          <button
+            onClick={() => navigate('/reports/new')}
+            className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-brand-600 text-white shadow-lg -mt-5 transition-transform active:scale-95"
+            aria-label="File a report"
+          >
+            <Plus size={26} />
+          </button>
+
+          {/* Activity */}
+          <NavLink
+            to="/activity"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors relative ${
+                isActive ? 'text-brand-600' : 'text-text-muted'
+              }`
+            }
+          >
+            <div className="relative">
+              <Bell size={22} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-status-rejected-text text-white text-[9px] font-bold flex items-center justify-center px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-medium">Activity</span>
+          </NavLink>
+
+          {/* Profile */}
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors ${
+                isActive ? 'text-brand-600' : 'text-text-muted'
+              }`
+            }
+          >
+            <User size={22} />
+            <span className="text-[10px] font-medium">Profile</span>
+          </NavLink>
         </div>
       </nav>
     </div>

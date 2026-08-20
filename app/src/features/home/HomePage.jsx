@@ -222,7 +222,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col min-h-full">
       {/* Header */}
-      <div className="bg-brand-600 px-5 pt-12 pb-6 safe-top">
+      <div className="bg-brand-600 px-5 pt-12 pb-6 safe-top sticky top-0 z-10">
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}

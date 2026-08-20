@@ -351,7 +351,7 @@ export default function HistoryPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="bg-brand-600 px-4 pt-12 pb-4">
+      <div className="bg-brand-600 px-4 pt-12 pb-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">History</h1>

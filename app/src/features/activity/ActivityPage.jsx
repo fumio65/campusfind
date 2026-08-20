@@ -156,7 +156,7 @@ export default function ActivityPage() {
     <div className="flex flex-col min-h-full">
       {/* Header */}
       <div
-        className="bg-brand-600 px-5 pb-5"
+        className="bg-brand-600 px-5 pb-5 sticky top-0 z-10"
         style={{ paddingTop: 'max(3rem, env(safe-area-inset-top) + 1rem)' }}
       >
         <div className="flex items-center justify-between">
