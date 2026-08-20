@@ -24,79 +24,121 @@ function formatDate(dateStr) {
 export default function ProfilePage() {
   const { session, profile } = useAuth()
   const navigate = useNavigate()
-  const [recentRejections, setRecentRejections] = useState([])
+  const [trustData, setTrustData] = useState(null)
+  const [rejections, setRejections] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   useEffect(() => {
-    if (!session?.user?.id) return
-    setRecentRejections([])
-    setLoading(true)
-    fetchRejections()
+    fetchData()
   }, [])
 
-  async function fetchRejections() {
-    const since = new Date()
-    since.setDate(since.getDate() - 30)
+  async function fetchData() {
+    setLoading(true)
+    const { data: user } = await supabase
+      .from('users')
+      .select('trust_score, first_name, last_name, student_id, program')
+      .eq('id', session.user.id)
+      .single()
+    setTrustData(user)
 
-    const { data } = await supabase
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: recentRejections } = await supabase
       .from('claims')
-      .select('id, updated_at, reports(title)')
+      .select('id, created_at, report_id, reports(title)')
       .eq('claimant_id', session.user.id)
       .eq('status', 'rejected')
-      .gte('updated_at', since.toISOString())
-      .order('updated_at', { ascending: true })
-      .limit(100)
-
-    setRecentRejections(data ?? [])
+      .gte('created_at', thirtyDaysAgo)
+      .order('created_at', { ascending: false })
+    setRejections(recentRejections ?? [])
     setLoading(false)
   }
 
-  async function handleSignOut() {
+  async function handleLogout() {
     await supabase.auth.signOut()
     navigate('/login')
   }
 
-  if (!profile) return null
+  const score = trustData?.trust_score ?? 100
+  const maxScore = 200
+  const pct = Math.min((score / maxScore) * 100, 100)
+  const standing = score >= 80 ? 'Good standing' : score >= 50 ? 'Fair standing' : 'Poor standing'
+  const standingColor = score >= 80
+    ? 'text-status-open-text bg-status-open-bg'
+    : score >= 50
+      ? 'text-status-claimed-text bg-status-claimed-bg'
+      : 'text-status-rejected-text bg-status-rejected-bg'
 
-  const trustScore = profile.trust_score ?? 100
-  const rejectionCount = recentRejections.length
-  const oldestRejection = recentRejections[0]
-  const expiryDate = oldestRejection
-    ? new Date(new Date(oldestRejection.updated_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    : null
+  const initials = profile
+    ? `${profile.first_name?.[0] ?? ''}${profile.last_name?.[0] ?? ''}`.toUpperCase()
+    : '?'
 
-  // Trust score color
-  const scoreColor = trustScore >= 90
-    ? 'text-status-open-text'
-    : trustScore >= 70
-      ? 'text-status-claimed-text'
-      : 'text-status-rejected-text'
-
-  const scoreBg = trustScore >= 90
-    ? 'bg-status-open-bg'
-    : trustScore >= 70
-      ? 'bg-status-claimed-bg'
-      : 'bg-status-rejected-bg'
-
-  const scoreLabel = trustScore >= 90 ? 'Good standing' : trustScore >= 70 ? 'Fair' : 'Poor standing'
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-page">
+        <div className="bg-brand-600 px-4 pt-12 pb-6 sticky top-0 z-10">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-white/20 animate-pulse" />
+            <div className="flex flex-col gap-2">
+              <div className="h-4 bg-white/20 rounded w-32 animate-pulse" />
+              <div className="h-3 bg-white/20 rounded w-20 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-surface-page safe-top pb-28">
+    <div className="min-h-screen bg-surface-page">
+
+      {/* Logout confirmation dialog */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-6">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-surface-card rounded-2xl w-full max-w-sm p-5 shadow-xl"
+          >
+            <div className="flex flex-col items-center text-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-status-rejected-bg flex items-center justify-center mb-3">
+                <LogOut size={22} className="text-status-rejected-text" />
+              </div>
+              <h3 className="text-sm font-bold text-text-primary mb-1">Log out?</h3>
+              <p className="text-xs text-text-secondary">
+                Are you sure you want to log out of CampusFind?
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 h-11 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 h-11 rounded-xl bg-status-rejected-text text-white text-sm font-semibold hover:opacity-90 transition-colors"
+              >
+                Log out
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-brand-600 px-4 pt-12 pb-6 sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-            <span className="text-2xl font-bold text-white">
-              {profile.first_name?.[0]}{profile.last_name?.[0]}
-            </span>
+            <span className="text-2xl font-bold text-white">{initials}</span>
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold text-white truncate">
-              {profile.first_name} {profile.last_name}
+              {profile?.first_name} {profile?.last_name}
             </h1>
-            <p className="text-sm text-brand-100">{profile.student_id}</p>
-            {profile.program && (
+            <p className="text-sm text-brand-100">{profile?.student_id}</p>
+            {profile?.program && (
               <p className="text-xs text-brand-200 mt-0.5">{profile.program}</p>
             )}
           </div>
@@ -104,7 +146,6 @@ export default function ProfilePage() {
       </div>
 
       <div className="px-4 mt-4 flex flex-col gap-4">
-
         {/* Trust Score card */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -113,51 +154,49 @@ export default function ProfilePage() {
         >
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-bold text-text-primary flex items-center gap-1.5">
-              <Shield size={15} className="text-brand-600" /> Trust Score
+              <Shield size={15} className="text-brand-600" />
+              Trust Score
             </h2>
-            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${scoreBg} ${scoreColor}`}>
-              {scoreLabel}
+            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${standingColor}`}>
+              {standing}
             </span>
           </div>
 
-          <div className="flex items-center gap-4 mb-4">
-            <div className={`w-16 h-16 rounded-full ${scoreBg} flex items-center justify-center shrink-0`}>
-              <span className={`text-2xl font-bold ${scoreColor}`}>{trustScore}</span>
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-14 h-14 rounded-full bg-brand-50 border-2 border-brand-200 flex items-center justify-center shrink-0">
+              <span className="text-lg font-bold text-brand-600">{score}</span>
             </div>
             <div className="flex-1">
-              <div className="w-full h-2 bg-surface-muted rounded-full overflow-hidden">
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    trustScore >= 90 ? 'bg-status-open-text' : trustScore >= 70 ? 'bg-status-claimed-text' : 'bg-status-rejected-text'
-                  }`}
-                  style={{ width: `${Math.min(100, trustScore / 2)}%` }}
-                />
+              <div className="flex justify-between text-[10px] text-text-muted mb-1">
+                <span>0</span>
+                <span>{maxScore}</span>
               </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-[10px] text-text-muted">0</span>
-                <span className="text-[10px] text-text-muted">200</span>
+              <div className="h-2.5 bg-surface-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-brand-600 rounded-full transition-all duration-500"
+                  style={{ width: `${pct}%` }}
+                />
               </div>
             </div>
           </div>
 
-          {/* How score changes */}
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <TrendingUp size={12} className="text-status-open-text shrink-0" />
-              <span>+5 when a claim is approved and item is recovered</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <TrendingDown size={12} className="text-status-rejected-text shrink-0" />
-              <span>-5 when a claim is rejected by the reporter</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <TrendingDown size={12} className="text-status-rejected-text shrink-0" />
-              <span>-5 extra on the 3rd rejection within 30 days</span>
-            </div>
+            <p className="text-[11px] text-status-open-text flex items-center gap-1.5">
+              <TrendingUp size={11} />
+              +5 when a claim is approved and item is recovered
+            </p>
+            <p className="text-[11px] text-status-rejected-text flex items-center gap-1.5">
+              <TrendingDown size={11} />
+              -5 when a claim is rejected by the reporter
+            </p>
+            <p className="text-[11px] text-status-rejected-text flex items-center gap-1.5">
+              <TrendingDown size={11} />
+              -5 extra on the 3rd rejection within 30 days
+            </p>
           </div>
         </motion.div>
 
-        {/* 30-day rejection window */}
+        {/* 30-Day Rejection Window */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -165,141 +204,88 @@ export default function ProfilePage() {
           className="bg-surface-card rounded-2xl border border-border p-4 shadow-sm"
         >
           <h2 className="text-sm font-bold text-text-primary flex items-center gap-1.5 mb-3">
-            <Clock size={15} className="text-brand-600" /> 30-Day Rejection Window
+            <Clock size={15} className="text-brand-600" />
+            30-Day Rejection Window
           </h2>
 
-          {loading ? (
-            <div className="h-10 bg-surface-muted rounded-xl animate-pulse" />
-          ) : rejectionCount === 0 ? (
-            <div className="flex items-center gap-2 text-xs text-status-open-text bg-status-open-bg rounded-xl px-3 py-2.5">
-              <CheckCircle2 size={14} className="shrink-0" />
-              No rejected claims in the last 30 days. You're in good standing!
+          {rejections.length === 0 ? (
+            <div className="flex items-center gap-2 bg-status-open-bg rounded-xl px-3 py-2.5">
+              <CheckCircle2 size={14} className="text-status-open-text shrink-0" />
+              <p className="text-xs text-status-open-text font-medium">
+                No rejected claims in the last 30 days. You're in good standing!
+              </p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-
-              {/* Status message */}
-              <div className={`flex items-start gap-2 text-xs rounded-xl px-3 py-2.5 ${
-                rejectionCount >= 3
-                  ? 'bg-status-rejected-bg text-status-rejected-text'
-                  : rejectionCount === 2
-                    ? 'bg-status-claimed-bg text-status-claimed-text'
-                    : 'bg-surface-muted text-text-secondary'
+              <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ${
+                rejections.length >= 3 ? 'bg-status-rejected-bg' : 'bg-status-claimed-bg'
               }`}>
-                <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold mb-0.5">
-                    {rejectionCount} rejection{rejectionCount > 1 ? 's' : ''} in the last 30 days
-                  </p>
-                  {rejectionCount === 1 && (
-                    <p>Be careful — a 3rd rejection within 30 days triggers an extra -5 penalty.</p>
-                  )}
-                  {rejectionCount === 2 && (
-                    <p>One more rejection this month will trigger an additional -5 penalty.</p>
-                  )}
-                  {rejectionCount >= 3 && (
-                    <p>You have reached the 3-rejection threshold. The extra -5 penalty is now active.</p>
-                  )}
-                </div>
+                <AlertTriangle size={13} className={rejections.length >= 3 ? 'text-status-rejected-text' : 'text-status-claimed-text'} />
+                <p className={`text-xs font-medium ${rejections.length >= 3 ? 'text-status-rejected-text' : 'text-status-claimed-text'}`}>
+                  {rejections.length} rejection{rejections.length === 1 ? '' : 's'} in the last 30 days
+                  {rejections.length >= 3 && ' — penalty applied'}
+                </p>
               </div>
-
-              {/* Window reset */}
-              {expiryDate && (
-                <div className="flex items-center justify-between text-xs bg-surface-muted rounded-xl px-3 py-2.5">
-                  <span className="flex items-center gap-1.5 text-text-secondary">
-                    <Clock size={11} className="shrink-0" />
-                    Window resets when oldest expires
-                  </span>
-                  <span className="font-semibold text-text-primary">
-                    {formatDate(expiryDate)} · {timeUntil(expiryDate)}
-                  </span>
-                </div>
-              )}
-
-              {/* Rejection list */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex flex-col gap-0.5 px-1">
-                  <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">
-                    Rejected claims this month
+              {rejections.map((r) => (
+                <div key={r.id} className="flex items-center justify-between px-1">
+                  <p className="text-xs text-text-secondary truncate flex-1">
+                    {r.reports?.title ?? 'Unknown report'}
                   </p>
-                  <p className="text-[11px] text-text-muted">
-                    The number shows which rejection this is. A 3rd triggers an extra -5 penalty.
+                  <p className="text-[10px] text-text-muted ml-2 shrink-0">
+                    {formatDate(r.created_at)} · expires in {timeUntil(new Date(new Date(r.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString())}
                   </p>
                 </div>
-                {recentRejections.map((r, i) => {
-                  const itemExpiry = new Date(new Date(r.updated_at).getTime() + 30 * 24 * 60 * 60 * 1000)
-                  const isThird = i + 1 === 3
-                  const badgeStyle = isThird
-                    ? 'bg-status-rejected-text text-white'
-                    : i + 1 === 2
-                      ? 'bg-status-claimed-text/20 text-status-claimed-text'
-                      : 'bg-border-strong text-text-secondary'
-                  return (
-                    <div key={r.id} className="flex items-center justify-between bg-surface-muted rounded-xl px-3 py-2.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${badgeStyle}`}>
-                          {i + 1}
-                        </span>
-                        <span className="text-xs font-medium text-text-primary truncate">
-                          {r.reports?.title ?? 'Unknown item'}
-                        </span>
-                        {isThird && (
-                          <span className="text-[10px] bg-status-rejected-bg text-status-rejected-text px-1.5 py-0.5 rounded-full font-medium shrink-0">
-                            -5 extra
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-text-muted shrink-0 ml-2">
-                        {itemExpiry.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
+              ))}
             </div>
           )}
         </motion.div>
 
-        {/* Account info */}
+        {/* Account */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-surface-card rounded-2xl border border-border overflow-hidden shadow-sm"
+          className="bg-surface-card rounded-2xl border border-border shadow-sm overflow-hidden"
         >
           <div className="px-4 py-3 border-b border-border">
             <h2 className="text-sm font-bold text-text-primary flex items-center gap-1.5">
-              <User size={15} className="text-brand-600" /> Account
+              <User size={15} className="text-brand-600" />
+              Account
             </h2>
           </div>
-          {[
-            { label: 'Student ID', value: profile.student_id },
-            { label: 'Year level', value: profile.year_level ?? '—' },
-            { label: 'Program', value: profile.program ?? '—' },
-            { label: 'Status', value: profile.status ?? 'Active' },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
-              <span className="text-xs text-text-muted">{label}</span>
-              <span className="text-xs font-medium text-text-primary capitalize">{value}</span>
-            </div>
-          ))}
+          <div className="divide-y divide-border">
+            {[
+              { label: 'Full name', value: `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() },
+              { label: 'Student ID', value: profile?.student_id ?? '—' },
+              { label: 'Program', value: profile?.program ?? '—' },
+              { label: 'Email', value: session?.user?.email ?? '—' },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
+                <p className="text-xs text-text-muted">{label}</p>
+                <p className="text-xs font-medium text-text-primary">{value}</p>
+              </div>
+            ))}
+          </div>
         </motion.div>
 
-        {/* Sign out */}
-        <motion.button
+        {/* Log out */}
+        <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          onClick={handleSignOut}
-          className="w-full flex items-center justify-between bg-surface-card rounded-2xl border border-border px-4 py-3.5 shadow-sm"
+          className="pb-6"
         >
-          <div className="flex items-center gap-2.5">
-            <LogOut size={16} className="text-status-rejected-text" />
-            <span className="text-sm font-medium text-status-rejected-text">Sign out</span>
-          </div>
-          <ChevronRight size={16} className="text-text-muted" />
-        </motion.button>
-
+          <button
+            onClick={() => setShowLogoutConfirm(true)}
+            className="w-full flex items-center justify-between bg-surface-card rounded-2xl border border-border px-4 py-3.5 shadow-sm hover:bg-surface-muted transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <LogOut size={16} className="text-status-rejected-text" />
+              <span className="text-sm font-medium text-status-rejected-text">Log out</span>
+            </div>
+            <ChevronRight size={16} className="text-text-muted" />
+          </button>
+        </motion.div>
       </div>
     </div>
   )
