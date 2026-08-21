@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CampusFind</string>
+    <string name="title_activity_main">CampusFind</string>
+    <string name="package_name">com.nwssu.campusfind</string>
+    <string name="custom_url_scheme">com.nwssu.campusfind</string>
+</resources>
