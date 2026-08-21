@@ -29,7 +29,15 @@ import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
-function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert }) {
+function TipCard({
+  tip,
+  isOwn,
+  onReply,
+  isReply,
+  onCredit,
+  credited,
+  onConvert,
+}) {
   const name = tip.users
     ? `${tip.users.first_name} ${tip.users.last_name}`
     : "Anonymous";
@@ -105,8 +113,7 @@ function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert }
                     onClick={onConvert}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-brand-400 bg-surface-page text-[10px] font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
                   >
-                    <Camera size={10} />
-                    I can prove this
+                    <Camera size={10} />I can prove this
                   </button>
                 )}
                 {!isReply && !credited && (
@@ -469,35 +476,49 @@ export default function ReportDetailPage() {
 
   async function handleShare() {
     const url = `${window.location.origin}/reports/${id}`;
-    const title = report?.type === "found_walkin"
-      ? `Found: ${report.title}`
-      : `Lost: ${report.title}`;
+    const title =
+      report?.type === "found_walkin"
+        ? `Found: ${report.title}`
+        : `Lost: ${report.title}`;
     const text = [
       report?.description ?? "",
       report?.location ? `📍 ${report.location}` : "",
       "Help find this item on CampusFind — NwSSU Lost & Found",
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, text, url });
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          await copyFallback(url);
+    try {
+      const { Share } = await import("@capacitor/share");
+      await Share.share({ title, text, url, dialogTitle: "Share this report" });
+    } catch {
+      // Fallback for web
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text, url });
+        } catch (err) {
+          if (err.name !== "AbortError") await copyFallback(url);
         }
+      } else {
+        await copyFallback(url);
       }
-    } else {
-      await copyFallback(url);
     }
   }
 
   async function copyFallback(url) {
     try {
-      await navigator.clipboard.writeText(url);
+      const { Clipboard } = await import("@capacitor/clipboard");
+      await Clipboard.write({ string: url });
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2500);
     } catch {
-      // ignore
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+      } catch {
+        window.prompt("Copy this link:", url);
+      }
     }
   }
 
@@ -505,14 +526,11 @@ export default function ReportDetailPage() {
     if (!claim) return;
     setActioning(true);
     try {
-      await fetch(
-        `${SERVER_URL}/claims/${claim.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
+      await fetch(`${SERVER_URL}/claims/${claim.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
     } catch (err) {
       console.error(err);
     }
@@ -523,14 +541,11 @@ export default function ReportDetailPage() {
   async function handleMarkResolved() {
     setActioning(true);
     try {
-      await fetch(
-        `${SERVER_URL}/reports/${id}/resolve`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resolvedVia: "handoff" }),
-        },
-      );
+      await fetch(`${SERVER_URL}/reports/${id}/resolve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolvedVia: "handoff" }),
+      });
     } catch (err) {
       console.error(err);
     }
@@ -589,18 +604,15 @@ export default function ReportDetailPage() {
     setPendingCreditTip(null);
     setCreditedTipId(tip.id);
     try {
-      await fetch(
-        `${SERVER_URL}/tips/${tip.id}/credit`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: tip.user_id,
-            reportId: id,
-            resolveReport,
-          }),
-        },
-      );
+      await fetch(`${SERVER_URL}/tips/${tip.id}/credit`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: tip.user_id,
+          reportId: id,
+          resolveReport,
+        }),
+      });
       if (resolveReport) fetchAll();
     } catch (err) {
       console.error(err);
@@ -638,7 +650,9 @@ export default function ReportDetailPage() {
             parentTipId: parentTipId ?? null,
           }),
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       setTipText("");
       setParentTipId(null);
       fetchAll();
@@ -831,30 +845,30 @@ export default function ReportDetailPage() {
 
       {/* Header */}
       <div className="bg-brand-600 px-4 pt-12 pb-3 sticky top-0 z-10">
-  <div className="flex items-center justify-between mb-2">
-    <button
-      onClick={() => navigate(-1)}
-      className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
-    >
-      <ArrowLeft size={20} className="text-white" />
-    </button>
-    <div className="flex items-center gap-2">
-      <span
-        className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLES[report.status] ?? ""}`}
-      >
-        {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-      </span>
-      {canShare && (
-        <button
-          onClick={handleShare}
-          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
-          aria-label="Share report"
-        >
-          <Share2 size={16} className="text-white" />
-        </button>
-      )}
-      {isOwner && isOpen && (
-        <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1">
+        <div className="flex items-center justify-between mb-2">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+          >
+            <ArrowLeft size={20} className="text-white" />
+          </button>
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLES[report.status] ?? ""}`}
+            >
+              {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+            </span>
+            {canShare && (
+              <button
+                onClick={handleShare}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                aria-label="Share report"
+              >
+                <Share2 size={16} className="text-white" />
+              </button>
+            )}
+            {isOwner && isOpen && (
+              <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1">
                 <Link
                   to={`/reports/${id}/edit`}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
@@ -1118,7 +1132,9 @@ export default function ReportDetailPage() {
           isClaimed &&
           (claim?.claimant_id === session?.user.id ? (
             <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
-              <p className="font-semibold mb-0.5">Your claim is under review.</p>
+              <p className="font-semibold mb-0.5">
+                Your claim is under review.
+              </p>
               <p>
                 Your claim is pending the reporter's review. You'll be notified
                 once a decision is made.
