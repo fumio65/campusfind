@@ -401,7 +401,7 @@ export default function ReportDetailPage() {
         .select("*")
         .eq("report_id", id)
         .in("status", ["pending", "approved"])
-        .single();
+        .maybeSingle();
 
       if (claimData) {
         activeClaim = claimData;
