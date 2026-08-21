@@ -134,15 +134,15 @@ export default function NewReportPage() {
   return (
     <div className="min-h-screen bg-surface-page safe-top safe-bottom">
       {/* Header */}
-      <div className="bg-surface-card border-b border-border px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
+      <div className="bg-brand-600 px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
         <button
           onClick={() => navigate(-1)}
-          className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface-muted transition-colors"
+          className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
           aria-label="Go back"
         >
-          <ArrowLeft size={20} className="text-text-primary" />
+          <ArrowLeft size={20} className="text-white" />
         </button>
-        <h1 className="text-base font-bold text-text-primary">Report a lost item</h1>
+        <h1 className="text-base font-bold text-white">Report a lost item</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 py-5 flex flex-col gap-5 pb-10">

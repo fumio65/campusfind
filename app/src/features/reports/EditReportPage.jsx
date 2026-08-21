@@ -145,11 +145,11 @@ export default function EditReportPage() {
   return (
     <div className="min-h-screen bg-surface-page safe-top pb-10">
       {/* Header */}
-      <div className="bg-surface-card border-b border-border px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
-        <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface-muted">
-          <ArrowLeft size={20} className="text-text-primary" />
+      <div className="bg-brand-600 px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10">
+          <ArrowLeft size={20} className="text-white" />
         </button>
-        <h1 className="text-base font-bold text-text-primary flex-1">Edit report</h1>
+        <h1 className="text-base font-bold text-white flex-1">Edit report</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 py-5 flex flex-col gap-5">

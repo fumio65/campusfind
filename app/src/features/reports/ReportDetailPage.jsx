@@ -656,7 +656,7 @@ export default function ReportDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-page safe-top">
-        <div className="bg-surface-card border-b border-border px-4 pt-12 pb-3 flex items-center gap-3">
+        <div className="bg-brand-600 px-4 pt-12 pb-3 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
             className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -830,36 +830,34 @@ export default function ReportDetailPage() {
       )}
 
       {/* Header */}
-      <div className="bg-surface-card border-b border-border px-4 pt-12 pb-3 sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-2">
-          <button
-            onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface-muted transition-colors"
-          >
-            <ArrowLeft size={20} className="text-text-primary" />
-          </button>
-          <div className="flex items-center gap-2">
-            <span
-              className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLES[report.status] ?? ""}`}
-            >
-              {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-            </span>
-
-            {canShare && (
-              <button
-                onClick={handleShare}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-muted transition-colors"
-                aria-label="Share report"
-              >
-                <Share2 size={16} className="text-text-secondary" />
-              </button>
-            )}
-
-            {isOwner && isOpen && (
-              <div className="flex items-center gap-1 bg-surface-muted rounded-xl p-1">
+      <div className="bg-brand-600 px-4 pt-12 pb-3 sticky top-0 z-10">
+  <div className="flex items-center justify-between mb-2">
+    <button
+      onClick={() => navigate(-1)}
+      className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+    >
+      <ArrowLeft size={20} className="text-white" />
+    </button>
+    <div className="flex items-center gap-2">
+      <span
+        className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLES[report.status] ?? ""}`}
+      >
+        {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+      </span>
+      {canShare && (
+        <button
+          onClick={handleShare}
+          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+          aria-label="Share report"
+        >
+          <Share2 size={16} className="text-white" />
+        </button>
+      )}
+      {isOwner && isOpen && (
+        <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1">
                 <Link
                   to={`/reports/${id}/edit`}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-surface-card hover:text-brand-600 transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <Pencil size={13} />
                   Edit
@@ -869,7 +867,7 @@ export default function ReportDetailPage() {
                     setShowDeleteConfirm(true);
                     setDeleteError(null);
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-surface-card hover:text-status-rejected-text transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <Trash2 size={13} />
                   Delete
@@ -878,7 +876,7 @@ export default function ReportDetailPage() {
             )}
           </div>
         </div>
-        <h1 className="text-base font-bold text-text-primary leading-snug">
+        <h1 className="text-base font-bold text-white leading-snug">
           {report.title}
         </h1>
       </div>

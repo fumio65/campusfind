@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
-import nwssuSeal from '../../assets/nwssu-seal.png'
 
 export default function LoginPage() {
   const [studentId, setStudentId] = useState('')
@@ -11,8 +10,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Supabase Auth uses email — we store student_id as the email identifier
-  // by convention: studentId@nwssu.local (a deterministic, non-real address)
   function toEmail(sid) {
     return `${sid.toLowerCase().replace('-', '')}@nwssu.local`
   }
@@ -20,123 +17,126 @@ export default function LoginPage() {
   async function handleLogin(e) {
     e.preventDefault()
     setError(null)
-
-    const sid = studentId.trim().toUpperCase()
-    if (!/^\d{2}-\d{5}$/.test(sid)) {
-      setError('Student ID must be in YY-NNNNN format (e.g. 24-00301).')
-      return
-    }
-
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({
-      email: toEmail(sid),
+
+    const formatted = studentId.trim().toUpperCase()
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: toEmail(formatted),
       password,
     })
 
-    if (error) {
-      setError('Incorrect student ID or password. Check your credentials and try again.')
+    if (signInError) {
+      setError('Invalid Student ID or password. Please try again.')
     }
+
     setLoading(false)
-    // On success, AuthContext detects the new session and App.jsx redirects
   }
 
   return (
-    <div className="min-h-screen bg-surface-page flex flex-col items-center justify-center px-6 safe-top safe-bottom">
+    <div className="min-h-screen bg-brand-600 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
 
-      {/* Logo / identity block */}
-      <motion.div
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="flex flex-col items-center mb-10"
-      >
-        <img
-          src={nwssuSeal}
-          alt="NwSSU seal"
-          className="w-20 h-20 mb-4"
-        />
-        <div className="text-center">
-          <div className="text-xs font-semibold tracking-widest text-brand-600 uppercase mb-1">
-            Northwest Samar State University
+        {/* Branding */}
+        <motion.div
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="text-center mb-8"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
           </div>
-          <h1 className="text-2xl font-bold text-text-primary">CampusFind</h1>
-          <p className="text-sm text-text-secondary mt-1">Lost &amp; Found — ISSC</p>
-        </div>
-      </motion.div>
+          <h1 className="text-2xl font-bold text-white">CampusFind</h1>
+          <p className="text-brand-200 text-sm mt-1">NwSSU Lost & Found</p>
+        </motion.div>
 
-      {/* Login card */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut', delay: 0.1 }}
-        className="w-full max-w-sm bg-surface-card rounded-2xl border border-border p-6 shadow-sm"
-      >
-        <h2 className="text-base font-semibold text-text-primary mb-5">Sign in to your account</h2>
+        {/* Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="bg-white rounded-2xl shadow-2xl p-6"
+        >
+          <h2 className="text-lg font-bold text-text-primary mb-1">Welcome back</h2>
+          <p className="text-xs text-text-muted mb-5">Sign in with your student credentials</p>
 
-        {error && (
-          <div className="flex items-start gap-2 bg-status-rejected-bg text-status-rejected-text text-xs rounded-lg px-3 py-2.5 mb-4">
-            <AlertCircle size={14} className="shrink-0 mt-0.5" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
-        )}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-start gap-2 bg-status-rejected-bg border border-status-rejected-text/20 text-status-rejected-text text-xs rounded-xl px-3 py-2.5 mb-4"
+            >
+              <AlertCircle size={13} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </motion.div>
+          )}
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <div>
-            <label className="text-xs font-medium text-text-secondary block mb-1.5">
-              Student ID
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. 24-00301"
-              value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
-              autoCapitalize="characters"
-              autoComplete="username"
-              required
-              className="w-full h-11 px-3.5 text-sm rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-text-secondary block mb-1.5">
-              Password
-            </label>
-            <div className="relative">
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                Student ID
+              </label>
               <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                data-1p-ignore
-                data-lpignore="true"
+                type="text"
+                placeholder="e.g. 24-00301"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck="false"
                 required
-                className="w-full h-11 pl-3.5 pr-11 text-sm rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
+                className="w-full h-10 px-3 text-sm rounded-lg border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-              </button>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-11 mt-1 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-60 transition-opacity active:opacity-80"
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-      </motion.div>
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full h-10 px-3 pr-10 text-sm rounded-lg border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary transition-colors"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
 
-      <p className="text-xs text-text-muted text-center mt-6 max-w-xs">
-        Your account is provisioned by the Registrar. Contact ISSC if you can't sign in.
-      </p>
+            <button
+              type="submit"
+              disabled={loading || !studentId.trim() || !password}
+              className="w-full h-10 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Signing in…
+                </span>
+              ) : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="text-center text-xs text-text-muted mt-4">
+            Forgot your password?{' '}
+            <span className="font-medium text-brand-600">Visit the ISSC office</span>
+          </p>
+        </motion.div>
+
+      </div>
     </div>
   )
 }
