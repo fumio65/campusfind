@@ -194,10 +194,10 @@ export default function ReportDetailPage() {
 
   // Read tip_id from URL search params
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const tipId = params.get('tip_id')
-    if (tipId) setHighlightedTipId(tipId)
-  }, [])
+    const params = new URLSearchParams(window.location.search);
+    const tipId = params.get("tip_id");
+    if (tipId) setHighlightedTipId(tipId);
+  }, []);
 
   async function showTrustToast(expectedDelta, reason = "") {
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -245,7 +245,7 @@ export default function ReportDetailPage() {
               "The item was recovered. Thank you for your honesty!",
             );
           }
-          setTimeout(() => fetchAll(), 500);
+          setTimeout(() => fetchAll(true), 500);
         },
       )
       .on(
@@ -287,7 +287,7 @@ export default function ReportDetailPage() {
           table: "claims",
         },
         (payload) => {
-          if (payload.new?.report_id === id) fetchAll();
+          if (payload.new?.report_id === id) fetchAll(true);
         },
       )
       .on(
@@ -301,7 +301,7 @@ export default function ReportDetailPage() {
         async (payload) => {
           const newStatus = payload.new?.status;
           const claimantId = payload.new?.claimant_id;
-          fetchAll();
+          fetchAll(true);
           if (
             claimantId === session?.user?.id ||
             claimantIdRef.current === session?.user?.id
@@ -323,7 +323,7 @@ export default function ReportDetailPage() {
           table: "tips",
         },
         (payload) => {
-          if (payload.new?.report_id === id) fetchAll();
+          if (payload.new?.report_id === id) fetchAll(true);
         },
       )
       .on(
@@ -334,7 +334,7 @@ export default function ReportDetailPage() {
           table: "tips",
         },
         (payload) => {
-          if (payload.new?.report_id === id) fetchAll();
+          if (payload.new?.report_id === id) fetchAll(true);
         },
       )
       .subscribe();
@@ -367,10 +367,10 @@ export default function ReportDetailPage() {
     }
   }, [loading, highlightedTipId]);
 
-  async function fetchAll() {
-    setLoading(true);
-    setClaim(null);
-    setClaimant(null);
+  async function fetchAll(silent = false) {
+    if (!silent) setLoading(true);
+    if (!silent) setClaim(null);
+    if (!silent) setClaimant(null);
 
     if (session?.user?.id && prevScoreRef.current === null) {
       const { data: userData } = await supabase
@@ -389,7 +389,7 @@ export default function ReportDetailPage() {
 
     if (error || !data) {
       setError("Report not found.");
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
     setReport(data);
@@ -499,7 +499,7 @@ export default function ReportDetailPage() {
     const credited = (tipsData ?? []).find((t) => t.credited);
     if (credited) setCreditedTipId(credited.id);
 
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   async function handleShare() {
@@ -559,7 +559,7 @@ export default function ReportDetailPage() {
       console.error(err);
     }
     setActioning(false);
-    fetchAll();
+    fetchAll(true);
   }
 
   async function handleMarkResolved() {
@@ -574,7 +574,7 @@ export default function ReportDetailPage() {
       console.error(err);
     }
     setActioning(false);
-    fetchAll();
+    fetchAll(true);
   }
 
   async function handleDelete() {
@@ -637,7 +637,7 @@ export default function ReportDetailPage() {
           resolveReport,
         }),
       });
-      if (resolveReport) fetchAll();
+      if (resolveReport) fetchAll(true);
     } catch (err) {
       console.error(err);
       setCreditedTipId(null);
@@ -677,7 +677,7 @@ export default function ReportDetailPage() {
       } catch { /* ignore */ }
       setTipText("");
       setParentTipId(null);
-      fetchAll();
+      fetchAll(true);
     }
     setSubmittingTip(false);
   }
