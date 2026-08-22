@@ -12,13 +12,13 @@ import {
   CheckCircle2,
   XCircle,
   Star,
-  X,
   CornerUpLeft,
   Pencil,
   Trash2,
   Camera,
   Share2,
   Link as LinkIcon,
+  ImagePlus,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
@@ -29,7 +29,33 @@ import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
-function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert, isHighlighted }) {
+function getScrollContainer() {
+  return document.querySelector("main") ?? window;
+}
+
+function scrollContainerTo(top) {
+  const el = document.querySelector("main");
+  if (el) {
+    el.scrollTop = top;
+  } else {
+    window.scrollTo({ top, behavior: "instant" });
+  }
+}
+
+function getScrollTop() {
+  const el = document.querySelector("main");
+  return el ? el.scrollTop : window.scrollY;
+}
+
+function TipCard({
+  tip,
+  isOwn,
+  onReply,
+  isReply,
+  credited,
+  onConvert,
+  isHighlighted,
+}) {
   const name = tip.users
     ? `${tip.users.first_name} ${tip.users.last_name}`
     : "Anonymous";
@@ -39,7 +65,10 @@ function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert, 
   const trustScore = tip.users?.trust_score ?? 100;
 
   return (
-    <div id={`tip-${tip.id}`} className={isReply ? "pl-4 border-l-2 border-brand-200 ml-1" : ""}>
+    <div
+      id={`tip-${tip.id}`}
+      className={isReply ? "pl-4 border-l-2 border-brand-200 ml-1" : ""}
+    >
       <div
         className={`rounded-xl p-3 transition-colors ${
           credited
@@ -91,24 +120,13 @@ function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert, 
                 )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {onCredit && !credited && (
-                  <button
-                    type="button"
-                    onClick={onCredit}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-600 text-white text-[10px] font-semibold hover:bg-brand-700 transition-colors"
-                  >
-                    <CheckCircle2 size={10} />
-                    Mark as helpful
-                  </button>
-                )}
                 {onConvert && !credited && !tip.converted_to_claim_id && (
                   <button
                     type="button"
                     onClick={onConvert}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-brand-400 bg-surface-page text-[10px] font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
                   >
-                    <Camera size={10} />
-                    I can prove this
+                    <Camera size={10} />I can prove this
                   </button>
                 )}
                 {!isReply && !credited && onReply && (
@@ -177,17 +195,20 @@ export default function ReportDetailPage() {
     delta: 0,
     newScore: 100,
   });
-  const [creditedTipId, setCreditedTipId] = useState(null);
-  const [pendingCreditTip, setPendingCreditTip] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [highlightedTipId, setHighlightedTipId] = useState(null);
+  const [showResolveDialog, setShowResolveDialog] = useState(false);
+  const [resolvePhoto, setResolvePhoto] = useState(null);
+  const [resolvePhotoPreview, setResolvePhotoPreview] = useState(null);
+  const [resolving, setResolving] = useState(false);
+  const resolveFileRef = useRef(null);
 
   const claimantIdRef = useRef(null);
   const prevScoreRef = useRef(null);
-
+  
   useEffect(() => {
     claimantIdRef.current = claim?.claimant_id ?? null;
   }, [claim]);
@@ -342,14 +363,18 @@ export default function ReportDetailPage() {
     return () => supabase.removeChannel(channel);
   }, [id]);
 
-  // Scroll to section based on URL hash
+  // Scroll to top or section after loading
   useEffect(() => {
-    if (!loading && window.location.hash) {
-      const el = document.querySelector(window.location.hash);
-      if (el) {
-        setTimeout(() => {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 300);
+    if (!loading) {
+      if (window.location.hash) {
+        const el = document.querySelector(window.location.hash);
+        if (el) {
+          setTimeout(() => {
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 300);
+        }
+      } else if (!highlightedTipId) {
+        scrollContainerTo(0);
       }
     }
   }, [loading]);
@@ -368,6 +393,7 @@ export default function ReportDetailPage() {
   }, [loading, highlightedTipId]);
 
   async function fetchAll(silent = false) {
+    const scrollY = silent ? getScrollTop() : 0;
     if (!silent) setLoading(true);
     if (!silent) setClaim(null);
     if (!silent) setClaimant(null);
@@ -496,52 +522,57 @@ export default function ReportDetailPage() {
       .order("created_at", { ascending: true });
     setTips(tipsData ?? []);
 
-    const credited = (tipsData ?? []).find((t) => t.credited);
-    if (credited) setCreditedTipId(credited.id);
-
     if (!silent) setLoading(false);
+    if (silent) {
+      requestAnimationFrame(() => {
+        scrollContainerTo(scrollY);
+      });
+    }
   }
 
   async function handleShare() {
     const url = `${window.location.origin}/reports/${id}`;
-    const title = report?.type === "found_walkin"
-      ? `Found: ${report.title}`
-      : `Lost: ${report.title}`;
+    const title =
+      report?.type === "found_walkin"
+        ? `Found: ${report.title}`
+        : `Lost: ${report.title}`;
     const text = [
       report?.description ?? "",
       report?.location ? `📍 ${report.location}` : "",
       "Help find this item on CampusFind — NwSSU Lost & Found",
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     try {
-      const { Share } = await import('@capacitor/share')
-      await Share.share({ title, text, url, dialogTitle: 'Share this report' })
+      const { Share } = await import("@capacitor/share");
+      await Share.share({ title, text, url, dialogTitle: "Share this report" });
     } catch {
       if (navigator.share) {
         try {
-          await navigator.share({ title, text, url })
+          await navigator.share({ title, text, url });
         } catch (err) {
-          if (err.name !== 'AbortError') await copyFallback(url)
+          if (err.name !== "AbortError") await copyFallback(url);
         }
       } else {
-        await copyFallback(url)
+        await copyFallback(url);
       }
     }
   }
 
   async function copyFallback(url) {
     try {
-      const { Clipboard } = await import('@capacitor/clipboard')
-      await Clipboard.write({ string: url })
-      setShareCopied(true)
-      setTimeout(() => setShareCopied(false), 2500)
+      const { Clipboard } = await import("@capacitor/clipboard");
+      await Clipboard.write({ string: url });
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2500);
     } catch {
       try {
         await navigator.clipboard.writeText(url);
         setShareCopied(true);
         setTimeout(() => setShareCopied(false), 2500);
       } catch {
-        window.prompt('Copy this link:', url)
+        window.prompt("Copy this link:", url);
       }
     }
   }
@@ -562,19 +593,44 @@ export default function ReportDetailPage() {
     fetchAll(true);
   }
 
+  function handleResolveClick() {
+    setResolvePhoto(null);
+    setResolvePhotoPreview(null);
+    setShowResolveDialog(true);
+  }
+
+  function handleResolvePhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResolvePhoto(file);
+    setResolvePhotoPreview(URL.createObjectURL(file));
+  }
+
   async function handleMarkResolved() {
-    setActioning(true);
+    if (!resolvePhoto) return;
+    setResolving(true);
     try {
+      const ext = resolvePhoto.name.split(".").pop();
+      const path = `resolved/${id}/${Date.now()}.${ext}`;
+      await supabase.storage.from("report-photos").upload(path, resolvePhoto);
+
       await fetch(`${SERVER_URL}/reports/${id}/resolve`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resolvedVia: "handoff" }),
+        body: JSON.stringify({
+          resolvedVia: "handoff",
+          resolvePhotoPath: path,
+        }),
       });
+
+      setShowResolveDialog(false);
+      setResolvePhoto(null);
+      setResolvePhotoPreview(null);
+      fetchAll(true);
     } catch (err) {
       console.error(err);
     }
-    setActioning(false);
-    fetchAll(true);
+    setResolving(false);
   }
 
   async function handleDelete() {
@@ -618,32 +674,6 @@ export default function ReportDetailPage() {
     }
   }
 
-  async function handleCreditTip(tip) {
-    setPendingCreditTip(tip);
-  }
-
-  async function confirmCreditTip(resolveReport = false) {
-    const tip = pendingCreditTip;
-    if (!tip) return;
-    setPendingCreditTip(null);
-    setCreditedTipId(tip.id);
-    try {
-      await fetch(`${SERVER_URL}/tips/${tip.id}/credit`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: tip.user_id,
-          reportId: id,
-          resolveReport,
-        }),
-      });
-      if (resolveReport) fetchAll(true);
-    } catch (err) {
-      console.error(err);
-      setCreditedTipId(null);
-    }
-  }
-
   function handleConvertTip(tip) {
     navigate(`/reports/${id}/claim?fromTip=${tip.id}`);
   }
@@ -655,12 +685,16 @@ export default function ReportDetailPage() {
       return setTipError("This report has reached the 25-tip limit.");
     setSubmittingTip(true);
     setTipError(null);
-    const { data: newTip, error } = await supabase.from("tips").insert({
-      report_id: id,
-      user_id: session.user.id,
-      text: tipText.trim(),
-      parent_tip_id: parentTipId ?? null,
-    }).select().single();
+    const { data: newTip, error } = await supabase
+      .from("tips")
+      .insert({
+        report_id: id,
+        user_id: session.user.id,
+        text: tipText.trim(),
+        parent_tip_id: parentTipId ?? null,
+      })
+      .select()
+      .single();
     if (error) setTipError(error.message);
     else {
       try {
@@ -674,7 +708,9 @@ export default function ReportDetailPage() {
             tipId: newTip?.id ?? null,
           }),
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       setTipText("");
       setParentTipId(null);
       fetchAll(true);
@@ -771,8 +807,8 @@ export default function ReportDetailPage() {
         </motion.div>
       )}
 
-      {/* Credit tip confirmation dialog */}
-      {pendingCreditTip && (
+      {/* Mark as resolved dialog */}
+      {showResolveDialog && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-6">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 8 }}
@@ -783,38 +819,68 @@ export default function ReportDetailPage() {
               <CheckCircle2 size={20} className="text-status-open-text" />
             </div>
             <h3 className="text-sm font-bold text-text-primary mb-1">
-              Mark tip as helpful?
+              Mark as resolved
             </h3>
-            <p className="text-xs text-text-secondary mb-1">
-              You're about to credit this tip from{" "}
-              <span className="font-semibold">
-                {pendingCreditTip.users?.first_name}{" "}
-                {pendingCreditTip.users?.last_name}
-              </span>
-              :
+            <p className="text-xs text-text-secondary mb-4">
+              Please take a photo of the recovered item as proof before marking
+              this report as resolved.
             </p>
-            <p className="text-xs text-text-primary bg-surface-muted rounded-xl px-3 py-2 mb-4 italic">
-              "{pendingCreditTip.text}"
-            </p>
-            <p className="text-xs text-text-muted mb-4">
-              This will award them{" "}
-              <span className="font-semibold text-status-open-text">
-                +2 trust score
-              </span>{" "}
-              and mark this report as resolved. This action cannot be undone.
-            </p>
-            <div className="flex flex-col gap-2">
+
+            <input
+              ref={resolveFileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleResolvePhotoChange}
+            />
+
+            {resolvePhotoPreview ? (
+              <div className="relative mb-4">
+                <img
+                  src={resolvePhotoPreview}
+                  alt="Resolve proof"
+                  className="w-full h-40 object-cover rounded-xl border border-border"
+                />
+                <button
+                  onClick={() => {
+                    setResolvePhoto(null);
+                    setResolvePhotoPreview(null);
+                  }}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white"
+                >
+                  <ArrowLeft size={14} className="rotate-[135deg]" />
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={() => confirmCreditTip(true)}
-                className="w-full h-10 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors"
+                onClick={() => resolveFileRef.current?.click()}
+                className="w-full h-32 rounded-xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center gap-2 mb-4 hover:border-brand-400 transition-colors"
               >
-                Yes, this tip helped — mark resolved
+                <ImagePlus size={24} className="text-text-muted" />
+                <p className="text-xs text-text-muted">
+                  Tap to take or upload a photo
+                </p>
               </button>
+            )}
+
+            <div className="flex gap-2">
               <button
-                onClick={() => setPendingCreditTip(null)}
-                className="w-full h-10 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors"
+                onClick={() => {
+                  setShowResolveDialog(false);
+                  setResolvePhoto(null);
+                  setResolvePhotoPreview(null);
+                }}
+                className="flex-1 h-11 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors"
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleMarkResolved}
+                disabled={!resolvePhoto || resolving}
+                className="flex-1 h-11 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+              >
+                {resolving ? "Saving…" : "Confirm"}
               </button>
             </div>
           </motion.div>
@@ -1067,24 +1133,39 @@ export default function ReportDetailPage() {
               Claim approved!
             </p>
             <p className="text-xs text-status-open-text/80 mb-3">
-              Once you've received your item, mark it as resolved.
+              Once you've received your item, take a photo as proof and mark it
+              as resolved.
             </p>
             <button
-              onClick={handleMarkResolved}
+              onClick={handleResolveClick}
               disabled={actioning}
-              className="w-full h-11 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50"
+              className="w-full h-11 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {actioning ? "Saving…" : "Mark as resolved"}
+              <Camera size={16} /> Mark as resolved
             </button>
           </motion.div>
         )}
 
-        {/* Approved: messaging thread */}
+        {/* Approved: messaging thread + claimant notice */}
         {isApproved &&
           claim &&
           (isOwner || claim?.claimant_id === session?.user.id) && (
-            <div id="messages">
-              <MessageThread claim={claim} report={report} isReporter={isOwner} />
+            <div id="messages" className="flex flex-col gap-4">
+              {!isOwner && claim?.claimant_id === session?.user.id && (
+                <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
+                  <p className="font-semibold mb-0.5">
+                    Your claim was approved!
+                  </p>
+                  <p>
+                    Use the thread below to arrange handoff with the reporter.
+                  </p>
+                </div>
+              )}
+              <MessageThread
+                claim={claim}
+                report={report}
+                isReporter={isOwner}
+              />
             </div>
           )}
 
@@ -1100,14 +1181,6 @@ export default function ReportDetailPage() {
         {/* Reporter: proxy confirmation banner */}
         {isOwner && isApproved && claim?.drop_off_chosen && (
           <ConfirmationRequestBanner reportId={id} />
-        )}
-
-        {/* Claimant: approved notice */}
-        {!isOwner && isApproved && claim?.claimant_id === session?.user.id && (
-          <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
-            <p className="font-semibold mb-0.5">Your claim was approved!</p>
-            <p>Use the thread below to arrange handoff with the reporter.</p>
-          </div>
         )}
 
         {/* Resolved */}
@@ -1159,7 +1232,9 @@ export default function ReportDetailPage() {
           isClaimed &&
           (claim?.claimant_id === session?.user.id ? (
             <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
-              <p className="font-semibold mb-0.5">Your claim is under review.</p>
+              <p className="font-semibold mb-0.5">
+                Your claim is under review.
+              </p>
               <p>
                 Your claim is pending the reporter's review. You'll be notified
                 once a decision is made.
@@ -1201,7 +1276,10 @@ export default function ReportDetailPage() {
           )}
 
         {/* Tips */}
-        <div id="tips" className="bg-surface-card rounded-2xl border border-border p-4">
+        <div
+          id="tips"
+          className="bg-surface-card rounded-2xl border border-border p-4"
+        >
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
               <Lightbulb size={15} className="text-status-claimed-text" /> Tips
@@ -1238,12 +1316,7 @@ export default function ReportDetailPage() {
                       isOwn={parent.user_id === session?.user.id}
                       isReply={false}
                       isHighlighted={highlightedTipId === parent.id}
-                      onCredit={
-                        isOwner && !creditedTipId && !parent.credited
-                          ? () => handleCreditTip(parent)
-                          : null
-                      }
-                      credited={creditedTipId === parent.id || parent.credited}
+                      credited={parent.credited}
                       onConvert={
                         parent.user_id === session?.user.id &&
                         isOpen &&
@@ -1269,6 +1342,7 @@ export default function ReportDetailPage() {
                         isOwn={reply.user_id === session?.user.id}
                         isReply={true}
                         isHighlighted={highlightedTipId === reply.id}
+                        credited={reply.credited}
                         onConvert={
                           reply.user_id === session?.user.id &&
                           isOpen &&
@@ -1282,7 +1356,9 @@ export default function ReportDetailPage() {
                           reply.user_id !== session?.user.id
                             ? () => {
                                 setParentTipId(parent.id);
-                                setTipText(`@${reply.users?.first_name ?? ""} `);
+                                setTipText(
+                                  `@${reply.users?.first_name ?? ""} `,
+                                );
                               }
                             : null
                         }

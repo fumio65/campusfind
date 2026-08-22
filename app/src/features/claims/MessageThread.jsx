@@ -10,7 +10,9 @@ export default function MessageThread({ claim, report, isReporter }) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [dropOffSent, setDropOffSent] = useState(false)
-  const bottomRef = useRef(null)
+  const messagesContainerRef = useRef(null)
+  const prevCountRef = useRef(0)
+  const isInitialLoad = useRef(true)
 
   useEffect(() => {
     if (!claim?.id) return
@@ -41,7 +43,24 @@ export default function MessageThread({ claim, report, isReporter }) {
   }, [claim?.id])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false
+      prevCountRef.current = messages.length
+      // Scroll to bottom of message container on initial load
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+      }
+      return
+    }
+    if (messages.length > prevCountRef.current) {
+      const lastMsg = messages[messages.length - 1]
+      if (lastMsg && lastMsg.sender_id !== session?.user?.id) {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+        }
+      }
+    }
+    prevCountRef.current = messages.length
   }, [messages])
 
   async function fetchMessages() {
@@ -61,24 +80,18 @@ export default function MessageThread({ claim, report, isReporter }) {
     if (!text.trim() || sending) return
     setSending(true)
     const role = isReporter ? 'reporter' : 'claimant'
-    console.log('[MessageThread] inserting:', {
-      claim_id: claim.id,
-      sender_id: session.user.id,
-      sender_role: role,
-      body: text.trim(),
-    })
     const { error } = await supabase.from('claim_messages').insert({
       claim_id: claim.id,
       sender_id: session.user.id,
       sender_role: role,
       body: text.trim(),
     })
-    if (error) {
-      console.error('[MessageThread] insert error:', error)
-    }
     if (!error) {
       setText('')
-      fetchMessages()
+      // Scroll to bottom after sending own message
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+      }
       try {
         await fetch(`${SERVER_URL}/claims/${claim.id}/message`, {
           method: 'POST',
@@ -110,7 +123,6 @@ export default function MessageThread({ claim, report, isReporter }) {
           body: JSON.stringify({ reportId: report?.id }),
         })
       } catch { /* ignore */ }
-      fetchMessages()
     }
     setSending(false)
   }
@@ -131,7 +143,7 @@ export default function MessageThread({ claim, report, isReporter }) {
       <p className="text-xs font-semibold text-text-primary">Message thread</p>
 
       {/* Messages */}
-      <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+      <div ref={messagesContainerRef} className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
         {messages.length === 0 && (
           <p className="text-xs text-text-muted text-center py-4">
             No messages yet. Start the conversation.
@@ -168,7 +180,6 @@ export default function MessageThread({ claim, report, isReporter }) {
             </div>
           )
         })}
-        <div ref={bottomRef} />
       </div>
 
       {/* Drop-off button — claimant only, once */}
