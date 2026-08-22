@@ -22,13 +22,14 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
   await supabaseAdmin.from('users').update({ trust_score: newScore }).eq('id', userId)
 }
 
-async function notifyUser({ userId, type, title, body, reportId = null, claimId = null }: {
+async function notifyUser({ userId, type, title, body, reportId = null, claimId = null, tipId = null }: {
   userId: string
   type: string
   title: string
   body: string
   reportId?: string | null
   claimId?: string | null
+  tipId?: string | null
 }) {
   if (!userId) return
   await supabaseAdmin.from('user_notifications').insert({
@@ -38,6 +39,7 @@ async function notifyUser({ userId, type, title, body, reportId = null, claimId 
     body,
     report_id: reportId,
     claim_id: claimId,
+    tip_id: tipId,
   })
 }
 
@@ -82,6 +84,7 @@ Deno.serve(async (req) => {
         title: 'Your tip helped! +2 Trust Score',
         body: `The reporter confirmed your tip helped recover "${(tip.reports as any)?.title ?? 'an item'}". You earned +2 trust score.`,
         reportId,
+        tipId: id,
       })
 
       if (resolveReport === true || resolveReport === 'true') {
@@ -98,7 +101,7 @@ Deno.serve(async (req) => {
 
     // POST /tips/notify
     if (req.method === 'POST' && id === 'notify') {
-      const { reportId, tipAuthorId, parentTipId } = await req.json()
+      const { reportId, tipAuthorId, parentTipId, tipId } = await req.json()
       if (!reportId || !tipAuthorId) {
         return new Response(JSON.stringify({ error: 'reportId and tipAuthorId required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -156,6 +159,7 @@ Deno.serve(async (req) => {
             ? `Someone replied to a tip on "${report.title}".`
             : `Someone left a tip on "${report.title}".`,
           reportId,
+          tipId: tipId ?? null,
         })
       }
 
@@ -175,4 +179,3 @@ Deno.serve(async (req) => {
     })
   }
 })
-

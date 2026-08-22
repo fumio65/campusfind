@@ -129,7 +129,19 @@ export default function ActivityPage() {
       )
     }
     if (notification.report_id) {
-      navigate(`/reports/${notification.report_id}`)
+      const hashMap = {
+        new_message:     '#messages',
+        dropoff_chosen:  '#messages',
+        claim_submitted: '#claim',
+        claim_approved:  '#messages',
+        claim_rejected:  '#claim',
+        tip_submitted:   '#tips',
+        tip_reply:       '#tips',
+        tip_credited:    '#tips',
+      }
+      const hash = hashMap[notification.type] ?? ''
+      const tipParam = notification.tip_id ? `?tip_id=${notification.tip_id}` : ''
+      navigate(`/reports/${notification.report_id}${tipParam}${hash}`)
     }
   }
 

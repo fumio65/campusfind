@@ -29,7 +29,7 @@ import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
-function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert }) {
+function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert, isHighlighted }) {
   const name = tip.users
     ? `${tip.users.first_name} ${tip.users.last_name}`
     : "Anonymous";
@@ -39,16 +39,18 @@ function TipCard({ tip, isOwn, onReply, isReply, onCredit, credited, onConvert }
   const trustScore = tip.users?.trust_score ?? 100;
 
   return (
-    <div className={isReply ? "pl-4 border-l-2 border-brand-200 ml-1" : ""}>
+    <div id={`tip-${tip.id}`} className={isReply ? "pl-4 border-l-2 border-brand-200 ml-1" : ""}>
       <div
-        className={`rounded-xl p-3 ${
+        className={`rounded-xl p-3 transition-colors ${
           credited
             ? "bg-status-open-bg border border-status-open-text/20"
-            : isOwn
-              ? "bg-brand-50 border border-brand-100"
-              : isReply
-                ? "bg-white border border-border"
-                : "bg-surface-muted"
+            : isHighlighted
+              ? "bg-brand-100 border-2 border-brand-400"
+              : isOwn
+                ? "bg-brand-50 border border-brand-100"
+                : isReply
+                  ? "bg-white border border-border"
+                  : "bg-surface-muted"
         }`}
       >
         <div className="flex items-start gap-2.5">
@@ -181,6 +183,7 @@ export default function ReportDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [highlightedTipId, setHighlightedTipId] = useState(null);
 
   const claimantIdRef = useRef(null);
   const prevScoreRef = useRef(null);
@@ -188,6 +191,13 @@ export default function ReportDetailPage() {
   useEffect(() => {
     claimantIdRef.current = claim?.claimant_id ?? null;
   }, [claim]);
+
+  // Read tip_id from URL search params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tipId = params.get('tip_id')
+    if (tipId) setHighlightedTipId(tipId)
+  }, [])
 
   async function showTrustToast(expectedDelta, reason = "") {
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -331,6 +341,31 @@ export default function ReportDetailPage() {
 
     return () => supabase.removeChannel(channel);
   }, [id]);
+
+  // Scroll to section based on URL hash
+  useEffect(() => {
+    if (!loading && window.location.hash) {
+      const el = document.querySelector(window.location.hash);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 300);
+      }
+    }
+  }, [loading]);
+
+  // Scroll to and highlight specific tip
+  useEffect(() => {
+    if (!loading && highlightedTipId) {
+      const el = document.getElementById(`tip-${highlightedTipId}`);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          setTimeout(() => setHighlightedTipId(null), 5000);
+        }, 400);
+      }
+    }
+  }, [loading, highlightedTipId]);
 
   async function fetchAll() {
     setLoading(true);
@@ -515,14 +550,11 @@ export default function ReportDetailPage() {
     if (!claim) return;
     setActioning(true);
     try {
-      await fetch(
-        `${SERVER_URL}/claims/${claim.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
+      await fetch(`${SERVER_URL}/claims/${claim.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
     } catch (err) {
       console.error(err);
     }
@@ -533,14 +565,11 @@ export default function ReportDetailPage() {
   async function handleMarkResolved() {
     setActioning(true);
     try {
-      await fetch(
-        `${SERVER_URL}/reports/${id}/resolve`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resolvedVia: "handoff" }),
-        },
-      );
+      await fetch(`${SERVER_URL}/reports/${id}/resolve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolvedVia: "handoff" }),
+      });
     } catch (err) {
       console.error(err);
     }
@@ -599,18 +628,15 @@ export default function ReportDetailPage() {
     setPendingCreditTip(null);
     setCreditedTipId(tip.id);
     try {
-      await fetch(
-        `${SERVER_URL}/tips/${tip.id}/credit`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: tip.user_id,
-            reportId: id,
-            resolveReport,
-          }),
-        },
-      );
+      await fetch(`${SERVER_URL}/tips/${tip.id}/credit`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: tip.user_id,
+          reportId: id,
+          resolveReport,
+        }),
+      });
       if (resolveReport) fetchAll();
     } catch (err) {
       console.error(err);
@@ -629,12 +655,12 @@ export default function ReportDetailPage() {
       return setTipError("This report has reached the 25-tip limit.");
     setSubmittingTip(true);
     setTipError(null);
-    const { error } = await supabase.from("tips").insert({
+    const { data: newTip, error } = await supabase.from("tips").insert({
       report_id: id,
       user_id: session.user.id,
       text: tipText.trim(),
       parent_tip_id: parentTipId ?? null,
-    });
+    }).select().single();
     if (error) setTipError(error.message);
     else {
       try {
@@ -645,6 +671,7 @@ export default function ReportDetailPage() {
             reportId: id,
             tipAuthorId: session.user.id,
             parentTipId: parentTipId ?? null,
+            tipId: newTip?.id ?? null,
           }),
         });
       } catch { /* ignore */ }
@@ -967,6 +994,7 @@ export default function ReportDetailPage() {
         {/* Reporter: claim review panel */}
         {isOwner && isClaimed && claim && (
           <motion.div
+            id="claim"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-surface-card rounded-2xl border border-status-claimed-text/20 p-4"
@@ -1055,7 +1083,9 @@ export default function ReportDetailPage() {
         {isApproved &&
           claim &&
           (isOwner || claim?.claimant_id === session?.user.id) && (
-            <MessageThread claim={claim} report={report} isReporter={isOwner} />
+            <div id="messages">
+              <MessageThread claim={claim} report={report} isReporter={isOwner} />
+            </div>
           )}
 
         {/* Reporter: proxy pickup */}
@@ -1171,7 +1201,7 @@ export default function ReportDetailPage() {
           )}
 
         {/* Tips */}
-        <div className="bg-surface-card rounded-2xl border border-border p-4">
+        <div id="tips" className="bg-surface-card rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
               <Lightbulb size={15} className="text-status-claimed-text" /> Tips
@@ -1207,6 +1237,7 @@ export default function ReportDetailPage() {
                       tip={parent}
                       isOwn={parent.user_id === session?.user.id}
                       isReply={false}
+                      isHighlighted={highlightedTipId === parent.id}
                       onCredit={
                         isOwner && !creditedTipId && !parent.credited
                           ? () => handleCreditTip(parent)
@@ -1237,6 +1268,7 @@ export default function ReportDetailPage() {
                         tip={reply}
                         isOwn={reply.user_id === session?.user.id}
                         isReply={true}
+                        isHighlighted={highlightedTipId === reply.id}
                         onConvert={
                           reply.user_id === session?.user.id &&
                           isOpen &&
