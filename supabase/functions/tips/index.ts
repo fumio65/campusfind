@@ -123,6 +123,7 @@ Deno.serve(async (req) => {
       const recipients = new Set<string>()
 
       if (parentTipId) {
+        // Reply — notify parent tip author and reporter and all previous tippers
         const { data: parentTip } = await supabaseAdmin
           .from('tips')
           .select('user_id')
@@ -138,6 +139,7 @@ Deno.serve(async (req) => {
           if (tipper.user_id) recipients.add(tipper.user_id)
         }
       } else {
+        // Top-level tip — notify reporter and all previous tippers
         if (report.reporter_id) recipients.add(report.reporter_id)
         const { data: previousTippers } = await supabaseAdmin
           .from('tips')
@@ -151,16 +153,28 @@ Deno.serve(async (req) => {
       recipients.delete(tipAuthorId)
 
       for (const userId of recipients) {
-        await notifyUser({
-          userId,
-          type: parentTipId ? 'tip_reply' : 'tip_submitted',
-          title: parentTipId ? 'New reply on a tip' : 'New tip on your report',
-          body: parentTipId
-            ? `Someone replied to a tip on "${report.title}".`
-            : `Someone left a tip on "${report.title}".`,
-          reportId,
-          tipId: tipId ?? null,
-        })
+        const isReporter = userId === report.reporter_id
+        if (parentTipId) {
+          await notifyUser({
+            userId,
+            type: 'tip_reply',
+            title: 'New reply on a tip',
+            body: `Someone replied to a tip on "${report.title}".`,
+            reportId,
+            tipId: tipId ?? null,
+          })
+        } else {
+          await notifyUser({
+            userId,
+            type: 'tip_submitted',
+            title: isReporter ? 'New tip on your report' : 'New tip on a report',
+            body: isReporter
+              ? `Someone left a tip on "${report.title}".`
+              : `A new tip was left on "${report.title}".`,
+            reportId,
+            tipId: tipId ?? null,
+          })
+        }
       }
 
       return new Response(JSON.stringify({ ok: true }), {

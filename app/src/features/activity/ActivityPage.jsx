@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Bell, CheckCircle2, XCircle, MessageSquare,
-  Star, MapPin, Trash2, Lightbulb
+  Star, MapPin, Lightbulb
 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
@@ -35,7 +35,7 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
 }
 
-function NotificationItem({ notification, onTap, onDelete }) {
+function NotificationItem({ notification, onTap }) {
   const { icon: Icon, color, bg } = TYPE_CONFIG[notification.type] ?? TYPE_CONFIG.default
   const isUnread = !notification.read
 
@@ -66,13 +66,6 @@ function NotificationItem({ notification, onTap, onDelete }) {
       <div className="flex items-center gap-2 shrink-0">
         {isUnread && <div className="w-2 h-2 rounded-full bg-brand-600 shrink-0" />}
         <p className="text-[10px] text-text-muted whitespace-nowrap">{timeAgo(notification.created_at)}</p>
-        <button
-          onClick={() => onDelete(notification.id)}
-          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-muted transition-colors"
-          aria-label="Delete notification"
-        >
-          <Trash2 size={13} className="text-text-muted" />
-        </button>
       </div>
     </motion.div>
   )
@@ -143,11 +136,6 @@ export default function ActivityPage() {
       const tipParam = notification.tip_id ? `?tip_id=${notification.tip_id}` : ''
       navigate(`/reports/${notification.report_id}${tipParam}${hash}`)
     }
-  }
-
-  async function handleDelete(id) {
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
-    await supabase.from('user_notifications').delete().eq('id', id)
   }
 
   async function markAllRead() {
@@ -230,7 +218,6 @@ export default function ActivityPage() {
                 key={n.id}
                 notification={n}
                 onTap={handleTap}
-                onDelete={handleDelete}
               />
             ))}
           </motion.div>
