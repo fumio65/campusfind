@@ -2,29 +2,28 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 
-// FIX: was pointing to old Express server (SERVER_URL / localhost:3001)
-// Drop-off requests now go directly to the Supabase Edge Function
 const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
   : 'https://muigquisnrhdbvnexyzu.supabase.co/functions/v1'
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
 
-// Message notifications still go through the old server route (unchanged)
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
 export default function MessageThread({ claim, report, isReporter, reporterName, claimantName }) {
   const { session } = useAuth()
-  const [messages, setMessages] = useState([])
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  const [dropOffSent, setDropOffSent] = useState(false)
+  const [messages, setMessages]           = useState([])
+  const [text, setText]                   = useState('')
+  const [sending, setSending]             = useState(false)
+  const [dropOffSent, setDropOffSent]     = useState(false)
+  const [dropOffStatus, setDropOffStatus] = useState(null) // null | 'pending' | 'received' | 'resolved'
   const messagesContainerRef = useRef(null)
-  const prevCountRef = useRef(0)
-  const isInitialLoad = useRef(true)
+  const prevCountRef         = useRef(0)
+  const isInitialLoad        = useRef(true)
 
   useEffect(() => {
     if (!claim?.id) return
     fetchMessages()
+    fetchDropOffStatus()
 
     const channelName = `messages-${claim.id}`
     const existing = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`)
@@ -32,19 +31,15 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
 
     const channel = supabase
       .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'claim_messages',
-        },
-        (payload) => {
-          if (payload.new?.claim_id === claim.id) {
-            fetchMessages()
-          }
-        },
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'claim_messages' }, (payload) => {
+        if (payload.new?.claim_id === claim.id) fetchMessages()
+      })
+      // Realtime: banner updates live when admin marks received or resolved
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dropoff_requests' }, (payload) => {
+        if (payload.new?.claim_id === claim.id) {
+          setDropOffStatus(payload.new.status)
+        }
+      })
       .subscribe()
 
     return () => supabase.removeChannel(channel)
@@ -82,6 +77,15 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     if (hasDropOff) setDropOffSent(true)
   }
 
+  async function fetchDropOffStatus() {
+    const { data } = await supabase
+      .from('dropoff_requests')
+      .select('status')
+      .eq('claim_id', claim.id)
+      .maybeSingle()
+    if (data) setDropOffStatus(data.status)
+  }
+
   async function handleSend(e) {
     e.preventDefault()
     if (!text.trim() || sending) return
@@ -114,15 +118,6 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     if (sending) return
     setSending(true)
 
-    console.log('[dropoff] report:', report)
-    console.log('[dropoff] claim:', claim)
-    console.log('[dropoff] payload:', {
-      reportId: report?.id,
-      claimId: claim.id,
-      claimantId: claim.claimant_id,
-      reporterId: report?.reporter_id,
-    })
-
     const body = '📍 ISSC_DROPOFF'
     const { error } = await supabase.from('claim_messages').insert({
       claim_id: claim.id,
@@ -134,8 +129,6 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     if (!error) {
       setDropOffSent(true)
       try {
-        // FIX: was fetching SERVER_URL/dropoff (old Express server, now dead)
-        // Now correctly calls the Supabase Edge Function with required apikey header
         await fetch(`${EDGE_URL}/dropoff`, {
           method: 'POST',
           headers: {
@@ -149,16 +142,65 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
             reporterId: report?.reporter_id,
           }),
         })
+        // Optimistically set to pending immediately after choosing drop-off
+        setDropOffStatus('pending')
       } catch { /* ignore */ }
     }
     setSending(false)
   }
 
-  function getDropOffMessage() {
+  // Banner title and message driven by dropoff_requests.status — updates live via realtime
+  function getDropOffBanner() {
+    const status = dropOffStatus ?? 'pending'
+
     if (isReporter) {
-      return `${claimantName ?? 'The finder'} has chosen ISSC drop-off. Head to the ISSC office to collect your item.`
+      switch (status) {
+        case 'pending':
+          return {
+            title: 'ISSC drop-off in progress',
+            message: `${claimantName ?? 'The finder'} has chosen to drop off your item at the ISSC office. You'll be notified once the item is received — no need to go yet.`,
+          }
+        case 'received':
+          return {
+            title: 'Your item is at the ISSC office',
+            message: 'The item has been received by ISSC and is ready for pickup. Head to the ISSC office to collect it.',
+          }
+        case 'resolved':
+          return {
+            title: 'Item collected',
+            message: 'You have collected your item from the ISSC office. This report is now resolved.',
+          }
+        default:
+          return {
+            title: 'ISSC drop-off chosen',
+            message: `${claimantName ?? 'The finder'} has chosen ISSC drop-off.`,
+          }
+      }
     }
-    return `You have chosen ISSC drop-off. Please bring the item to the ISSC office at your earliest convenience.`
+
+    // Claimant
+    switch (status) {
+      case 'pending':
+        return {
+          title: 'Drop-off pending',
+          message: 'Please bring the item to the ISSC office. The reporter will be notified once ISSC confirms receipt.',
+        }
+      case 'received':
+        return {
+          title: 'Item received by ISSC',
+          message: 'ISSC has confirmed receipt of the item. The reporter has been notified and will collect it soon.',
+        }
+      case 'resolved':
+        return {
+          title: 'Drop-off complete',
+          message: 'The reporter has collected the item. This report is now resolved. Thank you for your honesty!',
+        }
+      default:
+        return {
+          title: 'ISSC drop-off chosen',
+          message: 'Please bring the item to the ISSC office at your earliest convenience.',
+        }
+    }
   }
 
   function getSenderName(msg) {
@@ -187,9 +229,9 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     return `${Math.floor(hrs / 24)}d ago`
   }
 
-  const otherName = isReporter ? (claimantName ?? 'Finder') : (reporterName ?? 'Reporter')
+  const otherName     = isReporter ? (claimantName ?? 'Finder') : (reporterName ?? 'Reporter')
   const otherInitials = getInitials(otherName)
-  const myName = 'You'
+  const myName        = 'You'
 
   return (
     <div className="bg-surface-card rounded-2xl border border-border overflow-hidden">
@@ -219,11 +261,12 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
         )}
 
         {messages.map((msg) => {
-          const isMine = msg.sender_id === session.user.id
+          const isMine   = msg.sender_id === session.user.id
           const isSystem = msg.body?.startsWith('📍')
           const senderName = getSenderName(msg)
 
           if (isSystem) {
+            const { title, message } = getDropOffBanner()
             return (
               <div
                 key={msg.id}
@@ -232,10 +275,10 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
                 <span className="text-status-claimed-text mt-0.5 shrink-0">📍</span>
                 <div>
                   <p className="text-[11px] font-semibold text-status-claimed-text">
-                    ISSC drop-off chosen
+                    {title}
                   </p>
                   <p className="text-[11px] text-status-claimed-text/80 mt-0.5 leading-relaxed">
-                    {getDropOffMessage()}
+                    {message}
                   </p>
                   <p className="text-[10px] text-status-claimed-text/50 mt-1">
                     {timeAgo(msg.created_at)}
