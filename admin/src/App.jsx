@@ -8,6 +8,7 @@ import ReportsPage from "./features/reports/ReportsPage";
 import WalkInIntakePage from "./features/walk-in/WalkInIntakePage";
 import AnalyticsPage from "./features/analytics/AnalyticsPage";
 import AccountsPage from "./features/accounts/AccountsPage";
+import DropoffRequestsPage from "./features/dropoff/DropoffRequestsPage";
 
 function ProtectedRoutes() {
   const { session, loading, isAdmin, profile } = useAuth();
@@ -31,6 +32,7 @@ function ProtectedRoutes() {
         <Route path="walk-in" element={<WalkInIntakePage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="accounts" element={<AccountsPage />} />
+        <Route path="dropoff" element={<DropoffRequestsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

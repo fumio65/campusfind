@@ -8,6 +8,7 @@ import {
   BarChart3,
   Users,
   LogOut,
+  PackageCheck,
 } from 'lucide-react'
 import sealSrc from '../../assets/nwssu-seal.png'
 import { supabase } from '../lib/supabaseClient'
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/walk-in', label: 'Found Item Drop-off', icon: PersonStanding },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/accounts', label: 'Accounts', icon: Users },
+  { to: '/dropoff', label: 'Drop-off Requests', icon: PackageCheck },
 ]
 
 export default function Sidebar() {

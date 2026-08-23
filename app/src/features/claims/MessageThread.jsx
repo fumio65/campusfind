@@ -105,6 +105,16 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     e.preventDefault()
     if (sending) return
     setSending(true)
+
+    console.log('[dropoff] report:', report)
+    console.log('[dropoff] claim:', claim)
+    console.log('[dropoff] payload:', {
+      reportId: report?.id,
+      claimId: claim.id,
+      claimantId: claim.claimant_id,
+      reporterId: report?.reporter_id,
+    })
+
     const body = '📍 ISSC_DROPOFF'
     const { error } = await supabase.from('claim_messages').insert({
       claim_id: claim.id,
@@ -112,13 +122,19 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
       sender_role: 'claimant',
       body,
     })
+
     if (!error) {
       setDropOffSent(true)
       try {
-        await fetch(`${SERVER_URL}/claims/${claim.id}/dropoff`, {
+        await fetch(`${SERVER_URL}/dropoff`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId: report?.id }),
+          body: JSON.stringify({
+            reportId: report?.id,
+            claimId: claim.id,
+            claimantId: claim.claimant_id,
+            reporterId: report?.reporter_id,
+          }),
         })
       } catch { /* ignore */ }
     }
@@ -193,7 +209,6 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
           const isMine = msg.sender_id === session.user.id
           const isSystem = msg.body?.startsWith('📍')
           const senderName = getSenderName(msg)
-          const initials = isMine ? getInitials('You') : getInitials(otherName)
 
           if (isSystem) {
             return (
@@ -222,7 +237,6 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
               key={msg.id}
               className={`flex flex-col gap-1 ${isMine ? 'items-end' : 'items-start'}`}
             >
-              {/* Name + avatar row */}
               <div className={`flex items-center gap-1.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
@@ -238,7 +252,6 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
                 </span>
               </div>
 
-              {/* Bubble */}
               <div
                 className={`max-w-[78%] rounded-2xl px-3 py-2 ${
                   isMine
