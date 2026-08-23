@@ -2,6 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 
+// FIX: was pointing to old Express server (SERVER_URL / localhost:3001)
+// Drop-off requests now go directly to the Supabase Edge Function
+const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
+  ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+  : 'https://muigquisnrhdbvnexyzu.supabase.co/functions/v1'
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
+
+// Message notifications still go through the old server route (unchanged)
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
 export default function MessageThread({ claim, report, isReporter, reporterName, claimantName }) {
@@ -126,9 +134,14 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     if (!error) {
       setDropOffSent(true)
       try {
-        await fetch(`${SERVER_URL}/dropoff`, {
+        // FIX: was fetching SERVER_URL/dropoff (old Express server, now dead)
+        // Now correctly calls the Supabase Edge Function with required apikey header
+        await fetch(`${EDGE_URL}/dropoff`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': ANON_KEY,
+          },
           body: JSON.stringify({
             reportId: report?.id,
             claimId: claim.id,

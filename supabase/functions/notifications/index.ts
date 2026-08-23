@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(50)
+
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -45,6 +46,7 @@ Deno.serve(async (req) => {
         .from('notifications')
         .update({ read: true })
         .eq('read', false)
+
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -55,7 +57,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    // PATCH /notifications/:id/read
+    // PATCH /notifications/:id
     if (req.method === 'PATCH' && id) {
       const { data, error } = await supabaseAdmin
         .from('notifications')
@@ -63,6 +65,7 @@ Deno.serve(async (req) => {
         .eq('id', id)
         .select()
         .single()
+
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -75,12 +78,13 @@ Deno.serve(async (req) => {
 
     // POST /notifications
     if (req.method === 'POST' && !id) {
-      const { type, title, body, report_id, claim_id } = await req.json()
+      const { user_id, type, title, body, report_id, claim_id } = await req.json()
       const { data, error } = await supabaseAdmin
         .from('notifications')
-        .insert({ type, title, body, report_id, claim_id })
+        .insert({ user_id, type, title, body, report_id, claim_id, read: false })
         .select()
         .single()
+
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -102,4 +106,3 @@ Deno.serve(async (req) => {
     })
   }
 })
-

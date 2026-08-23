@@ -11,25 +11,6 @@ const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-async function notifyUser({ userId, type, title, body, reportId = null, claimId = null }: {
-  userId: string
-  type: string
-  title: string
-  body: string
-  reportId?: string | null
-  claimId?: string | null
-}) {
-  if (!userId) return
-  await supabaseAdmin.from('user_notifications').insert({
-    user_id: userId,
-    type,
-    title,
-    body,
-    report_id: reportId,
-    claim_id: claimId,
-  })
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
@@ -57,6 +38,8 @@ Deno.serve(async (req) => {
         .eq('id', reportId)
         .single()
 
+      const reportTitle = report?.title ?? 'an item'
+
       // Check if a pending request already exists
       const { data: existing } = await supabaseAdmin
         .from('dropoff_requests')
@@ -66,12 +49,24 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (existing) {
+        // FIX: was returning early without notifying admin.
+        // Admin still needs to be notified even if request already exists
+        // (they may have missed the original notification)
+        await supabaseAdmin.from('notifications').insert({
+          type: 'dropoff_request',
+          title: 'New drop-off request',
+          body: `A finder is dropping off "${reportTitle}" at the ISSC office.`,
+          report_id: reportId,
+          claim_id: claimId,
+          read: false,
+        })
+
         return new Response(JSON.stringify({ ok: true, id: existing.id, existing: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
-      const { data: request, error } = await supabaseAdmin
+      const { data: request, error: insertError } = await supabaseAdmin
         .from('dropoff_requests')
         .insert({
           report_id: reportId,
@@ -83,27 +78,24 @@ Deno.serve(async (req) => {
         .select()
         .single()
 
-      if (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
+      if (insertError) {
+        return new Response(JSON.stringify({ error: insertError.message }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
-      // Notify all admins
-      const { data: admins } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('is_admin', true)
+      // Notify admin
+      const { error: notifError } = await supabaseAdmin.from('notifications').insert({
+        type: 'dropoff_request',
+        title: 'New drop-off request',
+        body: `A finder is dropping off "${reportTitle}" at the ISSC office.`,
+        report_id: reportId,
+        claim_id: claimId,
+        read: false,
+      })
 
-      for (const admin of admins ?? []) {
-        await notifyUser({
-          userId: admin.id,
-          type: 'dropoff_request',
-          title: 'New drop-off request',
-          body: `A finder is dropping off "${report?.title ?? 'an item'}" at the ISSC office.`,
-          reportId,
-          claimId,
-        })
+      if (notifError) {
+        console.error('[dropoff] notification insert failed:', notifError)
       }
 
       return new Response(JSON.stringify({ ok: true, id: request.id }), {
@@ -172,14 +164,15 @@ Deno.serve(async (req) => {
         })
         .eq('id', id)
 
-      // Notify reporter — item is at ISSC ready for pickup
-      await notifyUser({
-        userId: request.reporter_id,
+      // Notify reporter via user_notifications (student-facing)
+      await supabaseAdmin.from('user_notifications').insert({
+        user_id: request.reporter_id,
         type: 'dropoff_received',
         title: 'Your item is at the ISSC office',
-        body: `"${(request.reports as any)?.title ?? 'Your item'}" has been dropped off at the ISSC office and is ready for pickup.`,
-        reportId: request.report_id,
-        claimId: request.claim_id,
+        body: `"${(request.reports as any)?.title ?? 'Your item'}" has been dropped off and is ready for pickup.`,
+        report_id: request.report_id,
+        claim_id: request.claim_id,
+        read: false,
       })
 
       return new Response(JSON.stringify({ ok: true }), {
@@ -201,25 +194,21 @@ Deno.serve(async (req) => {
         })
       }
 
-      // Mark dropoff request as resolved
       await supabaseAdmin
         .from('dropoff_requests')
         .update({ status: 'resolved', updated_at: new Date().toISOString() })
         .eq('id', id)
 
-      // Resolve the report
       await supabaseAdmin
         .from('reports')
         .update({ status: 'resolved', resolved_via: 'issc_dropoff' })
         .eq('id', request.report_id)
 
-      // Resolve the claim
       await supabaseAdmin
         .from('claims')
         .update({ status: 'resolved' })
         .eq('id', request.claim_id)
 
-      // Give claimant +5 trust score for returning item
       const { data: claimant } = await supabaseAdmin
         .from('users')
         .select('trust_score')
@@ -234,24 +223,26 @@ Deno.serve(async (req) => {
           .eq('id', request.claimant_id)
       }
 
-      // Notify reporter
-      await notifyUser({
-        userId: request.reporter_id,
+      // Notify reporter via user_notifications (student-facing)
+      await supabaseAdmin.from('user_notifications').insert({
+        user_id: request.reporter_id,
         type: 'report_resolved',
         title: 'Item recovered!',
         body: `"${(request.reports as any)?.title ?? 'Your item'}" has been marked as resolved. Thank you for using CampusFind!`,
-        reportId: request.report_id,
-        claimId: request.claim_id,
+        report_id: request.report_id,
+        claim_id: request.claim_id,
+        read: false,
       })
 
-      // Notify claimant
-      await notifyUser({
-        userId: request.claimant_id,
+      // Notify claimant via user_notifications (student-facing)
+      await supabaseAdmin.from('user_notifications').insert({
+        user_id: request.claimant_id,
         type: 'dropoff_resolved',
         title: 'Drop-off complete! +5 Trust Score',
-        body: `The item has been collected by the reporter. Thank you for your honesty! +5 trust score.`,
-        reportId: request.report_id,
-        claimId: request.claim_id,
+        body: `The item has been collected by the reporter. Thank you for your honesty!`,
+        report_id: request.report_id,
+        claim_id: request.claim_id,
+        read: false,
       })
 
       return new Response(JSON.stringify({ ok: true }), {

@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, X, MapPin, CheckCircle2, UserCheck, XCircle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
+  ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+  : 'https://muigquisnrhdbvnexyzu.supabase.co/functions/v1'
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -17,10 +20,12 @@ function timeAgo(dateStr) {
 }
 
 const TYPE_CONFIG = {
+  dropoff_request: { icon: MapPin, color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
   issc_dropoff: { icon: MapPin, color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
   proxy_request: { icon: UserCheck, color: 'text-brand-600', bg: 'bg-brand-50' },
   pickup_confirmation_approved: { icon: CheckCircle2, color: 'text-status-open-text', bg: 'bg-status-open-bg' },
   pickup_confirmation_denied: { icon: XCircle, color: 'text-status-rejected-text', bg: 'bg-status-rejected-bg' },
+  pickup_confirmation_request: { icon: UserCheck, color: 'text-brand-600', bg: 'bg-brand-50' },
   new_report: { icon: Bell, color: 'text-brand-600', bg: 'bg-brand-50' },
 }
 
@@ -36,7 +41,7 @@ export default function NotificationBell() {
 
     const channelName = 'admin-notifications'
     const existing = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`)
-    if (existing) supabase.removeChannel(existing) 
+    if (existing) supabase.removeChannel(existing)
 
     const channel = supabase
       .channel(channelName)
@@ -59,7 +64,9 @@ export default function NotificationBell() {
 
   async function fetchNotifications() {
     try {
-      const res = await fetch(`${SERVER_URL}/notifications`)
+      const res = await fetch(`${EDGE_URL}/notifications`, {
+        headers: { 'apikey': ANON_KEY },
+      })
       const data = await res.json()
       setNotifications(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -70,12 +77,18 @@ export default function NotificationBell() {
   }
 
   async function markAllRead() {
-    await fetch(`${SERVER_URL}/notifications/read-all`, { method: 'PATCH' })
+    await fetch(`${EDGE_URL}/notifications/read-all`, {
+      method: 'PATCH',
+      headers: { 'apikey': ANON_KEY },
+    })
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
   }
 
   async function markRead(id) {
-    await fetch(`${SERVER_URL}/notifications/${id}/read`, { method: 'PATCH' })
+    await fetch(`${EDGE_URL}/notifications/${id}`, {
+      method: 'PATCH',
+      headers: { 'apikey': ANON_KEY },
+    })
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n))
   }
 
