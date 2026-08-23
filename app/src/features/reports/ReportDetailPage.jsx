@@ -208,7 +208,7 @@ export default function ReportDetailPage() {
 
   const claimantIdRef = useRef(null);
   const prevScoreRef = useRef(null);
-  
+
   useEffect(() => {
     claimantIdRef.current = claim?.claimant_id ?? null;
   }, [claim]);
@@ -1165,6 +1165,16 @@ export default function ReportDetailPage() {
                 claim={claim}
                 report={report}
                 isReporter={isOwner}
+                reporterName={
+                  reporter
+                    ? `${reporter.first_name} ${reporter.last_name}`
+                    : "Reporter"
+                }
+                claimantName={
+                  claimant
+                    ? `${claimant.first_name} ${claimant.last_name}`
+                    : "Finder"
+                }
               />
             </div>
           )}
