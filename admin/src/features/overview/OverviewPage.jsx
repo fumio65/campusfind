@@ -232,10 +232,10 @@ export default function OverviewPage() {
                       </div>
                     </div>
                     <Link
-                      to="/reports"
+                      to="/dropoff"
                       className="shrink-0 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition-colors"
                     >
-                      Go to Reports
+                      View request
                     </Link>
                   </div>
                 ))}
