@@ -2,7 +2,8 @@
 import { useSearchParams } from 'react-router-dom'
 import {
   Search, X, ChevronLeft, ChevronRight, MapPin, CheckCircle2,
-  AlertCircle, Pencil, Trash2, Eye, EyeOff,
+  AlertCircle, Pencil, Trash2, Eye, Tag, Calendar, User,
+  Package, FileText,
 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabaseClient'
 import Dialog from '../../shared/components/Dialog'
@@ -36,6 +37,297 @@ function StatusBadge({ status }) {
   )
 }
 
+function InfoRow({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="w-7 h-7 rounded-lg bg-surface-muted flex items-center justify-center shrink-0 mt-0.5">
+        <Icon size={13} className="text-text-muted" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wide">{label}</p>
+        <p className="text-xs text-text-primary mt-0.5 truncate">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Report Detail Dialog ─────────────────────────────────────────────────────
+function ReportDetailDialog({ report, onClose, onEdit, onDelete, onAnnounce, onResolve, resolving, deletingId }) {
+  const [photos, setPhotos]               = useState([])
+  const [claimPhotos, setClaimPhotos]     = useState([])
+  const [lightbox, setLightbox]           = useState(null)
+  const [loadingPhotos, setLoadingPhotos] = useState(true)
+
+  useEffect(() => {
+    if (!report) return
+    setPhotos([])
+    setClaimPhotos([])
+    setLoadingPhotos(true)
+    fetchPhotos()
+  }, [report?.id])
+
+  async function fetchPhotos() {
+    try {
+      const { data: rp } = await supabase
+        .from('report_photos')
+        .select('storage_path')
+        .eq('report_id', report.id)
+
+      const reportUrls = (rp ?? []).map((p) => {
+        const { data } = supabase.storage.from('report-photos').getPublicUrl(p.storage_path)
+        return data?.publicUrl
+      }).filter(Boolean)
+      setPhotos(reportUrls)
+
+      if (report.active_claim?.id) {
+        const { data: cp } = await supabase
+          .from('claim_photos')
+          .select('storage_path')
+          .eq('claim_id', report.active_claim.id)
+
+        const claimUrls = (cp ?? []).map((p) => {
+          const { data } = supabase.storage.from('report-photos').getPublicUrl(p.storage_path)
+          return data?.publicUrl
+        }).filter(Boolean)
+        setClaimPhotos(claimUrls)
+      }
+    } catch (err) {
+      console.error('Failed to fetch photos:', err)
+    } finally {
+      setLoadingPhotos(false)
+    }
+  }
+
+  if (!report) return null
+  const isWalkIn = report.type === 'found_walkin'
+
+  return (
+    <>
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+          >
+            <X size={18} className="text-white" />
+          </button>
+          <img
+            src={lightbox}
+            alt="Full size"
+            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4">
+        <div className="bg-surface-card rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+
+          {/* Header */}
+          <div className="flex items-start justify-between px-6 py-4 border-b border-border shrink-0">
+            <div className="flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${isWalkIn ? 'bg-status-approved-bg' : 'bg-brand-50'}`}>
+                <Package size={16} className={isWalkIn ? 'text-status-approved-text' : 'text-brand-600'} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm font-bold text-text-primary">{report.title}</h2>
+                  <StatusBadge status={report.status} />
+                  {isWalkIn && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-approved-bg text-status-approved-text">
+                      Walk-in
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-text-muted mt-0.5">
+                  Filed {new Date(report.created_at).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted transition-colors shrink-0">
+              <X size={16} className="text-text-muted" />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="overflow-y-auto px-6 py-5 flex flex-col gap-5">
+
+            {/* Photos */}
+            <div>
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Item Photos</p>
+              {loadingPhotos ? (
+                <div className="flex gap-2">
+                  {[1,2,3].map((i) => <div key={i} className="w-24 h-24 rounded-xl bg-surface-muted animate-pulse" />)}
+                </div>
+              ) : photos.length > 0 ? (
+                <div className="flex gap-2 flex-wrap">
+                  {photos.map((url, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setLightbox(url)}
+                      className="w-24 h-24 rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity shrink-0"
+                    >
+                      <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="w-full h-20 rounded-xl bg-surface-muted border border-border flex items-center justify-center">
+                  <p className="text-xs text-text-muted">No photos attached</p>
+                </div>
+              )}
+            </div>
+
+            {/* Info grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <InfoRow icon={Tag} label="Category" value={report.category ?? '—'} />
+              <InfoRow icon={MapPin} label="Location" value={report.location ?? '—'} />
+              <InfoRow icon={User} label="Reporter" value={report.reporter_name ?? '—'} />
+              {report.walkin_finder_ref && <InfoRow icon={User} label="Finder Student ID" value={report.walkin_finder_ref} />}
+              {report.resolved_via && <InfoRow icon={CheckCircle2} label="Resolved via" value={report.resolved_via.replace(/_/g, ' ')} />}
+              {report.resolved_at && (
+                <InfoRow icon={Calendar} label="Resolved at" value={
+                  new Date(report.resolved_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                } />
+              )}
+            </div>
+
+            {/* Description */}
+            <div>
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1.5">Description</p>
+              <p className="text-sm text-text-primary leading-relaxed bg-surface-muted rounded-xl px-4 py-3">
+                {report.description ?? '—'}
+              </p>
+            </div>
+
+            {/* Active claim */}
+            {report.active_claim && (
+              <div className="rounded-xl border border-status-claimed-text/20 bg-status-claimed-bg px-4 py-3">
+                <p className="text-[11px] font-semibold text-status-claimed-text uppercase tracking-wide mb-2">Active Claim</p>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-status-claimed-text/60 mb-0.5">Claimant</p>
+                    <p className="text-status-claimed-text font-medium">
+                      {report.active_claim.claimant?.first_name} {report.active_claim.claimant?.last_name}
+                    </p>
+                  </div>
+                  {report.active_claim.claimant?.student_id && (
+                    <div>
+                      <p className="text-status-claimed-text/60 mb-0.5">Student ID</p>
+                      <p className="text-status-claimed-text font-medium">{report.active_claim.claimant.student_id}</p>
+                    </div>
+                  )}
+                  {report.active_claim.drop_off_chosen && (
+                    <div className="col-span-2">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/40 text-status-claimed-text px-2 py-0.5 rounded-full">
+                        📍 ISSC drop-off chosen
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {claimPhotos.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[11px] font-semibold text-status-claimed-text/70 mb-1.5">Claim Photos</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {claimPhotos.map((url, i) => (
+                        <button key={i} onClick={() => setLightbox(url)} className="w-20 h-20 rounded-lg overflow-hidden border border-status-claimed-text/20 hover:opacity-90 transition-opacity shrink-0">
+                          <img src={url} alt={`Claim photo ${i + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Proxy request */}
+            {report.proxy_request && (
+              <div className="rounded-xl border border-status-approved-text/20 bg-status-approved-bg px-4 py-3">
+                <p className="text-[11px] font-semibold text-status-approved-text uppercase tracking-wide mb-2">Proxy Pickup</p>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-status-approved-text/60 mb-0.5">Proxy Name</p>
+                    <p className="text-status-approved-text font-medium">{report.proxy_request.proxy_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-status-approved-text/60 mb-0.5">Proxy Student ID</p>
+                    <p className="text-status-approved-text font-medium">{report.proxy_request.proxy_student_id}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Rejected claim note */}
+            {report.had_rejected_claim && (
+              <div className="flex items-center gap-2 text-xs text-status-rejected-text bg-status-rejected-bg rounded-xl px-4 py-2.5">
+                <AlertCircle size={13} className="shrink-0" />
+                This report had a previously rejected claim.
+              </div>
+            )}
+          </div>
+
+          {/* Footer actions */}
+          <div className="flex items-center gap-2 px-6 py-4 border-t border-border shrink-0 flex-wrap">
+            {report.status === 'open' && report.type === 'found_walkin' && (
+              <>
+                <button
+                  onClick={() => { onEdit(report); onClose() }}
+                  className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-surface-muted text-text-secondary text-xs font-semibold hover:bg-surface-card border border-border transition-colors"
+                >
+                  <Pencil size={12} /> Edit
+                </button>
+                <button
+                  onClick={() => { onDelete(report.id); onClose() }}
+                  disabled={deletingId === report.id}
+                  className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-status-rejected-bg text-status-rejected-text text-xs font-semibold border border-status-rejected-text/20 hover:opacity-80 transition-opacity disabled:opacity-50"
+                >
+                  <Trash2 size={12} /> Delete
+                </button>
+              </>
+            )}
+            {report.status === 'open' && (
+              <button
+                onClick={() => onAnnounce(report.id, report.title)}
+                className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-surface-muted text-text-secondary text-xs font-semibold hover:bg-surface-card border border-border transition-colors"
+              >
+                <FileText size={12} /> Announce
+              </button>
+            )}
+            {report.status === 'approved' && report.type === 'found_walkin' && !report.active_claim?.drop_off_chosen && (
+              <button onClick={() => { onResolve(report, 'issc_walkin_pickup', true); onClose() }} disabled={resolving === report.id} className="px-3 h-9 rounded-lg bg-status-approved-bg text-status-approved-text text-xs font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap disabled:opacity-50">
+                Record collection
+              </button>
+            )}
+            {report.status === 'approved' && !report.active_claim?.drop_off_chosen && !report.proxy_request && report.type !== 'found_walkin' && (
+              <button onClick={() => { onResolve(report, 'issc_walkin_pickup', false); onClose() }} disabled={resolving === report.id} className="px-3 h-9 rounded-lg bg-surface-muted text-text-secondary text-xs font-semibold border border-border hover:opacity-80 transition-opacity whitespace-nowrap disabled:opacity-50">
+                Force resolve
+              </button>
+            )}
+            {report.status === 'approved' && report.active_claim?.drop_off_chosen && (
+              <a href="/dropoff" className="px-3 h-9 rounded-lg bg-status-claimed-bg text-status-claimed-text text-xs font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
+                📍 View drop-off request
+              </a>
+            )}
+            {report.status === 'approved' && report.proxy_request && !report.active_claim?.drop_off_chosen && (
+              <button onClick={() => { onResolve(report, 'issc_dropoff', false, true); onClose() }} disabled={resolving === report.id} className="px-3 h-9 rounded-lg bg-status-approved-bg text-status-approved-text text-xs font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap disabled:opacity-50">
+                Owner collected
+              </button>
+            )}
+            <button onClick={onClose} className="ml-auto px-4 h-9 rounded-lg border border-border-strong text-xs font-medium text-text-secondary hover:bg-surface-muted transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 20
 
 export default function ReportsPage() {
@@ -55,7 +347,7 @@ export default function ReportsPage() {
   const [confirmResolve, setConfirmResolve] = useState(null)
   const [confirmDelete, setConfirmDelete]   = useState(null)
   const [deletingId, setDeletingId]         = useState(null)
-  const [expandedId, setExpandedId]         = useState(highlightId ?? null)
+  const [viewReport, setViewReport]         = useState(null)
   const [editReport, setEditReport]         = useState(null)
   const [editForm, setEditForm]             = useState({})
   const [editSaving, setEditSaving]         = useState(false)
@@ -93,6 +385,14 @@ export default function ReportsPage() {
   }, [activeTab, offset, search])
 
   useEffect(() => { load() }, [load])
+
+  // Auto-open detail dialog when navigating from notification highlight
+  useEffect(() => {
+    if (highlightId && reports.length > 0) {
+      const found = reports.find((r) => r.id === highlightId)
+      if (found) setViewReport(found)
+    }
+  }, [highlightId, reports])
 
   useEffect(() => {
     const channel = supabase
@@ -235,18 +535,6 @@ export default function ReportsPage() {
     }
   }
 
-  async function handleCreditFinder(reportId, finderStudentId) {
-    try {
-      await fetch(`${SERVER_URL}/reports/${reportId}/credit-finder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ finderStudentId }),
-      })
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
   async function handleAnnounce(reportId, reportTitle) {
     try {
       await fetch(`${SERVER_URL}/reports/${reportId}/announce`, {
@@ -260,22 +548,44 @@ export default function ReportsPage() {
     }
   }
 
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1
-  const totalPages  = Math.ceil(total / PAGE_SIZE)
+  function handleResolveFromDialog(report, via, isWalkIn, hasPreAuthorizedProxy = false) {
+    setConfirmResolve({
+      id: report.id,
+      via,
+      reporterStudentId: report.reporter_student_id,
+      hasPreAuthorizedProxy,
+      finderStudentId: report.active_claim?.claimant_student_id,
+      isWalkIn,
+    })
+    setConfirmOpen(true)
+  }
+
+  const currentPage    = Math.floor(offset / PAGE_SIZE) + 1
+  const totalPages     = Math.ceil(total / PAGE_SIZE)
   const dropOffPending = reports.filter((r) => r.status === 'approved' && r.active_claim?.drop_off_chosen)
   const proxyPending   = reports.filter((r) => r.status === 'approved' && r.proxy_request && !r.active_claim?.drop_off_chosen)
-  const isDropOff  = confirmResolve?.via === 'issc_dropoff'
-  const isWalkIn   = confirmResolve?.isWalkIn === true
+  const isDropOff      = confirmResolve?.via === 'issc_dropoff'
+  const isWalkIn       = confirmResolve?.isWalkIn === true
   const ownerAlreadyConfirmed = confirmResolve?.hasPreAuthorizedProxy || ownerConfirmStatus === 'approved'
 
   return (
     <div className="flex flex-col min-h-full">
-      <Dialog open={!!error} onClose={() => setError(null)} tone="error" title="Error">
-        {error}
-      </Dialog>
-      <Dialog open={!!successMsg} onClose={() => setSuccessMsg(null)} tone="success" title="Done">
-        {successMsg}
-      </Dialog>
+      <Dialog open={!!error} onClose={() => setError(null)} tone="error" title="Error">{error}</Dialog>
+      <Dialog open={!!successMsg} onClose={() => setSuccessMsg(null)} tone="success" title="Done">{successMsg}</Dialog>
+
+      {/* Report detail dialog */}
+      {viewReport && (
+        <ReportDetailDialog
+          report={viewReport}
+          onClose={() => setViewReport(null)}
+          onEdit={(r) => { setEditReport(r); setEditForm({ title: r.title, description: r.description ?? '', category: r.category ?? '', walkin_finder_ref: r.walkin_finder_ref ?? '' }) }}
+          onDelete={(id) => setConfirmDelete(id)}
+          onAnnounce={handleAnnounce}
+          onResolve={handleResolveFromDialog}
+          resolving={resolving}
+          deletingId={deletingId}
+        />
+      )}
 
       {/* Edit walk-in report dialog */}
       {editReport && (
@@ -286,88 +596,41 @@ export default function ReportsPage() {
                 <p className="text-sm font-bold text-text-primary">Edit walk-in report</p>
                 <p className="text-[11px] text-text-muted mt-0.5">{editReport.location}</p>
               </div>
-              <button
-                onClick={() => setEditReport(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted transition-colors"
-              >
+              <button onClick={() => setEditReport(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted transition-colors">
                 <X size={16} className="text-text-muted" />
               </button>
             </div>
             <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4">
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-                  Item name <span className="text-status-rejected-text">*</span>
-                </label>
-                <input
-                  value={editForm.title}
-                  onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
-                  className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                />
+                <label className="text-xs font-semibold text-text-secondary block mb-1.5">Item name <span className="text-status-rejected-text">*</span></label>
+                <input value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-                  Description <span className="text-status-rejected-text">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={editForm.description}
-                  onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm rounded-md border border-border-strong bg-surface-page resize-none focus:outline-none focus:ring-2 focus:ring-brand-400"
-                />
+                <label className="text-xs font-semibold text-text-secondary block mb-1.5">Description <span className="text-status-rejected-text">*</span></label>
+                <textarea rows={3} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="w-full px-3 py-2 text-sm rounded-md border border-border-strong bg-surface-page resize-none focus:outline-none focus:ring-2 focus:ring-brand-400" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-                  Category <span className="text-status-rejected-text">*</span>
-                </label>
+                <label className="text-xs font-semibold text-text-secondary block mb-1.5">Category <span className="text-status-rejected-text">*</span></label>
                 <div className="flex flex-wrap gap-1.5">
                   {CATEGORIES.map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setEditForm((f) => ({ ...f, category: cat === f.category ? '' : cat }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                        editForm.category === cat
-                          ? 'bg-brand-600 text-white border-brand-600'
-                          : 'border-border-strong text-text-secondary hover:border-brand-400 hover:text-brand-600'
-                      }`}
-                    >
-                      {cat}
-                    </button>
+                    <button key={cat} type="button" onClick={() => setEditForm((f) => ({ ...f, category: cat === f.category ? '' : cat }))} className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${editForm.category === cat ? 'bg-brand-600 text-white border-brand-600' : 'border-border-strong text-text-secondary hover:border-brand-400 hover:text-brand-600'}`}>{cat}</button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-                  Finder Student ID <span className="text-status-rejected-text">*</span>
-                </label>
-                <input
-                  value={editForm.walkin_finder_ref}
-                  onChange={(e) => setEditForm((f) => ({ ...f, walkin_finder_ref: e.target.value }))}
-                  className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  placeholder="e.g. 24-00301"
-                />
+                <label className="text-xs font-semibold text-text-secondary block mb-1.5">Finder Student ID <span className="text-status-rejected-text">*</span></label>
+                <input value={editForm.walkin_finder_ref} onChange={(e) => setEditForm((f) => ({ ...f, walkin_finder_ref: e.target.value }))} className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" placeholder="e.g. 24-00301" />
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border shrink-0">
-              <button
-                onClick={() => setEditReport(null)}
-                className="px-4 h-9 rounded-lg border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditSave}
-                disabled={editSaving}
-                className="px-5 h-9 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors disabled:opacity-50"
-              >
-                {editSaving ? 'Saving…' : 'Save changes'}
-              </button>
+              <button onClick={() => setEditReport(null)} className="px-4 h-9 rounded-lg border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors">Cancel</button>
+              <button onClick={handleEditSave} disabled={editSaving} className="px-5 h-9 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors disabled:opacity-50">{editSaving ? 'Saving…' : 'Save changes'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
+      {/* Delete confirmation */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-6">
           <div className="bg-surface-card rounded-2xl w-full max-w-sm p-5 shadow-xl">
@@ -376,22 +639,11 @@ export default function ReportsPage() {
                 <AlertCircle size={22} className="text-status-rejected-text" />
               </div>
               <h3 className="text-sm font-bold text-text-primary mb-1">Delete this report?</h3>
-              <p className="text-xs text-text-secondary">
-                This will permanently remove the report and all related data. This cannot be undone.
-              </p>
+              <p className="text-xs text-text-secondary">This will permanently remove the report and all related data. This cannot be undone.</p>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="flex-1 h-11 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(confirmDelete)}
-                disabled={deletingId === confirmDelete}
-                className="flex-1 h-11 rounded-xl bg-status-rejected-text text-white text-sm font-semibold hover:opacity-90 transition-colors disabled:opacity-50"
-              >
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 h-11 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors">Cancel</button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={deletingId === confirmDelete} className="flex-1 h-11 rounded-xl bg-status-rejected-text text-white text-sm font-semibold hover:opacity-90 transition-colors disabled:opacity-50">
                 {deletingId === confirmDelete ? 'Deleting…' : 'Yes, delete'}
               </button>
             </div>
@@ -409,293 +661,103 @@ export default function ReportsPage() {
                   {isWalkIn ? 'Record owner collection' : isDropOff ? 'Record ISSC handoff' : 'Force resolve report?'}
                 </p>
                 <p className="text-[11px] text-text-muted mt-0.5">
-                  {isWalkIn
-                    ? "Verify the owner's identity before releasing the item."
-                    : isDropOff
-                      ? 'Verify who is collecting the item from the ISSC office.'
-                      : 'This will mark the report as resolved without a verified handoff.'}
+                  {isWalkIn ? "Verify the owner's identity before releasing the item." : isDropOff ? 'Verify who is collecting the item from the ISSC office.' : 'This will mark the report as resolved without a verified handoff.'}
                 </p>
               </div>
-              <button
-                onClick={handleCloseConfirm}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted"
-              >
-                <X size={16} className="text-text-muted" />
-              </button>
+              <button onClick={handleCloseConfirm} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted"><X size={16} className="text-text-muted" /></button>
             </div>
-
             <div className="overflow-y-auto px-5 py-4">
               {isWalkIn ? (
                 <div className="flex flex-col gap-4 mt-1">
                   <div>
-                    <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
-                      Who is collecting the item?
-                    </p>
+                    <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">Who is collecting the item?</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setHandoffRecord((r) => ({ ...r, isProxy: false, proxyStudentId: '' }))
-                          setProxyIdValidation(null)
-                          setVerifiedProxyName(null)
-                        }}
-                        className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${
-                          !handoffRecord.isProxy
-                            ? 'bg-brand-600 text-white border-brand-600'
-                            : 'border-border-strong text-text-secondary hover:border-brand-400'
-                        }`}
-                      >
-                        The owner
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setHandoffRecord((r) => ({ ...r, isProxy: true, verifiedStudentId: '' }))
-                          setIdValidation(null)
-                          setVerifiedOwnerName(null)
-                        }}
-                        className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${
-                          handoffRecord.isProxy
-                            ? 'bg-brand-600 text-white border-brand-600'
-                            : 'border-border-strong text-text-secondary hover:border-brand-400'
-                        }`}
-                      >
-                        Someone else (proxy)
-                      </button>
+                      <button type="button" onClick={() => { setHandoffRecord((r) => ({ ...r, isProxy: false, proxyStudentId: '' })); setProxyIdValidation(null); setVerifiedProxyName(null) }} className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${!handoffRecord.isProxy ? 'bg-brand-600 text-white border-brand-600' : 'border-border-strong text-text-secondary hover:border-brand-400'}`}>The owner</button>
+                      <button type="button" onClick={() => { setHandoffRecord((r) => ({ ...r, isProxy: true, verifiedStudentId: '' })); setIdValidation(null); setVerifiedOwnerName(null) }} className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${handoffRecord.isProxy ? 'bg-brand-600 text-white border-brand-600' : 'border-border-strong text-text-secondary hover:border-brand-400'}`}>Someone else (proxy)</button>
                     </div>
                   </div>
                   {!handoffRecord.isProxy && (
                     <div>
-                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
-                        Verify Student ID
-                      </p>
-                      <label className="text-xs font-medium text-text-secondary block mb-1">
-                        Owner Student ID
-                      </label>
+                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">Verify Student ID</p>
+                      <label className="text-xs font-medium text-text-secondary block mb-1">Owner Student ID</label>
                       <div className="flex gap-2">
-                        <input
-                          value={handoffRecord.verifiedStudentId}
-                          onChange={(e) => {
-                            setHandoffRecord((r) => ({ ...r, verifiedStudentId: e.target.value }))
-                            setIdValidation(null)
-                            setVerifiedOwnerName(null)
-                          }}
-                          placeholder={confirmResolve?.reporterStudentId ?? 'e.g. 24-00301'}
-                          className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                        />
-                        <button
-                          onClick={() => validateStudentId(handoffRecord.verifiedStudentId, 'owner')}
-                          disabled={validatingId || !handoffRecord.verifiedStudentId.trim()}
-                          className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50"
-                        >
-                          {validatingId ? '…' : 'Verify'}
-                        </button>
+                        <input value={handoffRecord.verifiedStudentId} onChange={(e) => { setHandoffRecord((r) => ({ ...r, verifiedStudentId: e.target.value })); setIdValidation(null); setVerifiedOwnerName(null) }} placeholder={confirmResolve?.reporterStudentId ?? 'e.g. 24-00301'} className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                        <button onClick={() => validateStudentId(handoffRecord.verifiedStudentId, 'owner')} disabled={validatingId || !handoffRecord.verifiedStudentId.trim()} className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50">{validatingId ? '…' : 'Verify'}</button>
                       </div>
-                      {idValidation === 'found' && verifiedOwnerName && (
-                        <p className="text-xs text-status-open-text mt-1 flex items-center gap-1">
-                          <CheckCircle2 size={12} /> {verifiedOwnerName}
-                        </p>
-                      )}
-                      {idValidation === 'not-found' && (
-                        <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>
-                      )}
+                      {idValidation === 'found' && verifiedOwnerName && <p className="text-xs text-status-open-text mt-1 flex items-center gap-1"><CheckCircle2 size={12} /> {verifiedOwnerName}</p>}
+                      {idValidation === 'not-found' && <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>}
                     </div>
                   )}
                   {handoffRecord.isProxy && (
                     <div>
-                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
-                        Verify Proxy Student ID
-                      </p>
-                      <label className="text-xs font-medium text-text-secondary block mb-1">
-                        Proxy Student ID
-                      </label>
+                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">Verify Proxy Student ID</p>
+                      <label className="text-xs font-medium text-text-secondary block mb-1">Proxy Student ID</label>
                       <div className="flex gap-2">
-                        <input
-                          value={handoffRecord.proxyStudentId}
-                          onChange={(e) => {
-                            setHandoffRecord((r) => ({ ...r, proxyStudentId: e.target.value }))
-                            setProxyIdValidation(null)
-                            setVerifiedProxyName(null)
-                          }}
-                          placeholder="e.g. 24-00301"
-                          className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                        />
-                        <button
-                          onClick={() => validateStudentId(handoffRecord.proxyStudentId, 'proxy')}
-                          disabled={validatingId || !handoffRecord.proxyStudentId.trim()}
-                          className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50"
-                        >
-                          {validatingId ? '…' : 'Verify'}
-                        </button>
+                        <input value={handoffRecord.proxyStudentId} onChange={(e) => { setHandoffRecord((r) => ({ ...r, proxyStudentId: e.target.value })); setProxyIdValidation(null); setVerifiedProxyName(null) }} placeholder="e.g. 24-00301" className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                        <button onClick={() => validateStudentId(handoffRecord.proxyStudentId, 'proxy')} disabled={validatingId || !handoffRecord.proxyStudentId.trim()} className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50">{validatingId ? '…' : 'Verify'}</button>
                       </div>
-                      {proxyIdValidation === 'found' && verifiedProxyName && (
-                        <p className="text-xs text-status-open-text mt-1 flex items-center gap-1">
-                          <CheckCircle2 size={12} /> {verifiedProxyName}
-                        </p>
-                      )}
-                      {proxyIdValidation === 'not-found' && (
-                        <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>
-                      )}
+                      {proxyIdValidation === 'found' && verifiedProxyName && <p className="text-xs text-status-open-text mt-1 flex items-center gap-1"><CheckCircle2 size={12} /> {verifiedProxyName}</p>}
+                      {proxyIdValidation === 'not-found' && <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>}
                     </div>
                   )}
                   <div>
                     <label className="text-xs font-medium text-text-secondary block mb-1">Notes (optional)</label>
-                    <input
-                      value={handoffRecord.notes}
-                      onChange={(e) => setHandoffRecord((r) => ({ ...r, notes: e.target.value }))}
-                      className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    />
+                    <input value={handoffRecord.notes} onChange={(e) => setHandoffRecord((r) => ({ ...r, notes: e.target.value }))} className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
                 </div>
               ) : isDropOff ? (
                 <div className="flex flex-col gap-4 mt-1">
                   <div>
-                    <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
-                      Who is picking up the item?
-                    </p>
+                    <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">Who is picking up the item?</p>
                     {confirmResolve?.hasPreAuthorizedProxy ? (
                       <div className="flex items-center gap-2 text-xs text-status-open-text bg-status-open-bg rounded-lg px-3 py-2.5">
-                        <CheckCircle2 size={12} className="shrink-0" />
-                        A proxy was pre-authorized by the owner via the app.
+                        <CheckCircle2 size={12} className="shrink-0" />A proxy was pre-authorized by the owner via the app.
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHandoffRecord((r) => ({ ...r, isProxy: false, proxyStudentId: '' }))
-                            setProxyIdValidation(null)
-                            setVerifiedProxyName(null)
-                          }}
-                          className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${
-                            !handoffRecord.isProxy
-                              ? 'bg-brand-600 text-white border-brand-600'
-                              : 'border-border-strong text-text-secondary hover:border-brand-400'
-                          }`}
-                        >
-                          The owner
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHandoffRecord((r) => ({ ...r, isProxy: true, verifiedStudentId: '' }))
-                            setIdValidation(null)
-                            setVerifiedOwnerName(null)
-                          }}
-                          className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${
-                            handoffRecord.isProxy
-                              ? 'bg-brand-600 text-white border-brand-600'
-                              : 'border-border-strong text-text-secondary hover:border-brand-400'
-                          }`}
-                        >
-                          Someone else (proxy)
-                        </button>
+                        <button type="button" onClick={() => { setHandoffRecord((r) => ({ ...r, isProxy: false, proxyStudentId: '' })); setProxyIdValidation(null); setVerifiedProxyName(null) }} className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${!handoffRecord.isProxy ? 'bg-brand-600 text-white border-brand-600' : 'border-border-strong text-text-secondary hover:border-brand-400'}`}>The owner</button>
+                        <button type="button" onClick={() => { setHandoffRecord((r) => ({ ...r, isProxy: true, verifiedStudentId: '' })); setIdValidation(null); setVerifiedOwnerName(null) }} className={`h-9 rounded-lg text-xs font-semibold border transition-colors ${handoffRecord.isProxy ? 'bg-brand-600 text-white border-brand-600' : 'border-border-strong text-text-secondary hover:border-brand-400'}`}>Someone else (proxy)</button>
                       </div>
                     )}
                   </div>
                   {!ownerAlreadyConfirmed && !handoffRecord.isProxy && !confirmResolve?.hasPreAuthorizedProxy && (
                     <div>
-                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
-                        Verify Student ID
-                      </p>
-                      <label className="text-xs font-medium text-text-secondary block mb-1">
-                        Owner Student ID
-                      </label>
+                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">Verify Student ID</p>
+                      <label className="text-xs font-medium text-text-secondary block mb-1">Owner Student ID</label>
                       <div className="flex gap-2">
-                        <input
-                          value={handoffRecord.verifiedStudentId}
-                          onChange={(e) => {
-                            setHandoffRecord((r) => ({ ...r, verifiedStudentId: e.target.value }))
-                            setIdValidation(null)
-                            setVerifiedOwnerName(null)
-                          }}
-                          placeholder={confirmResolve?.reporterStudentId ?? 'e.g. 24-00301'}
-                          className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                        />
-                        <button
-                          onClick={() => validateStudentId(handoffRecord.verifiedStudentId, 'owner')}
-                          disabled={validatingId || !handoffRecord.verifiedStudentId.trim()}
-                          className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50"
-                        >
-                          {validatingId ? '…' : 'Verify'}
-                        </button>
+                        <input value={handoffRecord.verifiedStudentId} onChange={(e) => { setHandoffRecord((r) => ({ ...r, verifiedStudentId: e.target.value })); setIdValidation(null); setVerifiedOwnerName(null) }} placeholder={confirmResolve?.reporterStudentId ?? 'e.g. 24-00301'} className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                        <button onClick={() => validateStudentId(handoffRecord.verifiedStudentId, 'owner')} disabled={validatingId || !handoffRecord.verifiedStudentId.trim()} className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50">{validatingId ? '…' : 'Verify'}</button>
                       </div>
-                      {idValidation === 'found' && verifiedOwnerName && (
-                        <p className="text-xs text-status-open-text mt-1 flex items-center gap-1">
-                          <CheckCircle2 size={12} /> {verifiedOwnerName}
-                        </p>
-                      )}
-                      {idValidation === 'not-found' && (
-                        <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>
-                      )}
+                      {idValidation === 'found' && verifiedOwnerName && <p className="text-xs text-status-open-text mt-1 flex items-center gap-1"><CheckCircle2 size={12} /> {verifiedOwnerName}</p>}
+                      {idValidation === 'not-found' && <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>}
                     </div>
                   )}
                   {(handoffRecord.isProxy || confirmResolve?.hasPreAuthorizedProxy) && (
                     <div>
-                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
-                        Verify Proxy Student ID
-                      </p>
-                      <label className="text-xs font-medium text-text-secondary block mb-1">
-                        Proxy Student ID
-                      </label>
+                      <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">Verify Proxy Student ID</p>
+                      <label className="text-xs font-medium text-text-secondary block mb-1">Proxy Student ID</label>
                       <div className="flex gap-2">
-                        <input
-                          value={handoffRecord.proxyStudentId}
-                          onChange={(e) => {
-                            setHandoffRecord((r) => ({ ...r, proxyStudentId: e.target.value }))
-                            setProxyIdValidation(null)
-                            setVerifiedProxyName(null)
-                          }}
-                          placeholder={confirmResolve?.finderStudentId ?? 'e.g. 24-00301'}
-                          className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                        />
-                        <button
-                          onClick={() => validateStudentId(handoffRecord.proxyStudentId, 'proxy')}
-                          disabled={validatingId || !handoffRecord.proxyStudentId.trim()}
-                          className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50"
-                        >
-                          {validatingId ? '…' : 'Verify'}
-                        </button>
+                        <input value={handoffRecord.proxyStudentId} onChange={(e) => { setHandoffRecord((r) => ({ ...r, proxyStudentId: e.target.value })); setProxyIdValidation(null); setVerifiedProxyName(null) }} placeholder={confirmResolve?.finderStudentId ?? 'e.g. 24-00301'} className="flex-1 h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                        <button onClick={() => validateStudentId(handoffRecord.proxyStudentId, 'proxy')} disabled={validatingId || !handoffRecord.proxyStudentId.trim()} className="px-3 h-9 rounded-md bg-brand-600 text-white text-xs font-semibold disabled:opacity-50">{validatingId ? '…' : 'Verify'}</button>
                       </div>
-                      {proxyIdValidation === 'found' && verifiedProxyName && (
-                        <p className="text-xs text-status-open-text mt-1 flex items-center gap-1">
-                          <CheckCircle2 size={12} /> {verifiedProxyName}
-                        </p>
-                      )}
-                      {proxyIdValidation === 'not-found' && (
-                        <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>
-                      )}
+                      {proxyIdValidation === 'found' && verifiedProxyName && <p className="text-xs text-status-open-text mt-1 flex items-center gap-1"><CheckCircle2 size={12} /> {verifiedProxyName}</p>}
+                      {proxyIdValidation === 'not-found' && <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>}
                     </div>
                   )}
                   <div>
                     <label className="text-xs font-medium text-text-secondary block mb-1">Notes (optional)</label>
-                    <input
-                      value={handoffRecord.notes}
-                      onChange={(e) => setHandoffRecord((r) => ({ ...r, notes: e.target.value }))}
-                      className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    />
+                    <input value={handoffRecord.notes} onChange={(e) => setHandoffRecord((r) => ({ ...r, notes: e.target.value }))} className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-text-secondary mt-1">
-                  Are you sure you want to mark this report as resolved? This action cannot be undone.
-                </p>
+                <p className="text-sm text-text-secondary mt-1">Are you sure you want to mark this report as resolved? This action cannot be undone.</p>
               )}
             </div>
-
             <div className="flex gap-2 px-5 py-4 border-t border-border shrink-0">
-              <button
-                onClick={handleCloseConfirm}
-                className="flex-1 h-10 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors"
-              >
-                Cancel
-              </button>
+              <button onClick={handleCloseConfirm} className="flex-1 h-10 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors">Cancel</button>
               <button
                 onClick={handleConfirmResolve}
-                disabled={
-                  (isWalkIn && !handoffRecord.isProxy && idValidation !== 'found') ||
-                  (isWalkIn && handoffRecord.isProxy && proxyIdValidation !== 'found')
-                }
+                disabled={(isWalkIn && !handoffRecord.isProxy && idValidation !== 'found') || (isWalkIn && handoffRecord.isProxy && proxyIdValidation !== 'found')}
                 className="flex-1 h-10 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 hover:bg-brand-700 transition-colors"
               >
                 Confirm
@@ -710,16 +772,8 @@ export default function ReportsPage() {
         <h1 className="text-lg font-bold text-text-primary">Reports</h1>
         <p className="text-xs text-text-muted mt-0.5">
           {total} report{total !== 1 ? 's' : ''} total
-          {dropOffPending.length > 0 && (
-            <span className="ml-2 text-status-claimed-text font-semibold">
-              · {dropOffPending.length} ISSC drop-off pending
-            </span>
-          )}
-          {proxyPending.length > 0 && (
-            <span className="ml-2 text-status-approved-text font-semibold">
-              · {proxyPending.length} proxy pickup pending
-            </span>
-          )}
+          {dropOffPending.length > 0 && <span className="ml-2 text-status-claimed-text font-semibold">· {dropOffPending.length} ISSC drop-off pending</span>}
+          {proxyPending.length > 0 && <span className="ml-2 text-status-approved-text font-semibold">· {proxyPending.length} proxy pickup pending</span>}
         </p>
       </div>
 
@@ -727,33 +781,12 @@ export default function ReportsPage() {
       <div className="px-6 pt-4">
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input
-            type="search"
-            placeholder="Search by title or location…"
-            value={search}
-            onChange={handleSearchChange}
-            className="w-full h-9 pl-9 pr-9 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-            >
-              <X size={14} />
-            </button>
-          )}
+          <input type="search" placeholder="Search by title or location…" value={search} onChange={handleSearchChange} className="w-full h-9 pl-9 pr-9 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400" />
+          {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"><X size={14} /></button>}
         </div>
         <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
           {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => { setActiveTab(tab.value); setOffset(0) }}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                activeTab === tab.value
-                  ? 'bg-brand-600 text-white'
-                  : 'text-text-secondary hover:bg-surface-muted border border-border-strong'
-              }`}
-            >
+            <button key={tab.value} onClick={() => { setActiveTab(tab.value); setOffset(0) }} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${activeTab === tab.value ? 'bg-brand-600 text-white' : 'text-text-secondary hover:bg-surface-muted border border-border-strong'}`}>
               {tab.label}
             </button>
           ))}
@@ -773,226 +806,70 @@ export default function ReportsPage() {
           </div>
         ) : (
           <div className="border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm border-collapse bg-surface-card">
-            <thead>
-              <tr className="bg-surface-muted">
-                <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Item</th>
-                <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Reporter</th>
-                <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Status</th>
-                <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Filed</th>
-                <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reports.map((r) => (
-                <>
-                  <tr
-                    key={r.id}
-                    className={`border-b border-border hover:bg-surface-muted transition-colors ${
-                      r.id === highlightId ? 'bg-status-open-bg' : 'bg-surface-card'
-                    }`}
-                  >
+            <table className="w-full text-sm border-collapse bg-surface-card">
+              <thead>
+                <tr className="bg-surface-muted">
+                  <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Item</th>
+                  <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Reporter</th>
+                  <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Status</th>
+                  <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Filed</th>
+                  <th className="py-2 px-3 text-left text-[11px] font-semibold text-text-muted uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.map((r) => (
+                  <tr key={r.id} className={`border-b border-border hover:bg-surface-muted transition-colors cursor-pointer ${r.id === highlightId ? 'bg-status-open-bg' : 'bg-surface-card'}`}>
                     <td className="py-2 px-3 font-medium">
                       <div className="flex items-center gap-1.5">
-                        {r.active_claim?.drop_off_chosen && (
-                          <MapPin size={12} className="text-status-claimed-text shrink-0" title="ISSC drop-off chosen" />
-                        )}
-                        {r.proxy_request && (
-                          <MapPin size={12} className="text-status-approved-text shrink-0" title="Proxy pickup requested" />
-                        )}
-                        <button
-                          onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                          className="text-left hover:text-brand-600 transition-colors"
-                        >
+                        {r.active_claim?.drop_off_chosen && <MapPin size={12} className="text-status-claimed-text shrink-0" title="ISSC drop-off chosen" />}
+                        {r.proxy_request && <MapPin size={12} className="text-status-approved-text shrink-0" title="Proxy pickup requested" />}
+                        <button onClick={() => setViewReport(r)} className="text-left hover:text-brand-600 transition-colors font-medium text-sm">
                           {r.title}
                         </button>
                       </div>
                       <p className="text-[11px] text-text-muted mt-0.5">{r.category}</p>
                     </td>
-                    <td className="py-2 px-3 text-text-secondary text-xs">
-                      {r.reporter_name ?? '—'}
-                    </td>
-                    <td className="py-2 px-3">
-                      <StatusBadge status={r.status} />
-                    </td>
+                    <td className="py-2 px-3 text-text-secondary text-xs">{r.reporter_name ?? '—'}</td>
+                    <td className="py-2 px-3"><StatusBadge status={r.status} /></td>
                     <td className="py-2 px-3 text-text-muted text-xs whitespace-nowrap">
-                      {new Date(r.created_at).toLocaleDateString('en-PH', {
-                        month: 'short', day: 'numeric', year: 'numeric',
-                      })}
+                      {new Date(r.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <button
-                          onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold hover:bg-surface-card border border-border transition-colors"
-                        >
-                          {expandedId === r.id ? <EyeOff size={11} /> : <Eye size={11} />}
-                          {expandedId === r.id ? 'Hide' : 'View'}
+                        <button onClick={() => setViewReport(r)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold hover:bg-surface-card border border-border transition-colors">
+                          <Eye size={11} /> View
                         </button>
-
-                        {r.status === 'open' && r.type === 'found_walkin' && (
-                          <>
-                            <button
-                              onClick={() => {
-                                setEditReport(r)
-                                setEditForm({
-                                  title: r.title,
-                                  description: r.description ?? '',
-                                  category: r.category ?? '',
-                                  walkin_finder_ref: r.walkin_finder_ref ?? '',
-                                })
-                              }}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold hover:bg-surface-card border border-border transition-colors"
-                            >
-                              <Pencil size={11} /> Edit
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(r.id)}
-                              disabled={deletingId === r.id}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-status-rejected-bg text-status-rejected-text text-[11px] font-semibold border border-status-rejected-text/20 hover:opacity-80 transition-opacity disabled:opacity-50"
-                            >
-                              <Trash2 size={11} /> Delete
-                            </button>
-                          </>
-                        )}
-
                         {r.status === 'open' && (
-                          <button
-                            onClick={() => handleAnnounce(r.id, r.title)}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold hover:bg-surface-card border border-border transition-colors"
-                          >
+                          <button onClick={() => handleAnnounce(r.id, r.title)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold hover:bg-surface-card border border-border transition-colors">
                             Announce
                           </button>
                         )}
-
                         {r.status === 'approved' && r.type === 'found_walkin' && !r.active_claim?.drop_off_chosen && (
-                          <button
-                            onClick={() => {
-                              setConfirmResolve({
-                                id: r.id,
-                                via: 'issc_walkin_pickup',
-                                reporterStudentId: r.reporter_student_id,
-                                hasPreAuthorizedProxy: false,
-                                isWalkIn: true,
-                              })
-                              setConfirmOpen(true)
-                            }}
-                            disabled={resolving === r.id}
-                            className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap"
-                          >
+                          <button onClick={() => { setConfirmResolve({ id: r.id, via: 'issc_walkin_pickup', reporterStudentId: r.reporter_student_id, hasPreAuthorizedProxy: false, isWalkIn: true }); setConfirmOpen(true) }} disabled={resolving === r.id} className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
                             Record collection
                           </button>
                         )}
-
                         {r.status === 'approved' && !r.active_claim?.drop_off_chosen && !r.proxy_request && r.type !== 'found_walkin' && (
-                          <button
-                            onClick={() => {
-                              setConfirmResolve({
-                                id: r.id,
-                                via: 'issc_walkin_pickup',
-                                reporterStudentId: r.reporter_student_id,
-                                hasPreAuthorizedProxy: false,
-                              })
-                              setConfirmOpen(true)
-                            }}
-                            disabled={resolving === r.id}
-                            className="px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold border border-border hover:opacity-80 transition-opacity whitespace-nowrap"
-                          >
+                          <button onClick={() => { setConfirmResolve({ id: r.id, via: 'issc_walkin_pickup', reporterStudentId: r.reporter_student_id, hasPreAuthorizedProxy: false }); setConfirmOpen(true) }} disabled={resolving === r.id} className="px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold border border-border hover:opacity-80 transition-opacity whitespace-nowrap">
                             Force resolve
                           </button>
                         )}
-
                         {r.status === 'approved' && r.active_claim?.drop_off_chosen && (
-                          <a
-                            href="/dropoff"
-                            className="px-2.5 py-1 rounded-lg bg-status-claimed-bg text-status-claimed-text text-[11px] font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1"
-                          >
-                            📍 Drop-off request
+                          <a href="/dropoff" className="px-2.5 py-1 rounded-lg bg-status-claimed-bg text-status-claimed-text text-[11px] font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1">
+                            📍 Drop-off
                           </a>
                         )}
-
                         {r.status === 'approved' && r.proxy_request && !r.active_claim?.drop_off_chosen && (
-                          <button
-                            onClick={() => {
-                              setConfirmResolve({
-                                id: r.id,
-                                via: 'issc_dropoff',
-                                reporterStudentId: r.reporter_student_id,
-                                hasPreAuthorizedProxy: !!r.proxy_request,
-                                finderStudentId: r.active_claim?.claimant_student_id,
-                              })
-                              setConfirmOpen(true)
-                            }}
-                            disabled={resolving === r.id}
-                            className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap"
-                          >
+                          <button onClick={() => { setConfirmResolve({ id: r.id, via: 'issc_dropoff', reporterStudentId: r.reporter_student_id, hasPreAuthorizedProxy: !!r.proxy_request, finderStudentId: r.active_claim?.claimant_student_id }); setConfirmOpen(true) }} disabled={resolving === r.id} className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
                             Owner collected
                           </button>
                         )}
                       </div>
                     </td>
                   </tr>
-
-                  {/* Expanded row */}
-                  {expandedId === r.id && (
-                    <tr key={`${r.id}-expanded`} className="bg-surface-muted border-b border-border">
-                      <td colSpan={5} className="px-6 py-4">
-                        <div className="grid grid-cols-3 gap-4 text-xs">
-                          <div>
-                            <p className="font-semibold text-text-secondary mb-1">Description</p>
-                            <p className="text-text-primary">{r.description ?? '—'}</p>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-text-secondary mb-1">Location</p>
-                            <p className="text-text-primary">{r.location ?? '—'}</p>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-text-secondary mb-1">Type</p>
-                            <p className="text-text-primary">{r.type ?? '—'}</p>
-                          </div>
-                          {r.active_claim && (
-                            <div>
-                              <p className="font-semibold text-text-secondary mb-1">Claimant</p>
-                              <p className="text-text-primary">
-                                {r.active_claim?.claimant?.first_name} {r.active_claim?.claimant?.last_name}
-                                {r.active_claim?.claimant?.student_id && ` · ${r.active_claim.claimant.student_id}`}
-                              </p>
-                            </div>
-                          )}
-                          {r.walkin_finder_ref && (
-                            <div>
-                              <p className="font-semibold text-text-secondary mb-1">Finder Student ID</p>
-                              <p className="text-text-primary">{r.walkin_finder_ref}</p>
-                            </div>
-                          )}
-                          {r.proxy_request && (
-                            <div>
-                              <p className="font-semibold text-text-secondary mb-1">Proxy</p>
-                              <p className="text-text-primary">
-                                {r.proxy_request.proxy_name} · {r.proxy_request.proxy_student_id}
-                              </p>
-                            </div>
-                          )}
-                          {r.resolved_via && (
-                            <div>
-                              <p className="font-semibold text-text-secondary mb-1">Resolved via</p>
-                              <p className="text-text-primary">{r.resolved_via}</p>
-                            </div>
-                          )}
-                          {r.had_rejected_claim && (
-                            <div>
-                              <p className="font-semibold text-text-secondary mb-1">Note</p>
-                              <p className="text-status-rejected-text">Had a rejected claim</p>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -1000,22 +877,12 @@ export default function ReportsPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="px-6 py-4 border-t border-border flex items-center justify-between">
-          <p className="text-xs text-text-muted">
-            Page {currentPage} of {totalPages} · {total} total
-          </p>
+          <p className="text-xs text-text-muted">Page {currentPage} of {totalPages} · {total} total</p>
           <div className="flex gap-2">
-            <button
-              onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-              disabled={offset === 0}
-              className="w-8 h-8 rounded-lg border border-border-strong flex items-center justify-center text-text-secondary hover:bg-surface-muted disabled:opacity-40 transition-colors"
-            >
+            <button onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))} disabled={offset === 0} className="w-8 h-8 rounded-lg border border-border-strong flex items-center justify-center text-text-secondary hover:bg-surface-muted disabled:opacity-40 transition-colors">
               <ChevronLeft size={14} />
             </button>
-            <button
-              onClick={() => setOffset((o) => o + PAGE_SIZE)}
-              disabled={offset + PAGE_SIZE >= total}
-              className="w-8 h-8 rounded-lg border border-border-strong flex items-center justify-center text-text-secondary hover:bg-surface-muted disabled:opacity-40 transition-colors"
-            >
+            <button onClick={() => setOffset((o) => o + PAGE_SIZE)} disabled={offset + PAGE_SIZE >= total} className="w-8 h-8 rounded-lg border border-border-strong flex items-center justify-center text-text-secondary hover:bg-surface-muted disabled:opacity-40 transition-colors">
               <ChevronRight size={14} />
             </button>
           </div>
