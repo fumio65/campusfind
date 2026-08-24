@@ -1,20 +1,18 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../shared/lib/supabase";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
-
 export default function ProxyRequestForm({
   reportId,
   reporterId,
   claimantStudentId,
 }) {
   const [proxyStudentId, setProxyStudentId] = useState("");
-  const [validating, setValidating] = useState(false);
-  const [validation, setValidation] = useState(null);
-  const [verifiedName, setVerifiedName] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(null);
+  const [validating, setValidating]         = useState(false);
+  const [validation, setValidation]         = useState(null);
+  const [verifiedName, setVerifiedName]     = useState(null);
+  const [submitting, setSubmitting]         = useState(false);
+  const [submitted, setSubmitted]           = useState(false);
+  const [error, setError]                   = useState(null);
   const [existingRequest, setExistingRequest] = useState(null);
   const validateRef = useRef(null);
 
@@ -67,16 +65,17 @@ export default function ProxyRequestForm({
         return;
       }
 
-      // Look up the student
-      const res = await fetch(
-        `${SERVER_URL}/accounts?search=${encodeURIComponent(inputId)}&limit=5`,
-      );
-      const body = await res.json();
-      const exact = (body.accounts ?? []).find((a) => a.student_id === inputId);
+      // FIX: was calling SERVER_URL/accounts (dead Express server)
+      // Now queries Supabase directly
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, first_name, last_name, student_id")
+        .eq("student_id", inputId)
+        .maybeSingle();
 
-      if (exact) {
+      if (user) {
         setValidation("valid");
-        setVerifiedName(`${exact.first_name} ${exact.last_name}`);
+        setVerifiedName(`${user.first_name} ${user.last_name}`);
       } else {
         setValidation("invalid");
         setVerifiedName(null);
@@ -95,15 +94,44 @@ export default function ProxyRequestForm({
     setSubmitting(true);
     setError(null);
     try {
-      const { error: insertError } = await supabase
+      const proxyId = proxyStudentId.trim().toUpperCase();
+
+      // Check if proxy_request already exists — upsert
+      const { data: existing } = await supabase
         .from("proxy_requests")
-        .insert({
+        .select("id")
+        .eq("report_id", reportId)
+        .eq("reporter_id", reporterId)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("proxy_requests")
+          .update({
+            proxy_name: verifiedName,
+            proxy_student_id: proxyId,
+            status: "pending",
+          })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("proxy_requests").insert({
           report_id: reportId,
           reporter_id: reporterId,
           proxy_name: verifiedName,
-          proxy_student_id: proxyStudentId.trim().toUpperCase(),
+          proxy_student_id: proxyId,
         });
-      if (insertError) throw insertError;
+      }
+
+      // FIX: was relying on Express route for admin notification — now inserts directly
+      // notifications table is global admin-only (no user_id column)
+      await supabase.from("notifications").insert({
+        type: "proxy_request",
+        title: "Proxy Pickup Registered",
+        body: `${verifiedName} (${proxyId}) has been authorized to pick up an item on the owner's behalf.`,
+        report_id: reportId,
+        read: false,
+      });
+
       setSubmitted(true);
       checkExisting();
     } catch (err) {
@@ -152,6 +180,7 @@ export default function ProxyRequestForm({
               placeholder="e.g. 18-00045"
               value={proxyStudentId}
               onChange={(e) => handleStudentIdChange(e.target.value)}
+              maxLength={8}
               className={`w-full h-10 px-3 text-sm rounded-xl border bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 ${
                 validation === "valid"
                   ? "border-status-open-text"
@@ -163,9 +192,7 @@ export default function ProxyRequestForm({
               }`}
             />
             {validating && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted">
-                Checking…
-              </span>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
             )}
           </div>
 
