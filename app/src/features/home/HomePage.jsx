@@ -113,14 +113,13 @@ export default function HomePage() {
   const [locationFilter, setLocationFilter] = useState("");
   const [debouncedLocation, setDebouncedLocation] = useState("");
   const [availableLocations, setAvailableLocations] = useState([]);
+  const [selectedStatus, setSelectedStatus] = useState(null);
 
-  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 600);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Debounce location filter
   useEffect(() => {
     const t = setTimeout(() => setDebouncedLocation(locationFilter), 350);
     return () => clearTimeout(t);
@@ -149,27 +148,20 @@ export default function HomePage() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "reports" },
-        () => {
-          fetchReports(true);
-        },
+        () => { fetchReports(true); },
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "reports" },
-        () => {
-          fetchReports(true);
-        },
+        () => { fetchReports(true); },
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "report_photos" },
-        () => {
-          setTimeout(() => fetchReports(true), 800);
-        },
+        () => { setTimeout(() => fetchReports(true), 800); },
       )
       .subscribe();
 
-    // Re-fetch when tab becomes visible again (handles WebSocket drops)
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
         fetchReports(true);
@@ -181,13 +173,14 @@ export default function HomePage() {
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [debouncedSearch, selectedCategory, debouncedLocation]);
+  }, [debouncedSearch, selectedCategory, debouncedLocation, selectedStatus]);
 
   async function fetchAvailableLocations() {
     const { data } = await supabase
       .from("reports")
       .select("location")
-      .in("status", ["open", "claimed", "approved"])
+      // FIX: include resolved so resolved report locations appear in filter suggestions
+      .in("status", ["open", "claimed", "approved", "resolved"])
       .not("location", "is", null);
     const unique = [
       ...new Set((data ?? []).map((r) => r.location).filter(Boolean)),
@@ -203,7 +196,8 @@ export default function HomePage() {
       .select(
         "id, title, description, location, category, status, created_at, type",
       )
-      .in("status", ["open", "claimed", "approved"])
+      // FIX: include resolved — public should see all report statuses
+      .in("status", selectedStatus ? [selectedStatus] : ["open", "claimed", "approved", "resolved"])
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -228,7 +222,6 @@ export default function HomePage() {
       return;
     }
 
-    // Fetch thumbnails
     const reportIds = data.map((r) => r.id);
     const { data: photos } = await supabase
       .from("report_photos")
@@ -253,10 +246,11 @@ export default function HomePage() {
   function clearFilters() {
     setSelectedCategory(null);
     setLocationFilter("");
+    setSelectedStatus(null);
   }
 
   const activeFilterCount =
-    (selectedCategory ? 1 : 0) + (debouncedLocation.trim() ? 1 : 0);
+    (selectedCategory ? 1 : 0) + (debouncedLocation.trim() ? 1 : 0) + (selectedStatus ? 1 : 0);
   const hasActiveQuery = debouncedSearch || activeFilterCount > 0;
 
   const firstName = profile?.first_name ?? "there";
@@ -278,7 +272,6 @@ export default function HomePage() {
           <p className="text-white/60 text-xs mt-0.5">NwSSU Lost & Found</p>
         </motion.div>
 
-        {/* Search bar + filter toggle */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -327,7 +320,6 @@ export default function HomePage() {
           </button>
         </motion.div>
 
-        {/* Filter panel */}
         <AnimatePresence>
           {showFilters && (
             <motion.div
@@ -338,7 +330,6 @@ export default function HomePage() {
               className="overflow-hidden"
             >
               <div className="bg-surface-card rounded-xl p-3.5 mt-3 flex flex-col gap-3">
-                {/* Category chips */}
                 <div>
                   <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
                     Category
@@ -362,7 +353,33 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Location filter */}
+                {/* Status filter */}
+                <div>
+                  <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
+                    Status
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { value: "open", label: "Open", style: "bg-status-open-bg text-status-open-text border-status-open-text/30" },
+                      { value: "claimed", label: "Claimed", style: "bg-status-claimed-bg text-status-claimed-text border-status-claimed-text/30" },
+                      { value: "approved", label: "Approved", style: "bg-status-approved-bg text-status-approved-text border-status-approved-text/30" },
+                      { value: "resolved", label: "Resolved", style: "bg-status-resolved-bg text-status-resolved-text border-status-resolved-text/30" },
+                    ].map(({ value, label, style }) => (
+                      <button
+                        key={value}
+                        onClick={() => setSelectedStatus((s) => s === value ? null : value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                          selectedStatus === value
+                            ? style + " ring-2 ring-offset-1 ring-current"
+                            : "border-border-strong text-text-secondary hover:border-brand-400"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div>
                   <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
                     Location
@@ -426,14 +443,10 @@ export default function HomePage() {
             className="flex flex-col items-center justify-center text-center py-16"
           >
             <div className="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center mb-4">
-              <Search
-                size={24}
-                className="text-text-muted"
-                aria-hidden="true"
-              />
+              <Search size={24} className="text-text-muted" aria-hidden="true" />
             </div>
             <p className="text-sm font-semibold text-text-primary mb-1">
-              {hasActiveQuery ? "No results found" : "No open reports yet"}
+              {hasActiveQuery ? "No results found" : "No reports yet"}
             </p>
             <p className="text-xs text-text-muted max-w-xs mb-6">
               {hasActiveQuery
@@ -442,10 +455,7 @@ export default function HomePage() {
             </p>
             {hasActiveQuery ? (
               <button
-                onClick={() => {
-                  setSearch("");
-                  clearFilters();
-                }}
+                onClick={() => { setSearch(""); clearFilters(); }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-strong text-text-secondary text-sm font-semibold"
               >
                 Clear search & filters
