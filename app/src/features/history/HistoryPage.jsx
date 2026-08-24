@@ -51,7 +51,6 @@ function formatDate(date) {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-// Year/Month picker modal
 function DatePickerModal({ cursor, onSelect, onClose }) {
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i)
@@ -80,7 +79,6 @@ function DatePickerModal({ cursor, onSelect, onClose }) {
           </button>
         </div>
 
-        {/* Year selector */}
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setPickerYear((y) => y - 1)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-muted">
             <ChevronLeft size={15} className="text-text-secondary" />
@@ -91,7 +89,6 @@ function DatePickerModal({ cursor, onSelect, onClose }) {
           </button>
         </div>
 
-        {/* Month grid */}
         <div className="grid grid-cols-4 gap-1.5">
           {MONTHS.map((m, i) => {
             const isSelected = cursor.getFullYear() === pickerYear && cursor.getMonth() === i
@@ -119,7 +116,6 @@ function DatePickerModal({ cursor, onSelect, onClose }) {
   )
 }
 
-// Day activity dialog
 function DaySheet({ date, items, onClose }) {
   const grouped = {
     report: items.filter(i => i._type === 'report'),
@@ -153,7 +149,6 @@ function DaySheet({ date, items, onClose }) {
         onClick={(e) => e.stopPropagation()}
         className="bg-surface-card rounded-2xl w-full max-w-sm max-h-[75vh] flex flex-col shadow-xl"
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div>
             <p className="text-sm font-bold text-text-primary">{formatDate(date)}</p>
@@ -175,7 +170,6 @@ function DaySheet({ date, items, onClose }) {
           ) : (
             sections.map(({ type, label, icon: Icon, bg, color }) => (
               <div key={type}>
-                {/* Section header */}
                 <div className="flex items-center gap-2 mb-2">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center ${bg}`}>
                     <Icon size={12} className={color} />
@@ -185,8 +179,6 @@ function DaySheet({ date, items, onClose }) {
                     {grouped[type].length}
                   </span>
                 </div>
-
-                {/* Items */}
                 <div className="flex flex-col gap-1.5">
                   {grouped[type].map((item) => {
                     const to = item.report_id ? `/reports/${item.report_id}` : item.id ? `/reports/${item.id}` : '/'
@@ -234,7 +226,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [sheetDay, setSheetDay] = useState(null)
-  const [summaryType, setSummaryType] = useState(null) // Date | null
+  const [summaryType, setSummaryType] = useState(null)
 
   useEffect(() => {
     if (!session?.user?.id) return
@@ -318,9 +310,9 @@ export default function HistoryPage() {
       start.setDate(cursor.getDate() - cursor.getDay())
       const end = new Date(start)
       end.setDate(start.getDate() + 6)
-      return `${start.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      return `${start.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`
     }
-    return cursor.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    return cursor.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
   const today = new Date()
@@ -328,7 +320,6 @@ export default function HistoryPage() {
   return (
     <div className="min-h-screen bg-surface-page safe-top pb-28">
 
-      {/* Date picker modal */}
       <AnimatePresence>
         {showDatePicker && (
           <DatePickerModal
@@ -339,7 +330,6 @@ export default function HistoryPage() {
         )}
       </AnimatePresence>
 
-      {/* Day sheet */}
       <AnimatePresence>
         {sheetDay && (
           <DaySheet
@@ -368,34 +358,46 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      {/* View switcher + navigation */}
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1 bg-surface-muted rounded-xl p-1">
-          {VIEWS.map((v) => (
-            <button
-              key={v}
-              onClick={() => setCalView(v)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors capitalize ${
-                calView === v ? 'bg-surface-card text-text-primary shadow-sm' : 'text-text-muted'
-              }`}
-            >
-              {v}
-            </button>
-          ))}
+      {/* FIX: was a single row causing overflow — now stacked in two rows */}
+      <div className="px-4 pt-4 pb-2 flex flex-col gap-2">
+        {/* Row 1: view switcher */}
+        <div className="flex items-center justify-center">
+          <div className="flex items-center gap-1 bg-surface-muted rounded-xl p-1">
+            {VIEWS.map((v) => (
+              <button
+                key={v}
+                onClick={() => setCalView(v)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${
+                  calView === v ? 'bg-surface-card text-text-primary shadow-sm' : 'text-text-muted'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => navigate(-1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-surface-muted">
+
+        {/* Row 2: navigation — prev / title / next */}
+        <div className="flex items-center justify-between gap-1">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-muted shrink-0"
+          >
             <ChevronLeft size={16} className="text-text-secondary" />
           </button>
-          {/* Tappable title opens date picker */}
+
           <button
             onClick={() => setShowDatePicker(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-surface-muted transition-colors"
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg hover:bg-surface-muted transition-colors min-w-0"
           >
-            <span className="text-xs font-semibold text-text-primary min-w-[110px] text-center">{calTitle()}</span>
+            <span className="text-xs font-semibold text-text-primary truncate">{calTitle()}</span>
             <ChevronDown size={12} className="text-text-muted shrink-0" />
           </button>
-          <button onClick={() => navigate(1)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-surface-muted">
+
+          <button
+            onClick={() => navigate(1)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-muted shrink-0"
+          >
             <ChevronRight size={16} className="text-text-secondary" />
           </button>
         </div>
@@ -433,9 +435,7 @@ export default function HistoryPage() {
               </button>
             ) : (
               calDays.map((day, i) => {
-                if (!day) return (
-                  <div key={`empty-${i}`} className="w-full h-8" />
-                )
+                if (!day) return <div key={`empty-${i}`} className="w-full h-8" />
                 const key = getDayKey(day)
                 const types = activityDates[key]
                 const isToday = isSameDay(day, today)
@@ -520,7 +520,6 @@ export default function HistoryPage() {
               onClick={(e) => e.stopPropagation()}
               className="bg-surface-card rounded-2xl w-full max-w-sm max-h-[75vh] flex flex-col shadow-xl"
             >
-              {/* Dialog header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
                 <div>
                   <p className="text-sm font-bold text-text-primary capitalize">
@@ -533,7 +532,6 @@ export default function HistoryPage() {
                 </button>
               </div>
 
-              {/* Items */}
               <div className="overflow-y-auto flex-1 px-4 py-3 flex flex-col gap-2">
                 {summaryType === 'report' && reports.map((item) => (
                   <Link key={item.id} to={`/reports/${item.id}`} onClick={() => setSummaryType(null)}
