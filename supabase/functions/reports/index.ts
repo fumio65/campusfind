@@ -173,10 +173,11 @@ Deno.serve(async (req) => {
         })
       }
 
+      // FIX: was querying is_admin: true — schema uses role: 'admin'
       const { data: adminUser } = await supabaseAdmin
         .from('users')
         .select('id')
-        .eq('is_admin', true)
+        .eq('role', 'admin')
         .single()
 
       if (!adminUser) {
@@ -276,7 +277,7 @@ Deno.serve(async (req) => {
     if (req.method === 'POST' && id && action === 'announce') {
       const { data: report } = await supabaseAdmin
         .from('reports')
-        .select('id, title, category, location')
+        .select('id, title, category, location, reporter_id')
         .eq('id', id)
         .single()
 
@@ -293,6 +294,9 @@ Deno.serve(async (req) => {
         .eq('status', 'active')
 
       for (const user of users ?? []) {
+        // FIX: skip the reporter — don't notify them about their own report
+        if ((user as any).id === (report as any).reporter_id) continue
+
         await notifyUser({
           userId: (user as any).id,
           type: 'new_report',
@@ -311,10 +315,11 @@ Deno.serve(async (req) => {
     if (req.method === 'POST' && id === 'admin-notify') {
       const { reportId, reportTitle } = await req.json()
 
+      // FIX: was querying is_admin: true — schema uses role: 'admin'
       const { data: admins } = await supabaseAdmin
         .from('users')
         .select('id')
-        .eq('is_admin', true)
+        .eq('role', 'admin')
 
       for (const admin of admins ?? []) {
         await notifyUser({
