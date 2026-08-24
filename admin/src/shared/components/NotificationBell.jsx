@@ -153,28 +153,50 @@ export default function NotificationBell() {
 
             {notifications.map((n) => {
               const { icon: Icon, color, bg } = TYPE_CONFIG[n.type] ?? TYPE_CONFIG.new_report
+              const isUnread = !n.read
               return (
                 <button
                   key={n.id}
                   onClick={() => handleNotificationClick(n)}
-                  className={`w-full flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 text-left transition-colors hover:bg-surface-muted ${
-                    !n.read ? 'bg-brand-50/40' : ''
+                  className={`w-full flex items-start gap-3 px-4 py-3.5 border-b border-border last:border-0 text-left transition-all relative ${
+                    isUnread
+                      ? 'bg-brand-50 hover:bg-brand-100/70'
+                      : 'hover:bg-surface-muted'
                   }`}
                 >
-                  <div className={`w-8 h-8 rounded-full ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                    <Icon size={15} className={color} />
+                  {/* Unread left accent bar */}
+                  {isUnread && (
+                    <span className="absolute left-0 top-0 bottom-0 w-1 rounded-r-full bg-brand-600" />
+                  )}
+
+                  {/* Icon */}
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                    isUnread ? bg + ' ring-2 ring-brand-200' : bg
+                  }`}>
+                    <Icon size={16} className={color} />
                   </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className={`text-xs font-semibold ${!n.read ? 'text-text-primary' : 'text-text-secondary'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-xs leading-snug ${
+                        isUnread ? 'font-bold text-text-primary' : 'font-semibold text-text-secondary'
+                      }`}>
                         {n.title}
                       </p>
-                      {!n.read && (
-                        <span className="w-2 h-2 rounded-full bg-brand-600 shrink-0" />
+                      {isUnread && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-brand-600 shrink-0 mt-0.5 shadow-sm" />
                       )}
                     </div>
-                    <p className="text-xs text-text-muted mt-0.5 leading-relaxed">{n.body}</p>
-                    <p className="text-[10px] text-text-muted mt-1">{timeAgo(n.created_at)}</p>
+                    <p className={`text-xs mt-0.5 leading-relaxed ${
+                      isUnread ? 'text-text-primary/70' : 'text-text-muted'
+                    }`}>
+                      {n.body}
+                    </p>
+                    <p className={`text-[10px] mt-1 font-medium ${
+                      isUnread ? 'text-brand-600' : 'text-text-muted'
+                    }`}>
+                      {timeAgo(n.created_at)}
+                    </p>
                   </div>
                 </button>
               )
