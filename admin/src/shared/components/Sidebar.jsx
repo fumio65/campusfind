@@ -16,18 +16,84 @@ import sealSrc from '../../assets/nwssu-seal.png'
 import { supabase } from '../lib/supabaseClient'
 import NotificationBell from './NotificationBell'
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/bulk-import', label: 'Bulk import', icon: Upload },
-  { to: '/reports', label: 'Reports', icon: ListChecks },
-  { to: '/walk-in', label: 'Found Item Drop-off', icon: PersonStanding },
-  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { to: '/accounts', label: 'Accounts', icon: Users },
-  { to: '/dropoff', label: 'Drop-off Requests', icon: PackageCheck },
+// ── Nav groups ────────────────────────────────────────────────────────────────
+const NAV_GROUPS = [
+  {
+    label: null, // no section label for top-level
+    items: [
+      { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { to: '/reports',  label: 'Reports',           icon: ListChecks    },
+      { to: '/dropoff',  label: 'Drop-off Requests', icon: PackageCheck  },
+      { to: '/walk-in',  label: 'Walk-in Item',      icon: PersonStanding },
+    ],
+  },
+  {
+    label: 'Accounts',
+    items: [
+      { to: '/accounts',    label: 'Accounts',     icon: Users   },
+      { to: '/bulk-import', label: 'Bulk import',  icon: Upload  },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+    ],
+  },
 ]
 
-export default function Sidebar() {
+// ── Nav item ──────────────────────────────────────────────────────────────────
+function NavItem({ to, label, icon: Icon, end }) {
   const location = useLocation()
+  const isActive = end ? location.pathname === to : location.pathname.startsWith(to)
+
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className="relative flex items-center gap-2.5 px-4 py-2 mx-2 rounded-lg text-sm group"
+    >
+      {/* Active background */}
+      {isActive && (
+        <motion.div
+          layoutId="sidebar-active"
+          className="absolute inset-0 bg-white/15 rounded-lg"
+          transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+        />
+      )}
+
+      {/* Hover background — only on inactive items */}
+      {!isActive && (
+        <motion.div
+          className="absolute inset-0 rounded-lg bg-white/0 group-hover:bg-white/8 transition-colors duration-150"
+        />
+      )}
+
+      <Icon
+        size={16}
+        aria-hidden="true"
+        className={`relative z-10 transition-transform duration-150 group-hover:scale-110 ${
+          isActive ? 'text-white' : 'text-brand-100 group-hover:text-white'
+        }`}
+      />
+      <span
+        className={`relative z-10 transition-colors duration-150 ${
+          isActive ? 'text-white font-semibold' : 'text-brand-100 group-hover:text-white'
+        }`}
+      >
+        {label}
+      </span>
+    </NavLink>
+  )
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+export default function Sidebar() {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
 
   return (
@@ -80,50 +146,49 @@ export default function Sidebar() {
       </AnimatePresence>
 
       <aside className="w-[210px] shrink-0 bg-brand-600 text-white flex flex-col py-5">
-        <div className="flex items-center gap-2 px-5 pb-5 mb-2 border-b border-white/15">
+
+        {/* Logo / header */}
+        <div className="flex items-center gap-2 px-5 pb-5 mb-3 border-b border-white/15">
           <img src={sealSrc} alt="" className="w-7 h-7 rounded-full object-cover" />
           <span className="text-sm font-bold flex-1">CampusFind admin</span>
           <NotificationBell />
         </div>
-        <nav className="flex flex-col flex-1">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => {
-            const isActive = end ? location.pathname === to : location.pathname.startsWith(to)
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={`relative flex items-center gap-2.5 px-5 py-2.5 text-sm ${!isActive ? 'hover:text-white' : ''}`}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
-                    className="absolute inset-0 bg-white/10 border-r-2 border-white"
-                    transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-                  />
-                )}
-                <Icon
-                  size={17}
-                  aria-hidden="true"
-                  className={`relative ${isActive ? 'text-white' : 'text-brand-100'}`}
-                />
-                <span className={`relative ${isActive ? 'text-white font-semibold' : 'text-brand-100'}`}>
-                  {label}
-                </span>
-              </NavLink>
-            )
-          })}
+
+        {/* Nav groups */}
+        <nav className="flex flex-col flex-1 gap-5 px-0">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label ?? '__top'}>
+              {group.label && (
+                <p className="px-6 mb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                  {group.label}
+                </p>
+              )}
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => (
+                  <NavItem key={item.to} {...item} />
+                ))}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        <div className="px-3 pt-3 border-t border-white/15">
-          <button
+        {/* Sign out */}
+        <div className="px-2 pt-3 mt-3 border-t border-white/15">
+          <motion.button
             onClick={() => setShowSignOutConfirm(true)}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-brand-100 hover:bg-white/10 transition-colors text-sm"
+            whileHover={{ x: 2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-brand-100 hover:bg-white/8 hover:text-white transition-colors text-sm group"
           >
-            <LogOut size={17} aria-hidden="true" />
+            <LogOut
+              size={16}
+              aria-hidden="true"
+              className="transition-transform duration-150 group-hover:scale-110"
+            />
             <span>Sign out</span>
-          </button>
+          </motion.button>
         </div>
+
       </aside>
     </>
   )
