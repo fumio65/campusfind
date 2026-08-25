@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Camera, X, AlertCircle, CheckCircle2, Info, Lightbulb } from 'lucide-react'
+import { ArrowLeft, Camera, ImagePlus, X, AlertCircle, CheckCircle2, Info, Lightbulb } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 
@@ -21,6 +21,7 @@ export default function ClaimPage() {
   const [done, setDone] = useState(false)
   const [originalTip, setOriginalTip] = useState(null)
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
 
   useEffect(() => {
     if (!fromTipId) return
@@ -224,22 +225,50 @@ export default function ClaimPage() {
               </div>
             ))}
             {photos.length < MAX_PHOTOS && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className={`w-24 h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-colors ${
-                  photos.length === 0
-                    ? 'border-status-rejected-text/40 text-status-rejected-text bg-status-rejected-bg/30'
-                    : 'border-border-strong text-text-muted'
-                } hover:border-brand-400`}
-              >
-                <Camera size={20} />
-                <span className="text-[10px]">
-                  {photos.length === 0 ? 'Required' : 'Add more'}
-                </span>
-              </button>
+              <div className="flex gap-2">
+                {/* Camera — opens rear camera directly */}
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className={`w-24 h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-colors ${
+                    photos.length === 0
+                      ? 'border-status-rejected-text/40 text-status-rejected-text bg-status-rejected-bg/30'
+                      : 'border-border-strong text-text-muted'
+                  } hover:border-brand-400`}
+                >
+                  <Camera size={20} />
+                  <span className="text-[10px]">
+                    {photos.length === 0 ? 'Camera*' : 'Camera'}
+                  </span>
+                </button>
+                {/* Gallery — opens photo library */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-24 h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-colors ${
+                    photos.length === 0
+                      ? 'border-status-rejected-text/40 text-status-rejected-text bg-status-rejected-bg/30'
+                      : 'border-border-strong text-text-muted'
+                  } hover:border-brand-400`}
+                >
+                  <ImagePlus size={20} />
+                  <span className="text-[10px]">
+                    {photos.length === 0 ? 'Gallery*' : 'Gallery'}
+                  </span>
+                </button>
+              </div>
             )}
           </div>
+          {/* Camera input — opens rear camera directly */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoChange}
+            className="hidden"
+          />
+          {/* Gallery input — opens photo library */}
           <input
             ref={fileInputRef}
             type="file"
