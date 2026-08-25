@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, X, Camera } from 'lucide-react'
+import { ArrowLeft, X, Camera, ImagePlus } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 
@@ -22,6 +22,8 @@ export default function EditReportPage() {
   const [removedPhotoIds, setRemovedPhotoIds] = useState([])
   const [newPhotos, setNewPhotos] = useState([])
   const [loading, setLoading] = useState(true)
+  const cameraInputRef = useRef(null)
+  const galleryInputRef = useRef(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -253,13 +255,46 @@ export default function EditReportPage() {
               </div>
             ))}
             {canAddMore && (
-              <label className="w-20 h-20 rounded-xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center cursor-pointer hover:border-brand-400 transition-colors">
-                <Camera size={18} className="text-text-muted mb-1" />
-                <span className="text-[10px] text-text-muted">Add photo</span>
-                <input type="file" accept="image/*" multiple className="hidden" onChange={handleNewPhoto} />
-              </label>
+              <div className="flex gap-2">
+                {/* Camera — opens rear camera directly */}
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-20 h-20 rounded-xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center gap-1 text-text-muted hover:border-brand-400 transition-colors"
+                >
+                  <Camera size={18} />
+                  <span className="text-[10px]">Camera</span>
+                </button>
+                {/* Gallery — opens photo library */}
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="w-20 h-20 rounded-xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center gap-1 text-text-muted hover:border-brand-400 transition-colors"
+                >
+                  <ImagePlus size={18} />
+                  <span className="text-[10px]">Gallery</span>
+                </button>
+              </div>
             )}
           </div>
+          {/* Camera input */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleNewPhoto}
+            className="hidden"
+          />
+          {/* Gallery input */}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleNewPhoto}
+            className="hidden"
+          />
         </div>
 
         {error && (

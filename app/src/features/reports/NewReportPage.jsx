@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Camera, X, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Camera, ImagePlus, X, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 
@@ -25,6 +25,7 @@ export default function NewReportPage() {
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
 
   function handlePhotoChange(e) {
     const files = Array.from(e.target.files ?? [])
@@ -248,16 +249,38 @@ export default function NewReportPage() {
               </div>
             ))}
             {photos.length < MAX_PHOTOS && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-20 h-20 rounded-xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center gap-1 text-text-muted hover:border-brand-400 transition-colors"
-              >
-                <Camera size={18} />
-                <span className="text-[10px]">Add photo</span>
-              </button>
+              <div className="flex gap-2">
+                {/* Camera capture */}
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-20 h-20 rounded-xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center gap-1 text-text-muted hover:border-brand-400 transition-colors"
+                >
+                  <Camera size={18} />
+                  <span className="text-[10px]">Camera</span>
+                </button>
+                {/* Gallery picker */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-20 h-20 rounded-xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center gap-1 text-text-muted hover:border-brand-400 transition-colors"
+                >
+                  <ImagePlus size={18} />
+                  <span className="text-[10px]">Gallery</span>
+                </button>
+              </div>
             )}
           </div>
+          {/* Camera input — opens camera directly */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoChange}
+            className="hidden"
+          />
+          {/* Gallery input — opens photo library */}
           <input
             ref={fileInputRef}
             type="file"
