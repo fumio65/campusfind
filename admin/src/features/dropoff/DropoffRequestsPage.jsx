@@ -1,6 +1,6 @@
-﻿import { useEffect, useState, useRef } from 'react'
+﻿import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { PackageCheck, Clock, CheckCircle2, ImagePlus, ArrowLeft, X, AlertCircle, User } from 'lucide-react'
+import { PackageCheck, Clock, CheckCircle2, ImagePlus, ArrowLeft, X, AlertCircle, User, RefreshCw } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabaseClient'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
@@ -32,7 +32,6 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
   const [loadingProxy, setLoadingProxy] = useState(true)
   const debounceRef = useRef(null)
 
-  // Auto-select proxy path if a proxy record exists
   const hasProxy = !!proxyRecord
   const [isProxy, setIsProxy] = useState(false)
 
@@ -47,7 +46,7 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
         .eq('report_id', request.report_id)
         .maybeSingle()
       setProxyRecord(data ?? null)
-      if (data) setIsProxy(true) // auto-select proxy path when proxy exists
+      if (data) setIsProxy(true)
     } catch {
       setProxyRecord(null)
     } finally {
@@ -124,7 +123,6 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
         </div>
 
         <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          {/* Item info — names only, no IDs */}
           <div className="bg-surface-muted rounded-xl px-3 py-2.5">
             <p className="text-xs font-semibold text-text-primary">{request.reports?.title ?? 'Unknown item'}</p>
             <p className="text-[11px] text-text-muted mt-0.5">
@@ -137,7 +135,6 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
             )}
           </div>
 
-          {/* Who is collecting */}
           <div>
             <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
               Who is collecting the item?
@@ -146,7 +143,7 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
               <button
                 type="button"
                 onClick={() => { setIsProxy(false); reset() }}
-                disabled={hasProxy} // owner path disabled when proxy is authorized
+                disabled={hasProxy}
                 className={`h-9 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                   !isProxy ? 'bg-brand-600 text-white border-brand-600' : 'border-border-strong text-text-secondary hover:border-brand-400'
                 }`}
@@ -174,7 +171,6 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
             )}
           </div>
 
-          {/* Student ID input — inline live validation */}
           <div>
             <label className="text-xs font-semibold text-text-secondary block mb-1.5">
               {isProxy ? 'Proxy Student ID' : 'Owner Student ID'}
@@ -253,6 +249,7 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
 export default function DropoffRequestsPage() {
   const [requests, setRequests]           = useState([])
   const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState(null)
   const [filter, setFilter]               = useState('pending')
   const [selected, setSelected]           = useState(null)
   const [pickupRequest, setPickupRequest] = useState(null)
@@ -262,29 +259,49 @@ export default function DropoffRequestsPage() {
   const [lightboxUrl, setLightboxUrl]     = useState(null)
   const fileRef = useRef(null)
 
-  useEffect(() => {
-    fetchRequests()
-    const channel = supabase
-      .channel('dropoff-admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dropoff_requests' }, () => fetchRequests())
-      .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [filter])
+  // Keep a ref to the current filter so the realtime callback always
+  // reads the latest value without needing to re-subscribe on every change.
+  const filterRef = useRef(filter)
+  useEffect(() => { filterRef.current = filter }, [filter])
 
-  async function fetchRequests() {
-    setLoading(true)
+  // Stable fetch function — reads filter from ref, not closure.
+  const fetchRequests = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/dropoff?status=${filter}`, {
-        headers: { 'apikey': ANON_KEY, 'Content-Type': 'application/json' },
-      })
+      const res = await fetch(
+        `${SERVER_URL}/dropoff?status=${filterRef.current}`,
+        { headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' } },
+      )
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`)
       const data = await res.json()
       setRequests(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('fetchRequests error:', err)
+      setError('Failed to load requests. Check your connection and try again.')
       setRequests([])
+    } finally {
+      if (!silent) setLoading(false)
     }
-    setLoading(false)
-  }
+  }, []) // no deps — reads filter via ref
+
+  // Re-fetch when filter tab changes.
+  useEffect(() => {
+    fetchRequests()
+  }, [filter, fetchRequests])
+
+  // Single realtime subscription — created once, never recreated on tab change.
+  useEffect(() => {
+    const channel = supabase
+      .channel('dropoff-admin')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dropoff_requests' },
+        () => fetchRequests(true), // silent: skip loading spinner on realtime updates
+      )
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [fetchRequests]) // fetchRequests is stable (useCallback with no deps)
 
   function handlePhotoChange(e) {
     const file = e.target.files?.[0]
@@ -302,7 +319,7 @@ export default function DropoffRequestsPage() {
       await supabase.storage.from('report-photos').upload(path, photo)
       await fetch(`${SERVER_URL}/dropoff/${selected.id}/receive`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
         body: JSON.stringify({ photoPath: path }),
       })
       setSelected(null)
@@ -320,7 +337,7 @@ export default function DropoffRequestsPage() {
     try {
       await fetch(`${SERVER_URL}/dropoff/${requestId}/pickup`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'apikey': ANON_KEY },
+        headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
         body: JSON.stringify({ isProxy }),
       })
       setPickupRequest(null)
@@ -331,13 +348,25 @@ export default function DropoffRequestsPage() {
     setActioning(false)
   }
 
+  function handleFilterChange(s) {
+    setFilter(s)
+    setRequests([])  // clear stale list immediately so old data doesn't flash
+    setError(null)
+  }
+
   return (
     <div className="flex flex-col min-h-full">
       {/* Lightbox */}
       {lightboxUrl && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setLightboxUrl(null)}>
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
           <img src={lightboxUrl} alt="" className="max-w-full max-h-full rounded-xl object-contain" />
-          <button className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white" onClick={() => setLightboxUrl(null)}>
+          <button
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white"
+            onClick={() => setLightboxUrl(null)}
+          >
             <X size={18} />
           </button>
         </div>
@@ -361,7 +390,6 @@ export default function DropoffRequestsPage() {
               <h3 className="text-sm font-bold text-text-primary">Mark item as received</h3>
             </div>
 
-            {/* Names only — no student IDs */}
             <div className="bg-surface-muted rounded-xl p-3 mb-4">
               <p className="text-xs font-semibold text-text-primary">
                 {selected.reports?.title ?? 'Unknown item'}
@@ -378,7 +406,14 @@ export default function DropoffRequestsPage() {
               Take a photo of the item as proof that it has been received at the ISSC office.
             </p>
 
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
 
             {photoPreview ? (
               <div className="relative mb-4">
@@ -440,9 +475,11 @@ export default function DropoffRequestsPage() {
         {['pending', 'received', 'resolved'].map((s) => (
           <button
             key={s}
-            onClick={() => setFilter(s)}
+            onClick={() => handleFilterChange(s)}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-              filter === s ? 'bg-brand-600 text-white' : 'bg-surface-muted text-text-secondary hover:bg-surface-card'
+              filter === s
+                ? 'bg-brand-600 text-white'
+                : 'bg-surface-muted text-text-secondary hover:bg-surface-card'
             }`}
           >
             {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -452,11 +489,36 @@ export default function DropoffRequestsPage() {
 
       {/* List */}
       <div className="px-6 py-4 flex flex-col gap-3">
-        {loading ? (
+
+        {/* Error state with retry */}
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-status-rejected-bg flex items-center justify-center">
+              <AlertCircle size={22} className="text-status-rejected-text" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-text-primary mb-1">Couldn't load requests</p>
+              <p className="text-xs text-text-muted">{error}</p>
+            </div>
+            <button
+              onClick={() => fetchRequests()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border-strong text-xs font-semibold text-text-secondary hover:bg-surface-muted transition-colors"
+            >
+              <RefreshCw size={13} />
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* Loading skeletons */}
+        {loading && !error && (
           [...Array(3)].map((_, i) => (
             <div key={i} className="h-24 bg-surface-card rounded-2xl animate-pulse border border-border" />
           ))
-        ) : requests.length === 0 ? (
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && requests.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-full bg-surface-muted flex items-center justify-center mb-3">
               <PackageCheck size={22} className="text-text-muted" />
@@ -464,86 +526,86 @@ export default function DropoffRequestsPage() {
             <p className="text-sm font-semibold text-text-primary mb-1">No {filter} requests</p>
             <p className="text-xs text-text-muted">Drop-off requests will appear here.</p>
           </div>
-        ) : (
-          requests.map((req) => {
-            const statusStyle = STATUS_STYLES[req.status] ?? STATUS_STYLES.pending
-            return (
-              <motion.div
-                key={req.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-surface-card rounded-2xl border border-border p-4"
-              >
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <p className="text-sm font-semibold text-text-primary">
-                      {req.reports?.title ?? 'Unknown item'}
-                    </p>
-                    <p className="text-xs text-text-muted mt-0.5">{req.reports?.category ?? '—'}</p>
-                  </div>
-                  <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusStyle.bg} ${statusStyle.text}`}>
-                    {statusStyle.label}
-                  </span>
-                </div>
+        )}
 
-                {/* Names only — no student IDs */}
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div className="bg-surface-muted rounded-xl px-3 py-2">
-                    <p className="text-[10px] text-text-muted mb-0.5">Finder</p>
-                    <p className="text-xs font-medium text-text-primary">
-                      {req.claimant?.first_name} {req.claimant?.last_name}
-                    </p>
-                  </div>
-                  <div className="bg-surface-muted rounded-xl px-3 py-2">
-                    <p className="text-[10px] text-text-muted mb-0.5">Owner</p>
-                    <p className="text-xs font-medium text-text-primary">
-                      {req.reporter?.first_name} {req.reporter?.last_name}
-                    </p>
-                  </div>
+        {/* Request cards */}
+        {!loading && !error && requests.map((req) => {
+          const statusStyle = STATUS_STYLES[req.status] ?? STATUS_STYLES.pending
+          return (
+            <motion.div
+              key={req.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-surface-card rounded-2xl border border-border p-4"
+            >
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">
+                    {req.reports?.title ?? 'Unknown item'}
+                  </p>
+                  <p className="text-xs text-text-muted mt-0.5">{req.reports?.category ?? '—'}</p>
                 </div>
+                <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusStyle.bg} ${statusStyle.text}`}>
+                  {statusStyle.label}
+                </span>
+              </div>
 
-                {req.drop_off_photo_path && (
-                  <DropoffPhoto path={req.drop_off_photo_path} onClick={(url) => setLightboxUrl(url)} />
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="bg-surface-muted rounded-xl px-3 py-2">
+                  <p className="text-[10px] text-text-muted mb-0.5">Finder</p>
+                  <p className="text-xs font-medium text-text-primary">
+                    {req.claimant?.first_name} {req.claimant?.last_name}
+                  </p>
+                </div>
+                <div className="bg-surface-muted rounded-xl px-3 py-2">
+                  <p className="text-[10px] text-text-muted mb-0.5">Owner</p>
+                  <p className="text-xs font-medium text-text-primary">
+                    {req.reporter?.first_name} {req.reporter?.last_name}
+                  </p>
+                </div>
+              </div>
+
+              {req.drop_off_photo_path && (
+                <DropoffPhoto path={req.drop_off_photo_path} onClick={(url) => setLightboxUrl(url)} />
+              )}
+
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-[10px] text-text-muted flex items-center gap-1">
+                  <Clock size={10} />
+                  {timeAgo(req.created_at)}
+                </span>
+
+                {req.status === 'pending' && (
+                  <button
+                    onClick={() => setSelected(req)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition-colors"
+                  >
+                    <CheckCircle2 size={13} />
+                    Mark as received
+                  </button>
                 )}
 
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-[10px] text-text-muted flex items-center gap-1">
-                    <Clock size={10} />
-                    {timeAgo(req.created_at)}
+                {req.status === 'received' && (
+                  <button
+                    onClick={() => setPickupRequest(req)}
+                    disabled={actioning}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-status-open-text text-white text-xs font-semibold hover:opacity-90 transition-colors disabled:opacity-50"
+                  >
+                    <User size={13} />
+                    Verify & confirm pickup
+                  </button>
+                )}
+
+                {req.status === 'resolved' && (
+                  <span className="flex items-center gap-1 text-xs text-status-open-text font-medium">
+                    <CheckCircle2 size={13} />
+                    Completed
                   </span>
-
-                  {req.status === 'pending' && (
-                    <button
-                      onClick={() => setSelected(req)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition-colors"
-                    >
-                      <CheckCircle2 size={13} />
-                      Mark as received
-                    </button>
-                  )}
-
-                  {req.status === 'received' && (
-                    <button
-                      onClick={() => setPickupRequest(req)}
-                      disabled={actioning}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-status-open-text text-white text-xs font-semibold hover:opacity-90 transition-colors disabled:opacity-50"
-                    >
-                      <User size={13} />
-                      Verify & confirm pickup
-                    </button>
-                  )}
-
-                  {req.status === 'resolved' && (
-                    <span className="flex items-center gap-1 text-xs text-status-open-text font-medium">
-                      <CheckCircle2 size={13} />
-                      Completed
-                    </span>
-                  )}
-                </div>
-              </motion.div>
-            )
-          })
-        )}
+                )}
+              </div>
+            </motion.div>
+          )
+        })}
       </div>
     </div>
   )

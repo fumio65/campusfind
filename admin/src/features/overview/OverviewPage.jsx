@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   TrendingUp,
   MapPin,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   LineChart,
@@ -23,6 +24,21 @@ import { staggerContainer, staggerItem } from "../../shared/lib/motion";
 import { supabase } from "../../shared/lib/supabaseClient";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function getInitials(firstName, lastName) {
+  return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
+}
+
+function claimantName(claim) {
+  if (claim?.claimant?.first_name) {
+    return `${claim.claimant.first_name} ${claim.claimant.last_name}`;
+  }
+  return claim?.claimant_name ?? "—";
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, sub, tone, icon: Icon }) {
   const toneClass =
@@ -49,6 +65,8 @@ function StatCard({ label, value, sub, tone, icon: Icon }) {
     </motion.div>
   );
 }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
   const [data, setData] = useState(null);
@@ -96,16 +114,36 @@ export default function OverviewPage() {
     return () => supabase.removeChannel(channel);
   }, []);
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <div>
-      <h2 className="text-2xl font-bold text-text-primary mb-4">Overview</h2>
+      {/* Page header */}
+      <div className="flex items-end justify-between mb-7">
+        <div>
+          <h2 className="text-2xl font-semibold text-text-primary leading-tight">
+            Overview
+          </h2>
+          <p className="text-xs text-text-muted mt-0.5">
+            NwSSU Lost &amp; Found · ISSC Admin
+          </p>
+        </div>
 
+        {/* Live indicator */}
+        <div className="flex items-center gap-1.5 text-xs text-text-secondary bg-surface-muted border border-border rounded-lg px-2.5 py-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-status-open-text shrink-0" />
+          Live
+        </div>
+      </div>
+
+      {/* Loading */}
       {loading && (
         <div className="text-sm text-text-muted py-8 text-center">
           Loading...
         </div>
       )}
 
+      {/* Error */}
       {error && (
         <div className="bg-status-rejected-bg text-status-rejected-text text-xs rounded-md px-3 py-2 mb-4">
           Could not load overview data: {error}
@@ -114,8 +152,9 @@ export default function OverviewPage() {
 
       {data && (
         <>
+          {/* ── Stat cards ─────────────────────────────────────────────────── */}
           <motion.div
-            className="grid grid-cols-4 gap-4 mb-5"
+            className="grid grid-cols-4 gap-2.5 mb-5"
             {...staggerContainer}
           >
             <StatCard
@@ -152,14 +191,15 @@ export default function OverviewPage() {
             />
           </motion.div>
 
+          {/* ── Open reports alert ─────────────────────────────────────────── */}
           {data.openReports > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.2 }}
-              className="bg-status-claimed-bg border border-status-claimed-text/30 rounded-xl p-4 mb-5 flex gap-3 items-start"
+              className="bg-status-claimed-bg border border-status-claimed-text/30 rounded-xl p-3.5 mb-5 flex gap-3 items-center"
             >
-              <div className="w-7 h-7 rounded-full bg-status-claimed-text/10 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-7 h-7 rounded-full bg-status-claimed-text/10 flex items-center justify-center shrink-0">
                 <AlertTriangle
                   size={14}
                   className="text-status-claimed-text"
@@ -167,12 +207,13 @@ export default function OverviewPage() {
                 />
               </div>
               <div className="flex-1">
-                <div className="text-sm font-semibold text-status-claimed-text mb-0.5">
+                <div className="text-sm font-semibold text-status-claimed-text">
                   {data.openReports} open report
-                  {data.openReports > 1 ? "s" : ""} awaiting a claim
+                  {data.openReports > 1 ? "s" : ""} with no active claim
                 </div>
                 <p className="text-xs text-status-claimed-text/80">
-                  Students are waiting for someone to claim their lost items.
+                  Students are waiting — share these to social media to boost
+                  visibility.
                 </p>
               </div>
               <Link
@@ -184,213 +225,196 @@ export default function OverviewPage() {
             </motion.div>
           )}
 
-          {dropOffReports.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              className="border border-status-claimed-text/30 rounded-xl p-4 mb-5 bg-status-claimed-bg"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 rounded-full bg-status-claimed-text/10 flex items-center justify-center shrink-0">
-                  <MapPin
-                    size={14}
-                    className="text-status-claimed-text"
-                    aria-hidden="true"
-                  />
-                </div>
-                <p className="text-sm font-semibold text-status-claimed-text">
-                  {dropOffReports.length} ISSC drop-off
-                  {dropOffReports.length > 1 ? "s" : ""} pending action
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {dropOffReports.map((r) => (
-                  <div
-                    key={r.id}
-                    className="bg-surface-card rounded-lg px-3 py-3 flex items-center justify-between gap-3 border border-border"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-text-primary truncate">
-                        {r.title}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className="text-xs text-text-muted">Finder:</span>
-                        <span className="text-xs font-medium text-text-secondary">
-                          {r.active_claim?.claimant?.first_name ? `${r.active_claim.claimant.first_name} ${r.active_claim.claimant.last_name}` : r.active_claim?.claimant_name}
-                        </span>
-                        {r.active_claim?.claimant_student_id && (
-                          <span className="text-xs text-text-muted">
-                            ({r.active_claim.claimant_student_id})
-                          </span>
-                        )}
-                        <span className="text-text-muted text-xs">·</span>
-                        <span className="text-xs text-text-muted">Owner:</span>
-                        <span className="text-xs font-medium text-text-secondary">
-                          {r.reporter_name}
-                        </span>
-                      </div>
+          {/* ── Lower grid: left col (chart + recent accounts), right rail (drop-offs) ── */}
+          <div className="grid gap-3 items-start" style={{ gridTemplateColumns: "1fr 272px" }}>
+
+            {/* LEFT — chart (conditional) + recent accounts below */}
+            <div className="flex flex-col gap-3">
+
+              {/* Chart — only when data exists */}
+              {analytics && analytics.itemsReported > 0 && (
+                <div className="bg-surface-card border border-border rounded-xl p-4">
+                  <div className="flex items-baseline justify-between mb-4">
+                    <div className="text-sm font-semibold text-text-primary">
+                      Reports filed over time
                     </div>
                     <Link
-                      to="/dropoff"
-                      className="shrink-0 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 transition-colors"
+                      to="/analytics"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 border border-brand-600/30 rounded-lg px-2.5 py-1 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-all duration-150"
                     >
-                      View request
+                      Full analytics
+                      <ArrowUpRight size={13} aria-hidden="true" />
                     </Link>
                   </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-status-claimed-text/70 mt-2.5">
-                Verify the finder's ID and hand over the item at the ISSC
-                office, then mark as handed over in Reports.
-              </p>
-            </motion.div>
-          )}
-
-          {analytics && analytics.itemsReported > 0 && (
-            <div className="bg-surface-card border border-border rounded-xl p-4 mb-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-semibold text-text-primary">
-                  Reports over time
-                </div>
-                <Link
-                  to="/analytics"
-                  className="text-xs text-brand-600 hover:underline"
-                >
-                  Full analytics →
-                </Link>
-              </div>
-              <ResponsiveContainer width="100%" height={140}>
-                <LineChart data={analytics.reportsOverTime}>
-                  <CartesianGrid stroke="#E2E8E6" vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="count"
-                    stroke="#06433C"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Reports filed"
-                    isAnimationActive
-                    animationDuration={500}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm font-semibold text-text-primary mb-2">
-                Recent accounts
-              </div>
-              {data.recentAccounts.length === 0 ? (
-                <div className="bg-surface-card border border-border rounded-xl py-10 text-center">
-                  <p className="text-xs text-text-muted">
-                    No accounts yet. Run a bulk import to get started.
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
-                  {data.recentAccounts.map((a) => (
-                    <div
-                      key={a.id}
-                      className="flex items-center justify-between px-4 py-2.5 border-b border-border last:border-0"
-                    >
-                      <div>
-                        <div className="text-sm font-medium">
-                          {a.first_name} {a.last_name}
-                        </div>
-                        <div className="text-xs text-text-muted">
-                          {a.student_id}
-                        </div>
-                      </div>
-                      <StatusPill status={a.status} />
-                    </div>
-                  ))}
-                  <div className="px-4 py-2 border-t border-border">
-                    <Link
-                      to="/accounts"
-                      className="text-xs text-brand-600 font-medium hover:underline"
-                    >
-                      View all {data.totalAccounts} accounts →
-                    </Link>
-                  </div>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <LineChart data={analytics.reportsOverTime}>
+                      <CartesianGrid stroke="#E2E8E6" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#06433C"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Reports filed"
+                        isAnimationActive
+                        animationDuration={500}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               )}
-            </div>
 
-            <div>
-              <div className="text-sm font-semibold text-text-primary mb-2">
-                Quick links
+              {/* Recent accounts — below chart */}
+              <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <Users
+                      size={13}
+                      className="text-brand-600 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span className="text-sm font-semibold text-text-primary">
+                      Recent accounts
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-surface-muted text-text-secondary border border-border">
+                    {data.totalAccounts} total
+                  </span>
+                </div>
+
+                {data.recentAccounts.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-xs text-text-muted">
+                      No accounts yet. Run a bulk import to get started.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {data.recentAccounts.map((a) => (
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-border last:border-0"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold flex items-center justify-center shrink-0">
+                          {getInitials(a.first_name, a.last_name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-text-primary truncate">
+                            {a.first_name} {a.last_name}
+                          </div>
+                          <div className="text-[11px] text-text-muted">
+                            {a.student_id}
+                          </div>
+                        </div>
+                        <StatusPill status={a.status} />
+                      </div>
+                    ))}
+                    <div className="px-3.5 py-2.5 border-t border-border">
+                      <Link
+                        to="/accounts"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 border border-brand-600/30 rounded-lg px-2.5 py-1 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-all duration-150"
+                      >
+                        <span>View all {data.totalAccounts} accounts</span>
+                        <ArrowUpRight size={13} aria-hidden="true" />
+                      </Link>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="flex flex-col gap-2">
-                <Link
-                  to="/bulk-import"
-                  className="bg-surface-card border border-border rounded-xl px-4 py-3 flex items-center gap-3 hover:border-border-strong transition-colors"
-                >
-                  <Users
-                    size={16}
-                    className="text-brand-600 shrink-0"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <div className="text-sm font-semibold">Bulk import</div>
-                    <div className="text-xs text-text-secondary">
-                      Upload the Registrar CSV for the new term.
-                    </div>
-                  </div>
-                </Link>
-                <Link
-                  to="/reports"
-                  className="bg-surface-card border border-border rounded-xl px-4 py-3 flex items-center gap-3 hover:border-border-strong transition-colors"
-                >
-                  <FileText
-                    size={16}
-                    className="text-brand-600 shrink-0"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <div className="text-sm font-semibold">Reports</div>
-                    <div className="text-xs text-text-secondary">
-                      Monitor and manage all lost item reports.
-                    </div>
-                  </div>
-                </Link>
-                <Link
-                  to="/analytics"
-                  className="bg-surface-card border border-border rounded-xl px-4 py-3 flex items-center gap-3 hover:border-border-strong transition-colors"
-                >
-                  <TrendingUp
-                    size={16}
-                    className="text-brand-600 shrink-0"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <div className="text-sm font-semibold">Analytics</div>
-                    <div className="text-xs text-text-secondary">
-                      Trends, claim rates, and trust distribution.
-                    </div>
-                  </div>
-                </Link>
-              </div>
+
             </div>
+            {/* end left col */}
+
+            {/* RIGHT RAIL — ISSC drop-offs only */}
+            <div>
+              {dropOffReports.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-surface-card border border-border rounded-xl overflow-hidden"
+                >
+                  {/* card header */}
+                  <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border">
+                    <div className="flex items-center gap-2">
+                      <MapPin
+                        size={13}
+                        className="text-brand-600 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span className="text-sm font-semibold text-text-primary">
+                        ISSC drop-offs
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-status-open-bg text-status-open-text">
+                      {dropOffReports.length} pending
+                    </span>
+                  </div>
+
+                  {/* drop-off rows — scrollable when many items */}
+                  <div className="overflow-y-auto max-h-[232px]">
+                    {dropOffReports.map((r) => (
+                      <div
+                        key={r.id}
+                        className="px-3.5 py-3 border-b border-border last:border-0"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <p className="text-xs font-semibold text-text-primary leading-snug">
+                            {r.title}
+                          </p>
+                          <Link
+                            to="/dropoff"
+                            className="shrink-0 px-2.5 py-1 rounded-lg bg-brand-600 text-white text-[11px] font-semibold hover:bg-brand-700 transition-colors"
+                          >
+                            View
+                          </Link>
+                        </div>
+                        <p className="text-[11px] text-text-muted leading-snug">
+                          Finder:{" "}
+                          <span className="text-text-secondary font-medium">
+                            {claimantName(r.active_claim)}
+                          </span>
+                          {r.active_claim?.claimant_student_id && (
+                            <> ({r.active_claim.claimant_student_id})</>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-text-muted leading-snug">
+                          Owner:{" "}
+                          <span className="text-text-secondary font-medium">
+                            {r.reporter_name}
+                          </span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* footer hint */}
+                  <p className="text-[11px] text-text-muted px-3.5 py-2 border-t border-border">
+                    Verify the finder's ID at the ISSC office before marking as
+                    resolved.
+                  </p>
+                </motion.div>
+              )}
+            </div>
+            {/* end right rail */}
+
           </div>
+          {/* end lower grid */}
         </>
       )}
     </div>
   );
 }
-
