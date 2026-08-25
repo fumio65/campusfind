@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronLeft, ChevronRight, FileText, MessageSquare,
-  Lightbulb, Star, X, ChevronDown, XCircle
+  Lightbulb, Star, X, ChevronDown, XCircle, TrendingUp, TrendingDown, Minus
 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
@@ -26,6 +26,20 @@ const DOT_COLORS = {
   claim: 'bg-status-claimed-text',
   rejected: 'bg-status-rejected-text',
   tip: 'bg-brand-600',
+}
+
+// Human-readable reason labels
+const REASON_LABELS = {
+  claim_rejected: 'Claim rejected by reporter',
+  multiple_rejections: '3+ rejections within 30 days',
+  no_show: 'No-show at agreed handoff',
+  claim_approved_handoff: 'Claim approved & handoff completed',
+  issc_dropoff: 'Item returned via ISSC drop-off',
+  tip_credited: 'Tip helped recover an item',
+}
+
+function reasonLabel(reason) {
+  return REASON_LABELS[reason] ?? reason?.replace(/_/g, ' ') ?? 'Trust score update'
 }
 
 function timeAgo(dateStr) {
@@ -53,14 +67,11 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 function DatePickerModal({ cursor, onSelect, onClose }) {
   const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i)
   const [pickerYear, setPickerYear] = useState(cursor.getFullYear())
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-6"
       onClick={onClose}
     >
@@ -78,7 +89,6 @@ function DatePickerModal({ cursor, onSelect, onClose }) {
             <X size={15} className="text-text-muted" />
           </button>
         </div>
-
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setPickerYear((y) => y - 1)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-muted">
             <ChevronLeft size={15} className="text-text-secondary" />
@@ -88,26 +98,20 @@ function DatePickerModal({ cursor, onSelect, onClose }) {
             <ChevronRight size={15} className="text-text-secondary" />
           </button>
         </div>
-
         <div className="grid grid-cols-4 gap-1.5">
           {MONTHS.map((m, i) => {
             const isSelected = cursor.getFullYear() === pickerYear && cursor.getMonth() === i
             const isFuture = new Date(pickerYear, i) > new Date()
             return (
               <button
-                key={m}
-                disabled={isFuture}
+                key={m} disabled={isFuture}
                 onClick={() => { onSelect(new Date(pickerYear, i, 1)); onClose() }}
                 className={`py-2 rounded-xl text-xs font-medium transition-colors ${
-                  isSelected
-                    ? 'bg-brand-600 text-white'
-                    : isFuture
-                      ? 'text-text-muted cursor-not-allowed opacity-40'
-                      : 'hover:bg-surface-muted text-text-secondary'
+                  isSelected ? 'bg-brand-600 text-white'
+                    : isFuture ? 'text-text-muted cursor-not-allowed opacity-40'
+                    : 'hover:bg-surface-muted text-text-secondary'
                 }`}
-              >
-                {m}
-              </button>
+              >{m}</button>
             )
           })}
         </div>
@@ -123,21 +127,17 @@ function DaySheet({ date, items, onClose }) {
     rejected: items.filter(i => i._type === 'rejected'),
     tip: items.filter(i => i._type === 'tip'),
   }
-
   const sections = [
     { type: 'report', label: 'Reports', icon: FileText, bg: 'bg-status-open-bg', color: 'text-status-open-text' },
     { type: 'claim', label: 'Claims', icon: MessageSquare, bg: 'bg-status-claimed-bg', color: 'text-status-claimed-text' },
     { type: 'rejected', label: 'Rejected', icon: XCircle, bg: 'bg-status-rejected-bg', color: 'text-status-rejected-text' },
     { type: 'tip', label: 'Tips', icon: Lightbulb, bg: 'bg-brand-50', color: 'text-brand-600' },
   ].filter(s => grouped[s.type].length > 0)
-
   const total = items.length
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-5"
       onClick={onClose}
     >
@@ -160,7 +160,6 @@ function DaySheet({ date, items, onClose }) {
             <X size={16} className="text-text-muted" />
           </button>
         </div>
-
         <div className="overflow-y-auto flex-1 px-4 py-3 flex flex-col gap-4">
           {total === 0 ? (
             <div className="text-center py-8">
@@ -215,6 +214,121 @@ function DaySheet({ date, items, onClose }) {
   )
 }
 
+// Trust Score History Dialog
+// Computes running score per event by replaying oldest→newest from currentScore
+function TrustHistoryDialog({ events, currentScore, onClose }) {
+  // events are newest-first from DB — reverse to oldest-first for score replay
+  const eventsOldestFirst = [...events].reverse()
+
+  // Compute score_after for each event: work forward from
+  // (currentScore minus sum of all deltas) as the starting baseline
+  const baseline = eventsOldestFirst.reduce((acc, e) => acc - e.delta, currentScore)
+  let running = baseline
+  const eventsWithScore = eventsOldestFirst.map((e) => {
+    running = Math.max(0, Math.min(200, running + e.delta))
+    return { ...e, scoreAfter: running }
+  })
+  // Re-reverse back to newest-first for display
+  const eventsDisplay = [...eventsWithScore].reverse()
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-5"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 10 }}
+        transition={{ duration: 0.18 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface-card rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-xl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          <div>
+            <p className="text-sm font-bold text-text-primary">Trust Score History</p>
+            <p className="text-xs text-text-muted mt-0.5">Current score: {currentScore}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted">
+            <X size={16} className="text-text-muted" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-4 py-3 flex flex-col gap-2">
+          {eventsDisplay.length === 0 ? (
+            <div className="text-center py-10">
+              <Star size={28} className="text-text-muted mx-auto mb-2" />
+              <p className="text-sm text-text-muted">No trust score events yet.</p>
+              <p className="text-xs text-text-muted mt-1">
+                Your score changes when you submit claims, complete handoffs, or leave credited tips.
+              </p>
+            </div>
+          ) : (
+            eventsDisplay.map((event) => {
+              const isPositive = event.delta > 0
+              const isNeutral = event.delta === 0
+              const Icon = isNeutral ? Minus : isPositive ? TrendingUp : TrendingDown
+              return (
+                <div
+                  key={event.id}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${
+                    isPositive
+                      ? 'bg-status-open-bg border-status-open-text/20'
+                      : isNeutral
+                      ? 'bg-surface-muted border-border'
+                      : 'bg-status-rejected-bg border-status-rejected-text/20'
+                  }`}
+                >
+                  {/* Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    isPositive ? 'bg-status-open-text/10'
+                      : isNeutral ? 'bg-surface-card'
+                      : 'bg-status-rejected-text/10'
+                  }`}>
+                    <Icon size={15} className={
+                      isPositive ? 'text-status-open-text'
+                        : isNeutral ? 'text-text-muted'
+                        : 'text-status-rejected-text'
+                    } />
+                  </div>
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-medium leading-snug ${
+                      isPositive ? 'text-status-open-text'
+                        : isNeutral ? 'text-text-secondary'
+                        : 'text-status-rejected-text'
+                    }`}>
+                      {reasonLabel(event.reason)}
+                    </p>
+                    <p className="text-[10px] text-text-muted mt-0.5">{timeAgo(event.created_at)}</p>
+                  </div>
+
+                  {/* Score after + delta */}
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className="text-sm font-bold text-text-primary">{event.scoreAfter}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      isPositive
+                        ? 'bg-status-open-text text-white'
+                        : isNeutral
+                        ? 'bg-surface-muted text-text-muted'
+                        : 'bg-status-rejected-text text-white'
+                    }`}>
+                      {isPositive ? `+${event.delta}` : event.delta}
+                    </span>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 export default function HistoryPage() {
   const { session, profile } = useAuth()
   const [activeTab, setActiveTab] = useState('All')
@@ -223,10 +337,12 @@ export default function HistoryPage() {
   const [reports, setReports] = useState([])
   const [claims, setClaims] = useState([])
   const [tips, setTips] = useState([])
+  const [trustEvents, setTrustEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [sheetDay, setSheetDay] = useState(null)
   const [summaryType, setSummaryType] = useState(null)
+  const [showTrustHistory, setShowTrustHistory] = useState(false)
 
   useEffect(() => {
     if (!session?.user?.id) return
@@ -236,14 +352,16 @@ export default function HistoryPage() {
   async function fetchAll() {
     setLoading(true)
     const uid = session.user.id
-    const [{ data: r }, { data: c }, { data: t }] = await Promise.all([
+    const [{ data: r }, { data: c }, { data: t }, { data: te }] = await Promise.all([
       supabase.from('reports').select('id, title, status, location, created_at').eq('reporter_id', uid).order('created_at', { ascending: false }),
       supabase.from('claims').select('id, status, created_at, report_id, reports(title)').eq('claimant_id', uid).order('created_at', { ascending: false }),
       supabase.from('tips').select('id, text, created_at, report_id, reports(title)').eq('user_id', uid).order('created_at', { ascending: false }),
+      supabase.from('trust_score_events').select('id, delta, reason, created_at').eq('user_id', uid).order('created_at', { ascending: false }),
     ])
     setReports(r ?? [])
     setClaims(c ?? [])
     setTips(t ?? [])
+    setTrustEvents(te ?? [])
     setLoading(false)
   }
 
@@ -316,6 +434,8 @@ export default function HistoryPage() {
   }
 
   const today = new Date()
+  const totalGained = trustEvents.filter(e => e.delta > 0).reduce((sum, e) => sum + e.delta, 0)
+  const totalLost = trustEvents.filter(e => e.delta < 0).reduce((sum, e) => sum + e.delta, 0)
 
   return (
     <div className="min-h-screen bg-surface-page safe-top pb-28">
@@ -340,6 +460,16 @@ export default function HistoryPage() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showTrustHistory && (
+          <TrustHistoryDialog
+            events={trustEvents}
+            currentScore={profile?.trust_score ?? 100}
+            onClose={() => setShowTrustHistory(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="bg-brand-600 px-4 pt-12 pb-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
@@ -348,19 +478,22 @@ export default function HistoryPage() {
             <p className="text-xs text-brand-200 mt-0.5">Your personal activity log</p>
           </div>
           {profile && (
-            <div className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full">
+            <button
+              onClick={() => setShowTrustHistory(true)}
+              className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-full active:bg-white/30 transition-colors"
+            >
               <Star size={13} className="text-white" />
               <span className="text-xs font-semibold text-white">
                 Trust: {profile.trust_score ?? 100}
               </span>
-            </div>
+              <ChevronRight size={11} className="text-white/70" />
+            </button>
           )}
         </div>
       </div>
 
-      {/* FIX: was a single row causing overflow — now stacked in two rows */}
+      {/* View switcher + navigation */}
       <div className="px-4 pt-4 pb-2 flex flex-col gap-2">
-        {/* Row 1: view switcher */}
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-1 bg-surface-muted rounded-xl p-1">
             {VIEWS.map((v) => (
@@ -377,15 +510,10 @@ export default function HistoryPage() {
           </div>
         </div>
 
-        {/* Row 2: navigation — prev / title / next */}
         <div className="flex items-center justify-between gap-1">
-          <button
-            onClick={() => navigate(-1)}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-muted shrink-0"
-          >
+          <button onClick={() => navigate(-1)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-muted shrink-0">
             <ChevronLeft size={16} className="text-text-secondary" />
           </button>
-
           <button
             onClick={() => setShowDatePicker(true)}
             className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg hover:bg-surface-muted transition-colors min-w-0"
@@ -393,11 +521,7 @@ export default function HistoryPage() {
             <span className="text-xs font-semibold text-text-primary truncate">{calTitle()}</span>
             <ChevronDown size={12} className="text-text-muted shrink-0" />
           </button>
-
-          <button
-            onClick={() => navigate(1)}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-muted shrink-0"
-          >
+          <button onClick={() => navigate(1)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-muted shrink-0">
             <ChevronRight size={16} className="text-text-secondary" />
           </button>
         </div>
@@ -413,7 +537,6 @@ export default function HistoryPage() {
               ))}
             </div>
           )}
-
           <div className={calView === 'day' ? '' : 'grid grid-cols-7'}>
             {calView === 'day' ? (
               <button
@@ -447,9 +570,7 @@ export default function HistoryPage() {
                         isToday ? 'bg-brand-600' : 'hover:bg-surface-muted'
                       }`}
                     >
-                      <span className={`text-[12px] leading-none font-medium ${
-                        isToday ? 'text-white font-bold' : 'text-text-secondary'
-                      }`}>
+                      <span className={`text-[12px] leading-none font-medium ${isToday ? 'text-white font-bold' : 'text-text-secondary'}`}>
                         {day.getDate()}
                       </span>
                       {types ? (
@@ -458,9 +579,7 @@ export default function HistoryPage() {
                             <span key={type} className={`w-1 h-1 rounded-full ${isToday ? 'bg-white/70' : DOT_COLORS[type]}`} />
                           ))}
                         </div>
-                      ) : (
-                        <div className="h-1" />
-                      )}
+                      ) : <div className="h-1" />}
                     </button>
                   </div>
                 )
@@ -469,7 +588,6 @@ export default function HistoryPage() {
           </div>
         </div>
 
-        {/* Dot legend */}
         <div className="flex items-center gap-3 mt-2 px-1 flex-wrap">
           {Object.entries(DOT_COLORS).map(([type, color]) => (
             <div key={type} className="flex items-center gap-1.5">
@@ -502,13 +620,37 @@ export default function HistoryPage() {
         </div>
       )}
 
+      {/* Trust Score History card */}
+      {!loading && (
+        <div className="px-4 pb-4">
+          <button
+            onClick={() => setShowTrustHistory(true)}
+            className="w-full bg-surface-card border border-border rounded-2xl px-4 py-3 flex items-center gap-3 active:scale-[0.99] transition-transform"
+          >
+            <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
+              <Star size={18} className="text-brand-600" />
+            </div>
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-sm font-semibold text-text-primary">Trust Score History</p>
+              <p className="text-xs text-text-muted mt-0.5">
+                {trustEvents.length === 0
+                  ? 'No events yet'
+                  : `${trustEvents.length} event${trustEvents.length > 1 ? 's' : ''} · +${totalGained} gained, ${totalLost} lost`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-lg font-bold text-brand-600">{profile?.trust_score ?? 100}</span>
+              <ChevronRight size={15} className="text-text-muted" />
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Summary detail dialog */}
       <AnimatePresence>
         {summaryType && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-5"
             onClick={() => setSummaryType(null)}
           >
@@ -531,7 +673,6 @@ export default function HistoryPage() {
                   <X size={16} className="text-text-muted" />
                 </button>
               </div>
-
               <div className="overflow-y-auto flex-1 px-4 py-3 flex flex-col gap-2">
                 {summaryType === 'report' && reports.map((item) => (
                   <Link key={item.id} to={`/reports/${item.id}`} onClick={() => setSummaryType(null)}

@@ -11,6 +11,7 @@ const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
+// FIX: now inserts into trust_score_events with score_after so history is trackable
 async function adjustTrustScore(userId: string, delta: number, reason: string) {
   const { data: user } = await supabaseAdmin
     .from('users')
@@ -20,6 +21,12 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
   if (!user) return
   const newScore = Math.max(0, Math.min(200, (user.trust_score ?? 100) + delta))
   await supabaseAdmin.from('users').update({ trust_score: newScore }).eq('id', userId)
+  await supabaseAdmin.from('trust_score_events').insert({
+    user_id: userId,
+    delta,
+    reason,
+    score_after: newScore,
+  })
 }
 
 async function notifyUser({ userId, type, title, body, reportId = null, claimId = null }: {
@@ -146,7 +153,7 @@ Deno.serve(async (req) => {
       const approvedClaim = (report.claims as any[])?.find((c: any) => c.status === 'approved')
       if (approvedClaim) {
         await supabaseAdmin.from('claims').update({ status: 'resolved' }).eq('id', approvedClaim.id)
-        await adjustTrustScore(approvedClaim.claimant_id, 5, 'claim approved and handoff completed')
+        await adjustTrustScore(approvedClaim.claimant_id, 5, 'claim_approved_handoff')
         await notifyUser({
           userId: approvedClaim.claimant_id,
           type: 'claim_resolved',
@@ -173,7 +180,6 @@ Deno.serve(async (req) => {
         })
       }
 
-      // FIX: was querying is_admin: true — schema uses role: 'admin'
       const { data: adminUser } = await supabaseAdmin
         .from('users')
         .select('id')
@@ -220,7 +226,7 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (finder) {
-        await adjustTrustScore(finder.id, 5, 'item returned via ISSC drop-off')
+        await adjustTrustScore(finder.id, 5, 'issc_dropoff')
         await notifyUser({
           userId: finder.id,
           type: 'walkin_registered',
@@ -258,7 +264,7 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (finder) {
-        await adjustTrustScore(finder.id, 5, 'item returned via ISSC drop-off')
+        await adjustTrustScore(finder.id, 5, 'issc_dropoff')
         await notifyUser({
           userId: finder.id,
           type: 'walkin_registered',
@@ -294,9 +300,7 @@ Deno.serve(async (req) => {
         .eq('status', 'active')
 
       for (const user of users ?? []) {
-        // FIX: skip the reporter — don't notify them about their own report
         if ((user as any).id === (report as any).reporter_id) continue
-
         await notifyUser({
           userId: (user as any).id,
           type: 'new_report',
@@ -315,7 +319,6 @@ Deno.serve(async (req) => {
     if (req.method === 'POST' && id === 'admin-notify') {
       const { reportId, reportTitle } = await req.json()
 
-      // FIX: was querying is_admin: true — schema uses role: 'admin'
       const { data: admins } = await supabaseAdmin
         .from('users')
         .select('id')

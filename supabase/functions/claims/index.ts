@@ -11,6 +11,7 @@ const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
+// FIX: now inserts into trust_score_events with score_after so history is trackable
 async function adjustTrustScore(userId: string, delta: number, reason: string) {
   const { data: user } = await supabaseAdmin
     .from('users')
@@ -20,6 +21,12 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
   if (!user) return
   const newScore = Math.max(0, Math.min(200, (user.trust_score ?? 100) + delta))
   await supabaseAdmin.from('users').update({ trust_score: newScore }).eq('id', userId)
+  await supabaseAdmin.from('trust_score_events').insert({
+    user_id: userId,
+    delta,
+    reason,
+    score_after: newScore,
+  })
 }
 
 async function checkRepeatedRejections(userId: string): Promise<boolean> {
@@ -115,6 +122,7 @@ Deno.serve(async (req) => {
       const reportTitle = (claim.reports as any)?.title ?? 'your item'
       const claimantId = claim.claimant_id
       const reportId = claim.report_id
+
       if (claimAction === 'approve') {
         await supabaseAdmin.from('claims').update({ status: 'approved' }).eq('id', claim.id)
         await supabaseAdmin.from('reports').update({ status: 'approved' }).eq('id', reportId)
@@ -133,9 +141,9 @@ Deno.serve(async (req) => {
           had_rejected_claim: true,
           last_rejected_claimant_id: claimantId,
         }).eq('id', reportId)
-        await adjustTrustScore(claimantId, -5, 'claim rejected')
+        await adjustTrustScore(claimantId, -5, 'claim_rejected')
         const repeated = await checkRepeatedRejections(claimantId)
-        if (repeated) await adjustTrustScore(claimantId, -5, '3+ rejections in 30 days')
+        if (repeated) await adjustTrustScore(claimantId, -5, 'multiple_rejections')
         await notifyUser({
           userId: claimantId,
           type: 'claim_rejected',
@@ -225,4 +233,3 @@ Deno.serve(async (req) => {
     })
   }
 })
-

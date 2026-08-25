@@ -29,6 +29,13 @@ import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
+// FIX: claim actions and resolve were hitting dead Express server
+// Now correctly call Supabase Edge Functions
+const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
+  ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+  : "https://muigquisnrhdbvnexyzu.supabase.co/functions/v1";
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+
 function getScrollContainer() {
   return document.querySelector("main") ?? window;
 }
@@ -213,7 +220,6 @@ export default function ReportDetailPage() {
     claimantIdRef.current = claim?.claimant_id ?? null;
   }, [claim]);
 
-  // Read tip_id from URL search params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tipId = params.get("tip_id");
@@ -302,11 +308,7 @@ export default function ReportDetailPage() {
       )
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "claims",
-        },
+        { event: "INSERT", schema: "public", table: "claims" },
         (payload) => {
           if (payload.new?.report_id === id) fetchAll(true);
         },
@@ -338,22 +340,14 @@ export default function ReportDetailPage() {
       )
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "tips",
-        },
+        { event: "INSERT", schema: "public", table: "tips" },
         (payload) => {
           if (payload.new?.report_id === id) fetchAll(true);
         },
       )
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "tips",
-        },
+        { event: "UPDATE", schema: "public", table: "tips" },
         (payload) => {
           if (payload.new?.report_id === id) fetchAll(true);
         },
@@ -363,7 +357,6 @@ export default function ReportDetailPage() {
     return () => supabase.removeChannel(channel);
   }, [id]);
 
-  // Scroll to top or section after loading
   useEffect(() => {
     if (!loading) {
       if (window.location.hash) {
@@ -379,7 +372,6 @@ export default function ReportDetailPage() {
     }
   }, [loading]);
 
-  // Scroll to and highlight specific tip
   useEffect(() => {
     if (!loading && highlightedTipId) {
       const el = document.getElementById(`tip-${highlightedTipId}`);
@@ -577,13 +569,17 @@ export default function ReportDetailPage() {
     }
   }
 
+  // FIX: was hitting dead Express SERVER_URL — now uses Edge Function
   async function handleClaimAction(action) {
     if (!claim) return;
     setActioning(true);
     try {
-      await fetch(`${SERVER_URL}/claims/${claim.id}`, {
+      await fetch(`${EDGE_URL}/claims/${claim.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": ANON_KEY,
+        },
         body: JSON.stringify({ action }),
       });
     } catch (err) {
@@ -606,6 +602,7 @@ export default function ReportDetailPage() {
     setResolvePhotoPreview(URL.createObjectURL(file));
   }
 
+  // FIX: was hitting dead Express SERVER_URL — now uses Edge Function
   async function handleMarkResolved() {
     if (!resolvePhoto) return;
     setResolving(true);
@@ -614,9 +611,12 @@ export default function ReportDetailPage() {
       const path = `resolved/${id}/${Date.now()}.${ext}`;
       await supabase.storage.from("report-photos").upload(path, resolvePhoto);
 
-      await fetch(`${SERVER_URL}/reports/${id}/resolve`, {
+      await fetch(`${EDGE_URL}/reports/${id}/resolve`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": ANON_KEY,
+        },
         body: JSON.stringify({
           resolvedVia: "handoff",
           resolvePhotoPath: path,
