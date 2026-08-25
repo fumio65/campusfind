@@ -34,6 +34,15 @@
 
 * { -webkit-tap-highlight-color: transparent; }
 
+/* Hide scrollbars globally while keeping scroll functionality */
+* {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+}
+*::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / WebKit */
+}
+
 body {
   background-color: var(--color-surface-page);
   color: var(--color-text-primary);
@@ -42,6 +51,9 @@ body {
 }
 
 .safe-top    { padding-top: env(safe-area-inset-top); }
+
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
 @media print {

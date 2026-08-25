@@ -89,7 +89,7 @@ export default function AppShell() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page">
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto pb-20 no-scrollbar">
         <Outlet />
       </main>
 
