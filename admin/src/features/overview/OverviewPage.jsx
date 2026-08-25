@@ -217,7 +217,7 @@ export default function OverviewPage() {
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         <span className="text-xs text-text-muted">Finder:</span>
                         <span className="text-xs font-medium text-text-secondary">
-                          {r.active_claim?.claimant_name}
+                          {r.active_claim?.claimant?.first_name ? `${r.active_claim.claimant.first_name} ${r.active_claim.claimant.last_name}` : r.active_claim?.claimant_name}
                         </span>
                         {r.active_claim?.claimant_student_id && (
                           <span className="text-xs text-text-muted">
@@ -393,3 +393,4 @@ export default function OverviewPage() {
     </div>
   );
 }
+
