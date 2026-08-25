@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Clock, Bell, User, Plus } from 'lucide-react'
+import { Home, Clock, Bell, BellRing, User, Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { registerPush } from '../lib/pushNotifications'
 
 export default function AppShell() {
   const { session } = useAuth()
@@ -10,6 +11,7 @@ export default function AppShell() {
   const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
+  const [showNotifBanner, setShowNotifBanner] = useState(false)
   const deferredPromptRef = useRef(null)
 
   const fetchUnread = useCallback(async () => {
@@ -69,6 +71,21 @@ export default function AppShell() {
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
+  // Show notification permission banner if not yet granted/denied
+  useEffect(() => {
+    if (!('Notification' in window)) return
+    if (Notification.permission === 'default') {
+      // Small delay so it doesn't fire instantly on login
+      const t = setTimeout(() => setShowNotifBanner(true), 2000)
+      return () => clearTimeout(t)
+    }
+  }, [])
+
+  async function handleEnableNotifications() {
+    setShowNotifBanner(false)
+    await registerPush(session.user.id)
+  }
+
   async function handleInstall() {
     const prompt = deferredPromptRef.current
     if (!prompt) return
@@ -92,6 +109,36 @@ export default function AppShell() {
       <main className="flex-1 overflow-y-auto pb-20 no-scrollbar">
         <Outlet />
       </main>
+
+      {/* Notification permission banner */}
+      {showNotifBanner && !showInstallPrompt && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-surface-card border-b border-border px-4 py-3 flex items-center justify-between gap-3 safe-top shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center shrink-0">
+              <BellRing size={16} className="text-brand-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Enable notifications</p>
+              <p className="text-xs text-text-muted">Get notified about claims, tips, and updates</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowNotifBanner(false)}
+              className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-muted transition-colors"
+              aria-label="Dismiss"
+            >
+              <X size={14} className="text-text-muted" />
+            </button>
+            <button
+              onClick={handleEnableNotifications}
+              className="text-xs font-semibold bg-brand-600 text-white px-3 py-1.5 rounded-lg active:opacity-80 transition-opacity"
+            >
+              Allow
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Install prompt banner */}
       {showInstallPrompt && (
