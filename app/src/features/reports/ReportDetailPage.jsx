@@ -17,7 +17,6 @@ import {
   Trash2,
   Camera,
   Share2,
-  Link as LinkIcon,
   ImagePlus,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
@@ -25,6 +24,7 @@ import { useAuth } from "../../shared/lib/AuthContext";
 import MessageThread from "../claims/MessageThread";
 import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
+import ShareSheet from "./ShareSheet";
 import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
@@ -205,7 +205,8 @@ export default function ReportDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
-  const [shareCopied, setShareCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false)
+  const [showShareSheet, setShowShareSheet] = useState(false);
   const [highlightedTipId, setHighlightedTipId] = useState(null);
   const [showResolveDialog, setShowResolveDialog] = useState(false);
   const [resolvePhoto, setResolvePhoto] = useState(null);
@@ -522,51 +523,8 @@ export default function ReportDetailPage() {
     }
   }
 
-  async function handleShare() {
-    const url = `${window.location.origin}/reports/${id}`;
-    const title =
-      report?.type === "found_walkin"
-        ? `Found: ${report.title}`
-        : `Lost: ${report.title}`;
-    const text = [
-      report?.description ?? "",
-      report?.location ? `📍 ${report.location}` : "",
-      "Help find this item on CampusFind — NwSSU Lost & Found",
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    try {
-      const { Share } = await import("@capacitor/share");
-      await Share.share({ title, text, url, dialogTitle: "Share this report" });
-    } catch {
-      if (navigator.share) {
-        try {
-          await navigator.share({ title, text, url });
-        } catch (err) {
-          if (err.name !== "AbortError") await copyFallback(url);
-        }
-      } else {
-        await copyFallback(url);
-      }
-    }
-  }
-
-  async function copyFallback(url) {
-    try {
-      const { Clipboard } = await import("@capacitor/clipboard");
-      await Clipboard.write({ string: url });
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2500);
-    } catch {
-      try {
-        await navigator.clipboard.writeText(url);
-        setShareCopied(true);
-        setTimeout(() => setShareCopied(false), 2500);
-      } catch {
-        window.prompt("Copy this link:", url);
-      }
-    }
+  function handleShare() {
+    setShowShareSheet(true)
   }
 
   // FIX: was hitting dead Express SERVER_URL — now uses Edge Function
@@ -794,18 +752,15 @@ export default function ReportDetailPage() {
         onDismiss={() => setTrustToast((t) => ({ ...t, visible: false }))}
       />
 
-      {/* Share copied toast */}
-      {shareCopied && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-text-primary text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2"
-        >
-          <LinkIcon size={13} />
-          Link copied to clipboard
-        </motion.div>
-      )}
+      {/* Share sheet */}
+      <AnimatePresence>
+        {showShareSheet && report && (
+          <ShareSheet
+            report={report}
+            onClose={() => setShowShareSheet(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Mark as resolved dialog */}
       {showResolveDialog && (
