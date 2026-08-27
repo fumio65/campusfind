@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Firebase config (project-specific, not a secret but not meant to be shared in git)
+android/app/google-services.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

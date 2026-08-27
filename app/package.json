@@ -14,7 +14,10 @@
     "@capacitor/cli": "^8.5.0",
     "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/push-notifications": "^8.1.2",
     "@capacitor/share": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
     "@supabase/supabase-js": "^2.110.0",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",
@@ -23,11 +26,13 @@
     "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@tailwindcss/vite": "^4.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.2",
     "vite": "^8.1.1"
   }
