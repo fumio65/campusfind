@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
   MapPin,

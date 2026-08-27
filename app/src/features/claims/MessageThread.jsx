@@ -16,6 +16,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
   const [sending, setSending]             = useState(false)
   const [dropOffSent, setDropOffSent]     = useState(false)
   const [dropOffStatus, setDropOffStatus] = useState(null) // null | 'pending' | 'received' | 'resolved'
+  const [sendError, setSendError]         = useState('')
   const messagesContainerRef = useRef(null)
   const prevCountRef         = useRef(0)
   const isInitialLoad        = useRef(true)
@@ -55,11 +56,8 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
       return
     }
     if (messages.length > prevCountRef.current) {
-      const lastMsg = messages[messages.length - 1]
-      if (lastMsg && lastMsg.sender_id !== session?.user?.id) {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
-        }
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
       }
     }
     prevCountRef.current = messages.length
@@ -90,6 +88,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     e.preventDefault()
     if (!text.trim() || sending) return
     setSending(true)
+    setSendError('')
     const role = isReporter ? 'reporter' : 'claimant'
     const { error } = await supabase.from('claim_messages').insert({
       claim_id: claim.id,
@@ -99,9 +98,6 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     })
     if (!error) {
       setText('')
-      if (messagesContainerRef.current) {
-        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
-      }
       try {
         await fetch(`${SERVER_URL}/claims/${claim.id}/message`, {
           method: 'POST',
@@ -109,6 +105,10 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
           body: JSON.stringify({ senderId: session.user.id, senderRole: role }),
         })
       } catch { /* ignore */ }
+    } else if (error.message?.includes('10-message cap')) {
+      setSendError('This conversation has reached the 10-message limit.')
+    } else {
+      setSendError('Message failed to send. Please try again.')
     }
     setSending(false)
   }
@@ -336,12 +336,18 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
       )}
 
       {/* Input */}
+      {sendError && (
+        <p className="px-4 pb-1 text-[11px] text-status-rejected-text">{sendError}</p>
+      )}
       <div className="px-4 pb-4 pt-1 flex gap-2">
         <input
           type="text"
           placeholder="Type a message…"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value)
+            if (sendError) setSendError('')
+          }}
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend(e)}
           maxLength={300}
           className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
