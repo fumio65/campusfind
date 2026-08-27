@@ -1,5 +1,17 @@
 {
   "appId": "com.nwssu.campusfind",
   "appName": "CampusFind",
-  "webDir": "dist"
+  "webDir": "dist",
+  "backgroundColor": "#012F28",
+  "android": {
+    "backgroundColor": "#012F28"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#012F28",
+      "showSpinner": false
+    }
+  }
 }
