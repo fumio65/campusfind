@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, X, Camera, ImagePlus } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
+import { db } from '../../shared/lib/db'
+import { cacheReport, cacheReportPhotos } from '../../shared/lib/repositories/reportDetail'
+import { updateReport } from '../../shared/lib/operations/reports'
 
 const CATEGORIES = [
   'Electronics', 'IDs & Cards', 'Bags', 'Clothing',
@@ -31,34 +34,47 @@ export default function EditReportPage() {
     fetchReport()
   }, [id])
 
+  function toPhotoUrl(storagePath) {
+    const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(storagePath)
+    return publicUrl
+  }
+
   async function fetchReport() {
-    const { data: report } = await supabase
+    const { data: report, error } = await supabase
       .from('reports')
       .select('*')
       .eq('id', id)
       .eq('reporter_id', session.user.id)
       .single()
 
-    if (!report) { navigate(-1); return }
+    if (error || !report) {
+      // Offline (or otherwise unreachable) - fall back to the cache.
+      const cached = await db.reports.get(id)
+      if (!cached || cached.reporter_id !== session.user.id) { navigate(-1); return }
+      setTitle(cached.title ?? '')
+      setDescription(cached.description ?? '')
+      setLocation(cached.location ?? '')
+      setCategory(cached.category ?? '')
+      const cachedPhotos = await db.report_photos.where('report_id').equals(id).sortBy('position')
+      setExistingPhotos(cachedPhotos.map((p) => ({ ...p, url: toPhotoUrl(p.storage_path) })))
+      setLoading(false)
+      return
+    }
 
     setTitle(report.title ?? '')
     setDescription(report.description ?? '')
     setLocation(report.location ?? '')
     setCategory(report.category ?? '')
+    await cacheReport(report)
 
     const { data: photos } = await supabase
       .from('report_photos')
-      .select('id, storage_path')
+      .select('id, storage_path, position')
       .eq('report_id', id)
       .order('position', { ascending: true })
+    await cacheReportPhotos(id, (photos ?? []).map((p) => ({ ...p, report_id: id })))
 
-    const withUrls = (photos ?? []).map((p) => {
-      const { data: { publicUrl } } = supabase.storage
-        .from('report-photos')
-        .getPublicUrl(p.storage_path)
-      return { ...p, url: publicUrl }
-    })
-    setExistingPhotos(withUrls)
+    setExistingPhotos((photos ?? []).map((p) => ({ ...p, url: toPhotoUrl(p.storage_path) })))
     setLoading(false)
   }
 
@@ -95,36 +111,19 @@ export default function EditReportPage() {
 
     setSubmitting(true)
     try {
-      // Update report
-      await supabase.from('reports').update({
-        title: title.trim(),
-        description: description.trim(),
-        location: location.trim(),
+      // Writes optimistically to the local cache and queues the update
+      // (report fields + removed photos + new photo uploads); syncs
+      // immediately if online, or on reconnect.
+      await updateReport({
+        reportId: id,
+        title,
+        description,
+        location,
         category,
-      }).eq('id', id)
-
-      // Delete removed photos
-      for (const photoId of removedPhotoIds) {
-        const photo = existingPhotos.find((p) => p.id === photoId)
-        if (photo) {
-          await supabase.storage.from('report-photos').remove([photo.storage_path])
-          await supabase.from('report_photos').delete().eq('id', photoId)
-        }
-      }
-
-      // Upload new photos
-      const startPosition = existingPhotos.filter((p) => !removedPhotoIds.includes(p.id)).length
-      for (let i = 0; i < newPhotos.length; i++) {
-        const { file } = newPhotos[i]
-        const ext = file.name.split('.').pop()
-        const path = `${id}/${Date.now()}-${i}.${ext}`
-        await supabase.storage.from('report-photos').upload(path, file)
-        await supabase.from('report_photos').insert({
-          report_id: id,
-          storage_path: path,
-          position: startPosition + i,
-        })
-      }
+        existingPhotos,
+        removedPhotoIds,
+        newPhotoFiles: newPhotos.map((p) => p.file),
+      })
 
       navigate(`/reports/${id}`)
     } catch (err) {

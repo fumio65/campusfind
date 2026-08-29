@@ -12,6 +12,10 @@ import {
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { staggerContainer, staggerItem } from "../../shared/lib/motion";
+import { useReports, refreshReports, fetchAvailableLocations } from "../../shared/lib/repositories/reports";
+import { onSyncTrigger } from "../../shared/lib/appLifecycle";
+import CachedImage from "../../shared/components/CachedImage";
+import SyncStateChip from "../../shared/components/SyncStateChip";
 
 const STATUS_STYLES = {
   open: "bg-status-open-bg text-status-open-text",
@@ -55,8 +59,9 @@ function ReportCard({ report }) {
         {/* Thumbnail */}
         <div className="w-16 h-16 rounded-xl shrink-0 overflow-hidden bg-surface-muted flex items-center justify-center border border-border">
           {thumbnail ? (
-            <img
+            <CachedImage
               src={thumbnail}
+              cacheKey={thumbnail}
               alt=""
               className="w-full h-full object-cover"
             />
@@ -73,11 +78,15 @@ function ReportCard({ report }) {
             <h3 className="text-sm font-semibold text-text-primary leading-snug flex-1 truncate">
               {report.title}
             </h3>
-            <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ""}`}
-            >
-              {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-            </span>
+            {report._syncStatus ? (
+              <SyncStateChip status={report._syncStatus} />
+            ) : (
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ""}`}
+              >
+                {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 text-xs text-text-muted">
             {report.location && (
@@ -104,8 +113,6 @@ function ReportCard({ report }) {
 
 export default function HomePage() {
   const { profile } = useAuth();
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -125,9 +132,25 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, [locationFilter]);
 
+  // Reads reactively from the local cache (works offline); refreshReports
+  // below keeps the cache in sync with Supabase whenever we're online.
+  const reports = useReports({
+    search: debouncedSearch,
+    category: selectedCategory,
+    location: debouncedLocation,
+    status: selectedStatus,
+  });
+  const loading = reports === undefined;
+
   useEffect(() => {
-    fetchReports();
-    fetchAvailableLocations();
+    const filters = {
+      search: debouncedSearch,
+      category: selectedCategory,
+      location: debouncedLocation,
+      status: selectedStatus,
+    };
+    refreshReports(filters);
+    fetchAvailableLocations().then(setAvailableLocations);
 
     const channelName = "home-reports";
     const existing = supabase
@@ -141,107 +164,41 @@ export default function HomePage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "reports" },
         () => {
-          setTimeout(() => fetchReports(true), 2000);
-          setTimeout(() => fetchReports(true), 5000);
+          setTimeout(() => refreshReports(filters), 2000);
+          setTimeout(() => refreshReports(filters), 5000);
         },
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "reports" },
-        () => { fetchReports(true); },
+        () => { refreshReports(filters); },
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "reports" },
-        () => { fetchReports(true); },
+        () => { refreshReports(filters); },
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "report_photos" },
-        () => { setTimeout(() => fetchReports(true), 800); },
+        () => { setTimeout(() => refreshReports(filters), 800); },
       )
       .subscribe();
 
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        fetchReports(true);
+        refreshReports(filters);
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    const unsubscribeSync = onSyncTrigger(() => refreshReports(filters));
 
     return () => {
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeSync();
     };
   }, [debouncedSearch, selectedCategory, debouncedLocation, selectedStatus]);
-
-  async function fetchAvailableLocations() {
-    const { data } = await supabase
-      .from("reports")
-      .select("location")
-      // FIX: include resolved so resolved report locations appear in filter suggestions
-      .in("status", ["open", "claimed", "approved", "resolved"])
-      .not("location", "is", null);
-    const unique = [
-      ...new Set((data ?? []).map((r) => r.location).filter(Boolean)),
-    ].sort();
-    setAvailableLocations(unique);
-  }
-
-  async function fetchReports(silent = false) {
-    if (!silent) setLoading(true);
-
-    let query = supabase
-      .from("reports")
-      .select(
-        "id, title, description, location, category, status, created_at, type",
-      )
-      // FIX: include resolved — public should see all report statuses
-      .in("status", selectedStatus ? [selectedStatus] : ["open", "claimed", "approved", "resolved"])
-      .order("created_at", { ascending: false })
-      .limit(30);
-
-    if (debouncedSearch.trim()) {
-      query = query.or(
-        `title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%,location.ilike.%${debouncedSearch}%`,
-      );
-    }
-
-    if (selectedCategory) {
-      query = query.eq("category", selectedCategory);
-    }
-
-    if (debouncedLocation.trim()) {
-      query = query.ilike("location", `%${debouncedLocation}%`);
-    }
-
-    const { data } = await query;
-    if (!data) {
-      setReports([]);
-      setLoading(false);
-      return;
-    }
-
-    const reportIds = data.map((r) => r.id);
-    const { data: photos } = await supabase
-      .from("report_photos")
-      .select("report_id, storage_path")
-      .in("report_id", reportIds)
-      .order("position", { ascending: true });
-
-    const thumbMap = {};
-    for (const p of photos ?? []) {
-      if (!thumbMap[p.report_id]) {
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("report-photos").getPublicUrl(p.storage_path);
-        thumbMap[p.report_id] = publicUrl;
-      }
-    }
-
-    setReports(data.map((r) => ({ ...r, thumbnail: thumbMap[r.id] ?? null })));
-    setLoading(false);
-  }
 
   function clearFilters() {
     setSelectedCategory(null);

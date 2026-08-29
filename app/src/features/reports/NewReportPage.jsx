@@ -2,8 +2,8 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Camera, ImagePlus, X, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
+import { createReport } from '../../shared/lib/operations/reports'
 
 const MAX_PHOTOS = 3
 
@@ -57,56 +57,18 @@ export default function NewReportPage() {
     setSubmitting(true)
 
     try {
-      // 1. Insert the report
-      const { data: report, error: reportError } = await supabase
-        .from('reports')
-        .insert({
-          title: title.trim(),
-          description: description.trim() || null,
-          location: location.trim(),
-          category: category || null,
-          type: 'lost',
-          status: 'open',
-          reporter_id: session.user.id,
-        })
-        .select()
-        .single()
-
-      if (reportError) throw reportError
-
-      // 2. Upload photos if any
-      // 2. Upload photos to storage and insert into report_photos table
-      if (photos.length > 0) {
-        let position = 0
-        for (const photo of photos) {
-          const ext = photo.file.name.split('.').pop()
-          const path = `reports/${report.id}/${Date.now()}.${ext}`
-          const { error: uploadError } = await supabase.storage
-            .from('report-photos')
-            .upload(path, photo.file, { cacheControl: '3600', upsert: false })
-          if (!uploadError) {
-            await supabase
-              .from('report_photos')
-              .insert({ report_id: report.id, storage_path: path, position })
-            position++
-          }
-        }
-      }
+      // Writes optimistically to the local cache and queues the report +
+      // photo uploads; syncs immediately if online, or on reconnect.
+      const report = await createReport({
+        title,
+        description,
+        location,
+        category,
+        reporterId: session.user.id,
+        photoFiles: photos.map((photo) => photo.file),
+      })
 
       setDone(true)
-
-      // Notify all users about the new report
-      fetch(`${import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'}/reports/${report.id}/announce`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reporterId: session.user.id,
-          title: report.title,
-          location: report.location,
-          category: report.category,
-        }),
-      }).catch(() => {}) // fire and forget
-
       setTimeout(() => navigate(`/reports/${report.id}`), 1200)
     } catch (err) {
       setError(err.message)

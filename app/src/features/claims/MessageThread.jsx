@@ -1,21 +1,29 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
+import { sendMessage, chooseDropoff } from '../../shared/lib/operations/messages'
+import SyncStateChip from '../../shared/components/SyncStateChip'
+import {
+  useMessages,
+  refreshMessages,
+  useDropOffStatus,
+  refreshDropOffStatus,
+} from '../../shared/lib/repositories/messages'
+import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 
-const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
-  ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
-  : 'https://muigquisnrhdbvnexyzu.supabase.co/functions/v1'
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+const EMPTY_MESSAGES = []
 
 export default function MessageThread({ claim, report, isReporter, reporterName, claimantName }) {
   const { session } = useAuth()
-  const [messages, setMessages]           = useState([])
+  // Read reactively from the local cache (works offline); refreshMessages /
+  // refreshDropOffStatus below keep the cache in sync with Supabase whenever
+  // we're online. Writes (sendMessage / chooseDropoff) write straight into
+  // the same cache, so sent messages appear here immediately.
+  const messages = useMessages(claim?.id) ?? EMPTY_MESSAGES
+  const dropOffSent = messages.some((m) => m.body?.startsWith('📍'))
+  const dropOffStatus = useDropOffStatus(claim?.id) // null | 'pending' | 'received' | 'resolved'
   const [text, setText]                   = useState('')
   const [sending, setSending]             = useState(false)
-  const [dropOffSent, setDropOffSent]     = useState(false)
-  const [dropOffStatus, setDropOffStatus] = useState(null) // null | 'pending' | 'received' | 'resolved'
   const [sendError, setSendError]         = useState('')
   const messagesContainerRef = useRef(null)
   const prevCountRef         = useRef(0)
@@ -23,8 +31,8 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
 
   useEffect(() => {
     if (!claim?.id) return
-    fetchMessages()
-    fetchDropOffStatus()
+    refreshMessages(claim.id)
+    refreshDropOffStatus(claim.id)
 
     const channelName = `messages-${claim.id}`
     const existing = supabase.getChannels().find((c) => c.topic === `realtime:${channelName}`)
@@ -33,17 +41,23 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     const channel = supabase
       .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'claim_messages' }, (payload) => {
-        if (payload.new?.claim_id === claim.id) fetchMessages()
+        if (payload.new?.claim_id === claim.id) refreshMessages(claim.id)
       })
       // Realtime: banner updates live when admin marks received or resolved
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dropoff_requests' }, (payload) => {
-        if (payload.new?.claim_id === claim.id) {
-          setDropOffStatus(payload.new.status)
-        }
+        if (payload.new?.claim_id === claim.id) refreshDropOffStatus(claim.id)
       })
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
+    const unsubscribeSync = onSyncTrigger(() => {
+      refreshMessages(claim.id)
+      refreshDropOffStatus(claim.id)
+    })
+
+    return () => {
+      supabase.removeChannel(channel)
+      unsubscribeSync()
+    }
   }, [claim?.id])
 
   useEffect(() => {
@@ -63,51 +77,25 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     prevCountRef.current = messages.length
   }, [messages])
 
-  async function fetchMessages() {
-    const { data } = await supabase
-      .from('claim_messages')
-      .select('id, body, sender_role, created_at, sender_id')
-      .eq('claim_id', claim.id)
-      .order('created_at', { ascending: true })
-    setMessages(data ?? [])
-
-    const hasDropOff = (data ?? []).some((m) => m.body?.startsWith('📍'))
-    if (hasDropOff) setDropOffSent(true)
-  }
-
-  async function fetchDropOffStatus() {
-    const { data } = await supabase
-      .from('dropoff_requests')
-      .select('status')
-      .eq('claim_id', claim.id)
-      .maybeSingle()
-    if (data) setDropOffStatus(data.status)
-  }
-
   async function handleSend(e) {
     e.preventDefault()
     if (!text.trim() || sending) return
+    if (messages.length >= 10) {
+      setSendError('This conversation has reached the 10-message limit.')
+      return
+    }
     setSending(true)
     setSendError('')
     const role = isReporter ? 'reporter' : 'claimant'
-    const { error } = await supabase.from('claim_messages').insert({
-      claim_id: claim.id,
-      sender_id: session.user.id,
-      sender_role: role,
-      body: text.trim(),
-    })
-    if (!error) {
+    try {
+      await sendMessage({
+        claimId: claim.id,
+        senderId: session.user.id,
+        senderRole: role,
+        body: text.trim(),
+      })
       setText('')
-      try {
-        await fetch(`${SERVER_URL}/claims/${claim.id}/message`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ senderId: session.user.id, senderRole: role }),
-        })
-      } catch { /* ignore */ }
-    } else if (error.message?.includes('10-message cap')) {
-      setSendError('This conversation has reached the 10-message limit.')
-    } else {
+    } catch {
       setSendError('Message failed to send. Please try again.')
     }
     setSending(false)
@@ -117,34 +105,19 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
     e.preventDefault()
     if (sending) return
     setSending(true)
-
-    const body = '📍 ISSC_DROPOFF'
-    const { error } = await supabase.from('claim_messages').insert({
-      claim_id: claim.id,
-      sender_id: session.user.id,
-      sender_role: 'claimant',
-      body,
-    })
-
-    if (!error) {
-      setDropOffSent(true)
-      try {
-        await fetch(`${EDGE_URL}/dropoff`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-          },
-          body: JSON.stringify({
-            reportId: report?.id,
-            claimId: claim.id,
-            claimantId: claim.claimant_id,
-            reporterId: report?.reporter_id,
-          }),
-        })
-        // Optimistically set to pending immediately after choosing drop-off
-        setDropOffStatus('pending')
-      } catch { /* ignore */ }
+    try {
+      // Writes straight into the cache sendMessage/dropOffSent read from, so
+      // the drop-off marker and banner ("pending" is the default fallback
+      // below until refreshDropOffStatus resolves) appear immediately.
+      await chooseDropoff({
+        reportId: report?.id,
+        claimId: claim.id,
+        claimantId: claim.claimant_id,
+        reporterId: report?.reporter_id,
+        senderId: session.user.id,
+      })
+    } catch {
+      /* local cache write failed unexpectedly; leave UI as-is */
     }
     setSending(false)
   }
@@ -306,6 +279,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
                 <span className="text-[10px] text-text-muted">
                   {senderName} · {timeAgo(msg.created_at)}
                 </span>
+                {isMine && <SyncStateChip status={msg._syncStatus} />}
               </div>
 
               <div

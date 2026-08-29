@@ -5,10 +5,13 @@ import {
   FileText, MessageSquare, Lightbulb, Star,
   X, ChevronRight, XCircle, TrendingUp, TrendingDown, Minus,
 } from 'lucide-react'
-import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
+import { useHistory, refreshHistory } from '../../shared/lib/repositories/history'
+import { onSyncTrigger } from '../../shared/lib/appLifecycle'
+import SyncStateChip from '../../shared/components/SyncStateChip'
 
 const TABS = ['All', 'My Reports', 'My Claims', 'My Tips']
+const EMPTY_HISTORY = []
 
 const STATUS_STYLES = {
   open:     'bg-status-open-bg text-status-open-text',
@@ -98,10 +101,14 @@ function ActivityRow({ item }) {
         )}
         <p className="text-xs font-medium text-text-primary truncate">{title}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          {item.status && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status] ?? ''}`}>
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-            </span>
+          {item._syncStatus ? (
+            <SyncStateChip status={item._syncStatus} />
+          ) : (
+            item.status && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status] ?? ''}`}>
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              </span>
+            )
           )}
           <span className="text-[10px] text-text-muted">{timeAgo(item.created_at)}</span>
         </div>
@@ -213,33 +220,22 @@ function TrustHistoryDialog({ events, currentScore, onClose }) {
 export default function HistoryPage() {
   const { session, profile } = useAuth()
   const [activeTab, setActiveTab]               = useState('All')
-  const [reports, setReports]                   = useState([])
-  const [claims, setClaims]                     = useState([])
-  const [tips, setTips]                         = useState([])
-  const [trustEvents, setTrustEvents]           = useState([])
-  const [loading, setLoading]                   = useState(true)
   const [showTrustHistory, setShowTrustHistory] = useState(false)
+
+  // Reads reactively from the local cache (works offline); refreshHistory
+  // below keeps the cache in sync with Supabase whenever we're online.
+  const history = useHistory(session?.user?.id)
+  const loading = history === undefined
+  const reports = history?.reports ?? EMPTY_HISTORY
+  const claims = history?.claims ?? EMPTY_HISTORY
+  const tips = history?.tips ?? EMPTY_HISTORY
+  const trustEvents = history?.trustEvents ?? EMPTY_HISTORY
 
   useEffect(() => {
     if (!session?.user?.id) return
-    fetchAll()
+    refreshHistory(session.user.id)
+    return onSyncTrigger(() => refreshHistory(session.user.id))
   }, [session?.user?.id])
-
-  async function fetchAll() {
-    setLoading(true)
-    const uid = session.user.id
-    const [{ data: r }, { data: c }, { data: t }, { data: te }] = await Promise.all([
-      supabase.from('reports').select('id, title, status, location, created_at').eq('reporter_id', uid).order('created_at', { ascending: false }),
-      supabase.from('claims').select('id, status, created_at, report_id, reports(title)').eq('claimant_id', uid).order('created_at', { ascending: false }),
-      supabase.from('tips').select('id, text, created_at, report_id, reports(title)').eq('user_id', uid).order('created_at', { ascending: false }),
-      supabase.from('trust_score_events').select('id, delta, reason, created_at').eq('user_id', uid).order('created_at', { ascending: false }),
-    ])
-    setReports(r ?? [])
-    setClaims(c ?? [])
-    setTips(t ?? [])
-    setTrustEvents(te ?? [])
-    setLoading(false)
-  }
 
   // All items merged, typed, and sorted newest-first
   const allItems = useMemo(() => [

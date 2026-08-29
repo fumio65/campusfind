@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { db } from './db'
+import { onSyncTrigger } from './appLifecycle'
 const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined)
@@ -34,16 +36,33 @@ export function AuthProvider({ children }) {
       }, () => fetchProfile(session.user.id))
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
+    // Realtime events missed while offline aren't replayed on reconnect, so
+    // explicitly refresh once connectivity (or the app) comes back.
+    const unsubscribeSync = onSyncTrigger(() => fetchProfile(session.user.id))
+
+    return () => {
+      supabase.removeChannel(channel)
+      unsubscribeSync()
+    }
   }, [session?.user?.id])
 
   async function fetchProfile(userId) {
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    setProfile(data)
+    const cached = await db.profile.get(userId).catch(() => undefined)
+    if (cached) setProfile(cached)
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      if (error) throw error
+      setProfile(data)
+      db.profile.put(data).catch(() => {})
+    } catch {
+      // Offline or request failed - keep the cached profile (if any) rather
+      // than clobbering it with null.
+    }
   }
 
   const value = {

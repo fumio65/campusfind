@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, Camera, ImagePlus, X, AlertCircle, CheckCircle2, Info, Lightbulb } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
+import { submitClaim } from '../../shared/lib/operations/claims'
 
 const MAX_PHOTOS = 3
 
@@ -71,68 +72,18 @@ export default function ClaimPage() {
     setSubmitting(true)
 
     try {
-      // 1. Create the claim
-      const { data: claim, error: claimError } = await supabase
-        .from('claims')
-        .insert({
-          report_id: reportId,
-          claimant_id: session.user.id,
-          status: 'pending',
-        })
-        .select()
-        .single()
-
-      if (claimError) throw claimError
-
-      // 2. Upload photos
-      let position = 0
-      for (const photo of photos) {
-        const ext = photo.file.name.split('.').pop()
-        const path = `claims/${claim.id}/${Date.now()}.${ext}`
-        const { error: uploadError } = await supabase.storage
-          .from('report-photos')
-          .upload(path, photo.file, { cacheControl: '3600', upsert: false })
-        if (!uploadError) {
-          await supabase
-            .from('claim_photos')
-            .insert({ claim_id: claim.id, storage_path: path, position })
-          position++
-        }
-      }
-
-      // 3. Update the report status to 'claimed'
-      await supabase
-        .from('reports')
-        .update({ status: 'claimed' })
-        .eq('id', reportId)
-
-      // 4. Send an initial message in the claim thread
-      await supabase
-        .from('claim_messages')
-        .insert({
-          claim_id: claim.id,
-          sender_id: session.user.id,
-          sender_role: 'claimant',
-          body: message.trim(),
-        })
-
-      // 5. If converting from a tip, link it back to this claim
-      if (originalTip) {
-        await supabase
-          .from('tips')
-          .update({ converted_to_claim_id: claim.id })
-          .eq('id', originalTip.id)
-      }
-
-      setDone(true)
-
-      // Notify reporter via server
-      await fetch(`${import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'}/claims`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId, claimantId: session.user.id }),
+      // Writes optimistically to the local cache and queues the claim +
+      // photo uploads + initial message; syncs immediately if online, or on
+      // reconnect.
+      await submitClaim({
+        reportId,
+        claimantId: session.user.id,
+        photoFiles: photos.map((photo) => photo.file),
+        messageText: message,
+        originalTipId: originalTip?.id ?? null,
       })
 
+      setDone(true)
       setTimeout(() => navigate(`/reports/${reportId}`), 1500)
     } catch (err) {
       setError(err.message)

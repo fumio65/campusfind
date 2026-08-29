@@ -4,23 +4,21 @@ import { Home, Clock, Bell, User, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { registerPushToken } from '../lib/pushToken'
+import { useUnreadCount, refreshNotifications } from '../lib/repositories/notifications'
+import { onSyncTrigger } from '../lib/appLifecycle'
+import SyncStatusBadge from './SyncStatusBadge'
 
 export default function AppShell() {
   const { session } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [unreadCount, setUnreadCount] = useState(0)
+  // Reads reactively from the local cache (works offline); refreshUnread
+  // below keeps the cache in sync with Supabase whenever we're online.
+  const unreadCount = useUnreadCount(session.user.id)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const deferredPromptRef = useRef(null)
 
-  const fetchUnread = useCallback(async () => {
-    const { count } = await supabase
-      .from('user_notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', session.user.id)
-      .eq('read', false)
-    setUnreadCount(count ?? 0)
-  }, [session.user.id])
+  const fetchUnread = useCallback(() => refreshNotifications(session.user.id), [session.user.id])
 
   useEffect(() => {
     fetchUnread()
@@ -52,7 +50,12 @@ export default function AppShell() {
       )
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
+    const unsubscribeSync = onSyncTrigger(fetchUnread)
+
+    return () => {
+      supabase.removeChannel(channel)
+      unsubscribeSync()
+    }
   }, [fetchUnread])
 
   // Re-fetch unread count on every navigation
@@ -99,6 +102,8 @@ export default function AppShell() {
       <main className="flex-1 overflow-y-auto pb-20 no-scrollbar">
         <Outlet />
       </main>
+
+      <SyncStatusBadge />
 
       {/* Install prompt banner */}
       {showInstallPrompt && (

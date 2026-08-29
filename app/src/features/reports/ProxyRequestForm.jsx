@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../shared/lib/supabase";
+import { useOnlineStatus } from "../../shared/lib/network";
 
 export default function ProxyRequestForm({
   reportId,
@@ -15,6 +16,10 @@ export default function ProxyRequestForm({
   const [error, setError]                   = useState(null);
   const [existingRequest, setExistingRequest] = useState(null);
   const validateRef = useRef(null);
+  // This form validates and registers a proxy against the live student
+  // directory, so - like login - it requires connectivity rather than
+  // going through the offline write queue.
+  const isOnline = useOnlineStatus();
 
   useEffect(() => {
     checkExisting();
@@ -169,6 +174,11 @@ export default function ProxyRequestForm({
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        {!isOnline && (
+          <p className="text-[11px] text-status-rejected-text bg-status-rejected-bg rounded-lg px-2.5 py-2">
+            Registering a proxy pickup requires an internet connection.
+          </p>
+        )}
         <div>
           <label className="text-xs font-medium text-text-secondary block mb-1">
             Proxy's Student ID{" "}
@@ -181,7 +191,8 @@ export default function ProxyRequestForm({
               value={proxyStudentId}
               onChange={(e) => handleStudentIdChange(e.target.value)}
               maxLength={8}
-              className={`w-full h-10 px-3 text-sm rounded-xl border bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 ${
+              disabled={!isOnline}
+              className={`w-full h-10 px-3 text-sm rounded-xl border bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50 ${
                 validation === "valid"
                   ? "border-status-open-text"
                   : validation === "invalid" ||
@@ -224,7 +235,7 @@ export default function ProxyRequestForm({
 
         <button
           type="submit"
-          disabled={submitting || validation !== "valid"}
+          disabled={submitting || validation !== "valid" || !isOnline}
           className="w-full h-10 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
         >
           {submitting ? "Registering…" : "Register proxy pickup"}

@@ -21,13 +21,22 @@ import {
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
+import { submitTip } from "../../shared/lib/operations/tips";
+import SyncStateChip from "../../shared/components/SyncStateChip";
+import {
+  cacheReport,
+  cacheReportPhotos,
+  cacheClaim,
+  cacheClaimPhotos,
+  cacheTips,
+  getCachedReportDetail,
+} from "../../shared/lib/repositories/reportDetail";
+import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import MessageThread from "../claims/MessageThread";
 import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import ShareSheet from "./ShareSheet";
 import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
 // FIX: claim actions and resolve were hitting dead Express server
 // Now correctly call Supabase Edge Functions
@@ -151,9 +160,12 @@ function TipCard({
             <p className="text-xs text-text-primary leading-relaxed">
               {tip.text}
             </p>
-            <p className="text-[10px] text-text-muted mt-1">
-              {timeAgo(tip.created_at)}
-            </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <p className="text-[10px] text-text-muted">
+                {timeAgo(tip.created_at)}
+              </p>
+              <SyncStateChip status={tip._syncStatus} />
+            </div>
           </div>
         </div>
       </div>
@@ -182,7 +194,7 @@ function timeAgo(dateStr) {
 export default function ReportDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
 
   const [report, setReport] = useState(null);
   const [reporter, setReporter] = useState(null);
@@ -355,7 +367,12 @@ export default function ReportDetailPage() {
       )
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    const unsubscribeSync = onSyncTrigger(() => fetchAll(true));
+
+    return () => {
+      supabase.removeChannel(channel);
+      unsubscribeSync();
+    };
   }, [id]);
 
   useEffect(() => {
@@ -407,17 +424,31 @@ export default function ReportDetailPage() {
       .single();
 
     if (error || !data) {
-      setError("Report not found.");
+      // Offline (or otherwise unreachable) - fall back to whatever was
+      // cached from a previous successful load, if any.
+      const cached = await getCachedReportDetail(id);
+      if (cached) {
+        setReport(cached.report);
+        setClaim(cached.claim);
+        setTips(cached.tips);
+      } else {
+        setError("Report not found.");
+      }
       if (!silent) setLoading(false);
       return;
     }
     setReport(data);
+    await cacheReport(data);
 
     const { data: reportPhotos } = await supabase
       .from("report_photos")
-      .select("storage_path")
+      .select("id, storage_path, position")
       .eq("report_id", id)
       .order("position", { ascending: true });
+    await cacheReportPhotos(
+      id,
+      (reportPhotos ?? []).map((p) => ({ ...p, report_id: id })),
+    );
     const photoUrls = (reportPhotos ?? []).map((p) => {
       const {
         data: { publicUrl },
@@ -460,12 +491,17 @@ export default function ReportDetailPage() {
       if (claimData) {
         activeClaim = claimData;
         setClaim(claimData);
+        await cacheClaim(claimData);
 
         const { data: claimPhotos } = await supabase
           .from("claim_photos")
-          .select("storage_path")
+          .select("id, storage_path, position")
           .eq("claim_id", claimData.id)
           .order("position", { ascending: true });
+        await cacheClaimPhotos(
+          claimData.id,
+          (claimPhotos ?? []).map((p) => ({ ...p, claim_id: claimData.id })),
+        );
         const photoUrls = (claimPhotos ?? []).map((p) => {
           const {
             data: { publicUrl },
@@ -503,6 +539,7 @@ export default function ReportDetailPage() {
         .maybeSingle();
       if (rejectedClaim && !activeClaim) {
         setClaim(rejectedClaim);
+        await cacheClaim(rejectedClaim);
       }
     }
 
@@ -514,6 +551,7 @@ export default function ReportDetailPage() {
       .eq("report_id", id)
       .order("created_at", { ascending: true });
     setTips(tipsData ?? []);
+    await cacheTips(id, (tipsData ?? []).map((t) => ({ ...t, report_id: id })));
 
     if (!silent) setLoading(false);
     if (silent) {
@@ -643,35 +681,30 @@ export default function ReportDetailPage() {
       return setTipError("This report has reached the 25-tip limit.");
     setSubmittingTip(true);
     setTipError(null);
-    const { data: newTip, error } = await supabase
-      .from("tips")
-      .insert({
-        report_id: id,
-        user_id: session.user.id,
+    try {
+      const tip = await submitTip({
+        reportId: id,
+        userId: session.user.id,
         text: tipText.trim(),
-        parent_tip_id: parentTipId ?? null,
-      })
-      .select()
-      .single();
-    if (error) setTipError(error.message);
-    else {
-      try {
-        await fetch(`${SERVER_URL}/tips/notify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reportId: id,
-            tipAuthorId: session.user.id,
-            parentTipId: parentTipId ?? null,
-            tipId: newTip?.id ?? null,
-          }),
-        });
-      } catch {
-        /* ignore */
-      }
+        parentTipId,
+      });
+      setTips((prev) => [
+        ...prev,
+        {
+          ...tip,
+          users: profile
+            ? {
+                first_name: profile.first_name,
+                last_name: profile.last_name,
+                trust_score: profile.trust_score,
+              }
+            : undefined,
+        },
+      ]);
       setTipText("");
       setParentTipId(null);
-      fetchAll(true);
+    } catch (err) {
+      setTipError(err?.message ?? "Something went wrong submitting your tip.");
     }
     setSubmittingTip(false);
   }
@@ -1197,9 +1230,10 @@ export default function ReportDetailPage() {
           isClaimed &&
           (claim?.claimant_id === session?.user.id ? (
             <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
-              <p className="font-semibold mb-0.5">
-                Your claim is under review.
-              </p>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <p className="font-semibold">Your claim is under review.</p>
+                <SyncStateChip status={claim._syncStatus} />
+              </div>
               <p>
                 Your claim is pending the reporter's review. You'll be notified
                 once a decision is made.

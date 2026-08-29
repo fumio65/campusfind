@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -7,6 +7,15 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
+import {
+  useNotifications,
+  refreshNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '../../shared/lib/repositories/notifications'
+import { onSyncTrigger } from '../../shared/lib/appLifecycle'
+
+const EMPTY_NOTIFICATIONS = []
 
 const TYPE_CONFIG = {
   claim_submitted:   { icon: MessageSquare, color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
@@ -74,19 +83,15 @@ function NotificationItem({ notification, onTap }) {
 export default function ActivityPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
-  const [notifications, setNotifications] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Reads reactively from the local cache (works offline); refreshNotifications
+  // below keeps the cache in sync with Supabase whenever we're online.
+  const notifications = useNotifications(session.user.id)
+  const loading = notifications === undefined
 
-  const fetchNotifications = useCallback(async () => {
-    const { data } = await supabase
-      .from('user_notifications')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false })
-      .limit(50)
-    setNotifications(data ?? [])
-    setLoading(false)
-  }, [session.user.id])
+  const fetchNotifications = useCallback(
+    () => refreshNotifications(session.user.id),
+    [session.user.id],
+  )
 
   useEffect(() => {
     fetchNotifications()
@@ -108,18 +113,17 @@ export default function ActivityPage() {
       )
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
+    const unsubscribeSync = onSyncTrigger(fetchNotifications)
+
+    return () => {
+      supabase.removeChannel(channel)
+      unsubscribeSync()
+    }
   }, [fetchNotifications])
 
   async function handleTap(notification) {
     if (!notification.read) {
-      await supabase
-        .from('user_notifications')
-        .update({ read: true })
-        .eq('id', notification.id)
-      setNotifications((prev) =>
-        prev.map((n) => n.id === notification.id ? { ...n, read: true } : n)
-      )
+      await markNotificationRead(notification.id)
     }
     if (notification.report_id) {
       const hashMap = {
@@ -139,18 +143,10 @@ export default function ActivityPage() {
   }
 
   async function markAllRead() {
-    const unread = notifications.filter((n) => !n.read)
-    if (!unread.length) return
-    await supabase
-      .from('user_notifications')
-      .update({ read: true })
-      .in('id', unread.map((n) => n.id))
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, read: true }))
-    )
+    await markAllNotificationsRead(session.user.id)
   }
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = (notifications ?? EMPTY_NOTIFICATIONS).filter((n) => !n.read).length
 
   return (
     <div className="flex flex-col min-h-full">

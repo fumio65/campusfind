@@ -7,6 +7,10 @@ import {
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { useRecentRejections, refreshHistory } from '../../shared/lib/repositories/history'
+import { onSyncTrigger } from '../../shared/lib/appLifecycle'
+
+const EMPTY_REJECTIONS = []
 
 function timeUntil(dateStr) {
   const diff = new Date(dateStr).getTime() - Date.now()
@@ -24,42 +28,25 @@ function formatDate(dateStr) {
 export default function ProfilePage() {
   const { session, profile } = useAuth()
   const navigate = useNavigate()
-  const [trustData, setTrustData] = useState(null)
-  const [rejections, setRejections] = useState([])
-  const [loading, setLoading] = useState(true)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
+  // `profile` (from AuthContext) already carries trust_score/first_name/etc.
+  // and is offline-cached, so no separate fetch is needed for it here.
+  const loading = profile == null
+  const rejections = useRecentRejections(session?.user?.id) ?? EMPTY_REJECTIONS
+
   useEffect(() => {
-    fetchData()
-  }, [])
-
-  async function fetchData() {
-    setLoading(true)
-    const { data: user } = await supabase
-      .from('users')
-      .select('trust_score, first_name, last_name, student_id, program')
-      .eq('id', session.user.id)
-      .single()
-    setTrustData(user)
-
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: recentRejections } = await supabase
-      .from('claims')
-      .select('id, created_at, report_id, reports(title)')
-      .eq('claimant_id', session.user.id)
-      .eq('status', 'rejected')
-      .gte('created_at', thirtyDaysAgo)
-      .order('created_at', { ascending: false })
-    setRejections(recentRejections ?? [])
-    setLoading(false)
-  }
+    if (!session?.user?.id) return
+    refreshHistory(session.user.id)
+    return onSyncTrigger(() => refreshHistory(session.user.id))
+  }, [session?.user?.id])
 
   async function handleLogout() {
     await supabase.auth.signOut()
     navigate('/login')
   }
 
-  const score = trustData?.trust_score ?? 100
+  const score = profile?.trust_score ?? 100
   const maxScore = 200
   const pct = Math.min((score / maxScore) * 100, 100)
   const standing = score >= 80 ? 'Good standing' : score >= 50 ? 'Fair standing' : 'Poor standing'
