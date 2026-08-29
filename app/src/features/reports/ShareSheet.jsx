@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { X, Link as LinkIcon, Share2, Download, CheckCircle2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { X, Link as LinkIcon, Share2, Download, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
+import { Filesystem, Directory } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 
 const BRAND = '#06433C'
 const BRAND_LIGHT = '#E1F5EE'
 
-function drawShareCard(canvas, report, photoUrl) {
+function drawShareCard(canvas, report, photoImg) {
   const W = 1080
   const H = 1350
   canvas.width = W
@@ -28,21 +31,14 @@ function drawShareCard(canvas, report, photoUrl) {
   const PHOTO_H = 620
   const RADIUS = 40
 
-  if (photoUrl) {
+  if (photoImg) {
     // Draw photo with rounded rect clip
     ctx.save()
     roundRect(ctx, 60, PHOTO_Y, W - 120, PHOTO_H, RADIUS)
     ctx.clip()
     ctx.fillStyle = '#1a3d38'
     ctx.fillRect(60, PHOTO_Y, W - 120, PHOTO_H)
-
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.src = photoUrl
-    // If image already loaded (same frame), draw immediately
-    if (img.complete) {
-      drawCover(ctx, img, 60, PHOTO_Y, W - 120, PHOTO_H)
-    }
+    drawCover(ctx, photoImg, 60, PHOTO_Y, W - 120, PHOTO_H)
     ctx.restore()
   } else {
     // Placeholder box
@@ -78,11 +74,20 @@ function drawShareCard(canvas, report, photoUrl) {
   wrapText(ctx, report.title, 60, titleY, W - 120, 88)
 
   // Location
+  let nextY = titleY + 200
   if (report.location) {
-    const locY = titleY + 200
     ctx.fillStyle = 'rgba(255,255,255,0.6)'
     ctx.font = '36px system-ui, -apple-system, sans-serif'
-    ctx.fillText(`📍 ${report.location}`, 60, locY)
+    ctx.fillText(`📍 ${report.location}`, 60, nextY)
+    nextY += 60
+  }
+
+  // Description (single truncated line - keeps the layout safe regardless
+  // of how long the title/location above turned out to be)
+  if (report.description) {
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = '30px system-ui, -apple-system, sans-serif'
+    ctx.fillText(truncateToWidth(ctx, report.description, W - 120), 60, nextY)
   }
 
   // Divider
@@ -153,10 +158,57 @@ function wrapText(ctx, text, x, y, maxW, lineH) {
   ctx.fillText(line.trim(), x, y + lineCount * lineH)
 }
 
+function truncateToWidth(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text
+  let truncated = text
+  while (truncated.length > 0 && ctx.measureText(truncated + '…').width > maxW) {
+    truncated = truncated.slice(0, -1)
+  }
+  return truncated.trimEnd() + '…'
+}
+
+// Loads the report photo via fetch+blob (not a plain cross-origin <img>) so
+// the canvas is never tainted, regardless of the storage host's CORS
+// headers - a tainted canvas silently breaks both toBlob() and toDataURL(),
+// which was the root cause of "Share image"/"Download card" doing nothing.
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    fetch(url)
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('image fetch failed'))))
+      .then((blob) => {
+        const objectUrl = URL.createObjectURL(blob)
+        const img = new Image()
+        img.onload = () => resolve({ img, objectUrl })
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl)
+          reject(new Error('image decode failed'))
+        }
+        img.src = objectUrl
+      })
+      .catch(reject)
+  })
+}
+
+function canvasToBase64Png(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error('Could not export the card image.'))
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(String(reader.result).split(',')[1])
+      reader.onerror = () => reject(new Error('Could not export the card image.'))
+      reader.readAsDataURL(blob)
+    }, 'image/png')
+  })
+}
+
 export default function ShareSheet({ report, onClose }) {
   const canvasRef = useRef(null)
   const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
   const [cardReady, setCardReady] = useState(false)
+  const [actionError, setActionError] = useState(null)
+  const [sharing, setSharing] = useState(false)
+  const [saving, setSaving] = useState(false)
   const shareUrl = `${window.location.origin}/reports/${report.id}`
 
   useEffect(() => {
@@ -164,23 +216,30 @@ export default function ShareSheet({ report, onClose }) {
     if (!canvas) return
     const photoUrl = report.photoUrls?.[0] ?? null
 
-    if (photoUrl) {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        drawShareCard(canvas, report, photoUrl)
-        setCardReady(true)
-      }
-      img.onerror = () => {
-        drawShareCard(canvas, report, null)
-        setCardReady(true)
-      }
-      img.src = photoUrl
-      // Draw immediately without photo, then redraw once loaded
-      drawShareCard(canvas, report, null)
-    } else {
-      drawShareCard(canvas, report, null)
+    let cancelled = false
+    let objectUrl = null
+
+    drawShareCard(canvas, report, null)
+
+    if (!photoUrl) {
       setCardReady(true)
+      return
+    }
+
+    loadImage(photoUrl)
+      .then(({ img, objectUrl: url }) => {
+        objectUrl = url
+        if (cancelled) return
+        drawShareCard(canvas, report, img)
+        setCardReady(true)
+      })
+      .catch(() => {
+        if (!cancelled) setCardReady(true)
+      })
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [report])
 
@@ -196,34 +255,64 @@ export default function ShareSheet({ report, onClose }) {
 
   async function handleShareImage() {
     const canvas = canvasRef.current
-    if (!canvas) return
-    canvas.toBlob(async (blob) => {
-      const file = new File([blob], 'campusfind-report.png', { type: 'image/png' })
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: report.title,
-            text: `${report.type === 'found_walkin' ? 'Found at ISSC' : 'Lost'}: ${report.title} — Help on CampusFind`,
-            url: shareUrl,
-          })
-          return
-        } catch (e) {
-          if (e.name === 'AbortError') return
-        }
+    if (!canvas || sharing) return
+    setSharing(true)
+    setActionError(null)
+    try {
+      const filename = `campusfind-${report.id.slice(0, 8)}-${Date.now()}.png`
+      const shareText = `${report.type === 'found_walkin' ? 'Found at ISSC' : 'Lost'}: ${report.title} — Help on CampusFind`
+
+      if (Capacitor.isNativePlatform()) {
+        const base64 = await canvasToBase64Png(canvas)
+        const { uri } = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache })
+        await Share.share({ title: report.title, text: shareText, url: shareUrl, files: [uri] })
+        return
       }
-      // Fallback: download
-      handleDownload()
-    }, 'image/png')
+
+      // Browser fallback, for local dev testing only.
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+      if (!blob) throw new Error('Could not export the card image.')
+      const file = new File([blob], filename, { type: 'image/png' })
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: report.title, text: shareText, url: shareUrl })
+        return
+      }
+      await handleDownload()
+    } catch (err) {
+      if (err?.name !== 'AbortError') {
+        setActionError("Couldn't share the image. Please try again.")
+      }
+    } finally {
+      setSharing(false)
+    }
   }
 
-  function handleDownload() {
+  async function handleDownload() {
     const canvas = canvasRef.current
-    if (!canvas) return
-    const a = document.createElement('a')
-    a.download = `campusfind-${report.id.slice(0, 8)}.png`
-    a.href = canvas.toDataURL('image/png')
-    a.click()
+    if (!canvas || saving) return
+    setSaving(true)
+    setActionError(null)
+    try {
+      const filename = `campusfind-${report.id.slice(0, 8)}.png`
+
+      if (Capacitor.isNativePlatform()) {
+        const base64 = await canvasToBase64Png(canvas)
+        await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents })
+        setDownloaded(true)
+        setTimeout(() => setDownloaded(false), 2500)
+        return
+      }
+
+      // Browser fallback, for local dev testing only.
+      const a = document.createElement('a')
+      a.download = filename
+      a.href = canvas.toDataURL('image/png')
+      a.click()
+    } catch {
+      setActionError("Couldn't save the card. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -282,6 +371,13 @@ export default function ShareSheet({ report, onClose }) {
 
         {/* Actions */}
         <div className="px-5 pt-2 pb-6 flex flex-col gap-2.5">
+          {actionError && (
+            <div className="flex items-center gap-2 bg-status-rejected-bg text-status-rejected-text text-xs rounded-xl px-3 py-2.5">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>{actionError}</span>
+            </div>
+          )}
+
           {/* Copy link */}
           <button
             onClick={handleCopyLink}
@@ -304,14 +400,16 @@ export default function ShareSheet({ report, onClose }) {
           {/* Share image */}
           <button
             onClick={handleShareImage}
-            disabled={!cardReady}
+            disabled={!cardReady || sharing}
             className="flex items-center gap-3 w-full bg-surface-muted rounded-xl px-4 py-3 active:scale-[0.98] transition-transform disabled:opacity-50"
           >
             <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center shrink-0">
               <Share2 size={18} className="text-brand-600" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-medium text-text-primary">Share image</p>
+              <p className="text-sm font-medium text-text-primary">
+                {sharing ? 'Preparing…' : 'Share image'}
+              </p>
               <p className="text-xs text-text-muted">Share the card via your apps</p>
             </div>
           </button>
@@ -319,14 +417,19 @@ export default function ShareSheet({ report, onClose }) {
           {/* Download */}
           <button
             onClick={handleDownload}
-            disabled={!cardReady}
+            disabled={!cardReady || saving}
             className="flex items-center gap-3 w-full bg-surface-muted rounded-xl px-4 py-3 active:scale-[0.98] transition-transform disabled:opacity-50"
           >
             <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center shrink-0">
-              <Download size={18} className="text-brand-600" />
+              {downloaded
+                ? <CheckCircle2 size={18} className="text-brand-600" />
+                : <Download size={18} className="text-brand-600" />
+              }
             </div>
             <div className="text-left">
-              <p className="text-sm font-medium text-text-primary">Download card</p>
+              <p className="text-sm font-medium text-text-primary">
+                {saving ? 'Saving…' : downloaded ? 'Saved!' : 'Download card'}
+              </p>
               <p className="text-xs text-text-muted">Save to your device</p>
             </div>
           </button>

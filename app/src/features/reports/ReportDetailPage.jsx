@@ -28,6 +28,7 @@ import {
   cacheReportPhotos,
   cacheClaim,
   cacheClaimPhotos,
+  cacheClaimMessages,
   cacheTips,
   getCachedReportDetail,
 } from "../../shared/lib/repositories/reportDetail";
@@ -513,12 +514,26 @@ export default function ReportDetailPage() {
 
         const { data: msgs } = await supabase
           .from("claim_messages")
-          .select("body")
-          .eq("claim_id", claimData.id);
+          .select("id, body, sender_role, created_at")
+          .eq("claim_id", claimData.id)
+          .order("created_at", { ascending: true });
+        await cacheClaimMessages(
+          claimData.id,
+          (msgs ?? []).map((m) => ({ ...m, claim_id: claimData.id })),
+        );
         const dropOffChosen = (msgs ?? []).some((m) =>
           m.body?.startsWith("📍"),
         );
-        setClaim({ ...claimData, photoUrls, drop_off_chosen: dropOffChosen });
+        const claimantMessage =
+          (msgs ?? []).find(
+            (m) => m.sender_role === "claimant" && !m.body?.startsWith("📍"),
+          )?.body ?? null;
+        setClaim({
+          ...claimData,
+          photoUrls,
+          drop_off_chosen: dropOffChosen,
+          claimant_message: claimantMessage,
+        });
 
         const { data: claimantData } = await supabase
           .from("users")
@@ -1030,7 +1045,11 @@ export default function ReportDetailPage() {
                 </span>
               </span>
             ) : (
-              reporter && (
+              // Only the reporter themselves, or the claimant once their
+              // claim has actually been approved, gets to see who reported
+              // it - not every student browsing the list.
+              reporter &&
+              (isOwner || (isApproved && claim?.claimant_id === session?.user?.id)) && (
                 <span className="flex items-center gap-1.5">
                   <User size={13} className="shrink-0" /> {reporter.first_name}{" "}
                   {reporter.last_name}
@@ -1073,6 +1092,11 @@ export default function ReportDetailPage() {
                   </div>
                 </div>
               </div>
+            )}
+            {claim.claimant_message && (
+              <p className="text-xs text-text-secondary bg-surface-muted rounded-xl px-3 py-2.5 mb-3 leading-relaxed">
+                "{claim.claimant_message}"
+              </p>
             )}
             {claim.photoUrls?.length > 0 && (
               <div className="flex gap-2 overflow-x-auto mb-3 pb-1">
