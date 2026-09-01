@@ -77,6 +77,21 @@ export function classifyRows(rawRows, existingUsersMap, existingEnrollmentNumber
   const seenStudentIds = new Set()
   const seenEnrollmentNumbers = new Set()
 
+  // Enrollment numbers change every year, so a number freed by one existing
+  // student in this same file is fair game for another row to claim -- the
+  // DB-wide existingEnrollmentNumbers snapshot doesn't know that yet, so
+  // without this it looks like a collision with "a different student" when
+  // it's really just this year's reassignment.
+  const vacatedEnrollmentNumbers = new Set()
+  for (const row of rawRows) {
+    const studentId = (row['Student ID'] ?? '').trim()
+    const newEnrollmentNumber = (row['Enrollment Number'] ?? '').trim()
+    const existingUser = existingUsersMap.get(studentId)
+    if (existingUser?.enrollment_number && existingUser.enrollment_number !== newEnrollmentNumber) {
+      vacatedEnrollmentNumbers.add(existingUser.enrollment_number)
+    }
+  }
+
   return rawRows.map((row, index) => {
     const studentId = (row['Student ID'] ?? '').trim()
     const enrollmentNumber = (row['Enrollment Number'] ?? '').trim()
@@ -86,6 +101,7 @@ export function classifyRows(rawRows, existingUsersMap, existingEnrollmentNumber
     const program = (row['Program/Course'] ?? '').trim() || null
     const yearLevel = (row['Year Level'] ?? '').trim() || null
     const classified = classifyRow(row)
+    const existingUser = existingUsersMap.get(studentId)
 
     let action = classified.action
     let errorMessage = classified.error_message
@@ -97,29 +113,41 @@ export function classifyRows(rawRows, existingUsersMap, existingEnrollmentNumber
       if (isDuplicateInFile) {
         action = 'skip_duplicate'
         errorMessage = 'duplicate within this file'
-      } else if (existingUsersMap.has(studentId)) {
-        const existingUser = existingUsersMap.get(studentId)
-
+      } else if (existingUser) {
         if (action === 'create') {
-          // Check if anything actually changed vs what's in the DB
-          const hasChanges =
-            existingUser.enrollment_number !== enrollmentNumber ||
-            existingUser.last_name !== lastName ||
-            existingUser.first_name !== firstName ||
-            (existingUser.middle_name ?? null) !== middleName ||
-            (existingUser.program ?? null) !== program ||
-            (existingUser.year_level ?? null) !== yearLevel
+          // A returning student can bring a new enrollment number, but not one
+          // that's still live on a *different* student who isn't also being
+          // moved off it in this same file -- that's a real collision, not a
+          // self-update, and would otherwise crash the DB write at confirm time.
+          const targetTakenByAnotherStudent =
+            enrollmentNumber !== existingUser.enrollment_number &&
+            existingEnrollmentNumbers.has(enrollmentNumber) &&
+            !vacatedEnrollmentNumbers.has(enrollmentNumber)
 
-          if (hasChanges) {
-            action = 'update'
-            errorMessage = null
+          if (targetTakenByAnotherStudent) {
+            action = 'error'
+            errorMessage = 'enrollment number already assigned to a different student'
           } else {
-            action = 'skip_duplicate'
-            errorMessage = 'no changes from current record'
+            // Check if anything actually changed vs what's in the DB
+            const hasChanges =
+              existingUser.enrollment_number !== enrollmentNumber ||
+              existingUser.last_name !== lastName ||
+              existingUser.first_name !== firstName ||
+              (existingUser.middle_name ?? null) !== middleName ||
+              (existingUser.program ?? null) !== program ||
+              (existingUser.year_level ?? null) !== yearLevel
+
+            if (hasChanges) {
+              action = 'update'
+              errorMessage = null
+            } else {
+              action = 'skip_duplicate'
+              errorMessage = 'no changes from current record'
+            }
           }
         }
         // If action is 'deactivate', leave it -- that's correct as-is
-      } else if (existingEnrollmentNumbers.has(enrollmentNumber)) {
+      } else if (existingEnrollmentNumbers.has(enrollmentNumber) && !vacatedEnrollmentNumbers.has(enrollmentNumber)) {
         action = 'skip_duplicate'
         errorMessage = 'enrollment number already assigned to a different student'
       }
@@ -142,6 +170,14 @@ export function classifyRows(rawRows, existingUsersMap, existingEnrollmentNumber
       csv_status: (row['Status'] ?? '').trim() || null,
       action,
       error_message: errorMessage,
+      // Snapshot of the existing record at upload time, so the preview can
+      // show a before/after diff on 'update' rows.
+      previous_enrollment_number: existingUser?.enrollment_number ?? null,
+      previous_last_name: existingUser?.last_name ?? null,
+      previous_first_name: existingUser?.first_name ?? null,
+      previous_middle_name: existingUser?.middle_name ?? null,
+      previous_program: existingUser?.program ?? null,
+      previous_year_level: existingUser?.year_level ?? null,
     }
   })
 }

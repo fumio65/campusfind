@@ -7,7 +7,7 @@ import { validateHeaders, classifyRows, classifyRow } from '../lib/bulkImportVal
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 
-// GET /accounts/bulk-import/:batchId
+// GET /bulk-import/:batchId
 router.get('/bulk-import/:batchId', async (req, res) => {
   const { batchId } = req.params
 
@@ -30,7 +30,7 @@ router.get('/bulk-import/:batchId', async (req, res) => {
   res.json({ batch, rows })
 })
 
-// POST /accounts/bulk-import
+// POST /bulk-import
 router.post('/bulk-import', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded. Send a CSV under the "file" field.' })
@@ -109,7 +109,7 @@ router.post('/bulk-import', upload.single('file'), async (req, res) => {
   res.status(201).json({ batch, rows: insertedRows, counts })
 })
 
-// PATCH /accounts/bulk-import/:batchId/rows/:rowId
+// PATCH /bulk-import/:batchId/rows/:rowId
 router.patch('/bulk-import/:batchId/rows/:rowId', async (req, res) => {
   const { batchId, rowId } = req.params
   const editableFields = [
@@ -161,7 +161,7 @@ router.patch('/bulk-import/:batchId/rows/:rowId', async (req, res) => {
   res.json(data)
 })
 
-// POST /accounts/bulk-import/:batchId/confirm
+// POST /bulk-import/:batchId/confirm
 router.post('/bulk-import/:batchId/confirm', async (req, res) => {
   const { batchId } = req.params
 
@@ -197,7 +197,35 @@ router.post('/bulk-import/:batchId/confirm', async (req, res) => {
 
   const createdIds = []
   const createdAuthIds = []
+  const vacatedOriginals = []
   try {
+    // enrollment_number is unique in the DB and checked per-statement, not
+    // deferred -- so if row A's new number is row B's current number, writing
+    // A's update (or a new account's create) before B vacates it would throw
+    // a real unique-constraint violation. Move every updating student's
+    // enrollment_number off to a disposable placeholder first so every
+    // reassignment in this batch, including cross-student swaps, is safe
+    // regardless of write order. Their original values are recorded so a
+    // later failure in this batch can restore them.
+    if (toUpdate.length > 0) {
+      const { data: currentUsers, error: currentFetchError } = await supabaseAdmin
+        .from('users')
+        .select('student_id, enrollment_number')
+        .in('student_id', toUpdate.map((row) => row.student_id))
+
+      if (currentFetchError) throw new Error(`Could not read current enrollment numbers: ${currentFetchError.message}`)
+      vacatedOriginals.push(...currentUsers)
+
+      for (const row of toUpdate) {
+        const placeholder = `9${String(9000000000 + row.row_number).slice(-9)}`
+        const { error: vacateError } = await supabaseAdmin
+          .from('users')
+          .update({ enrollment_number: placeholder })
+          .eq('student_id', row.student_id)
+        if (vacateError) throw new Error(`Row ${row.row_number}: ${vacateError.message}`)
+      }
+    }
+
     for (const row of toCreate) {
       // per SRS FR-1: enrollment number is the initial password
       const email = `${row.student_id.replace('-', '')}@nwssu.local`
@@ -266,6 +294,9 @@ router.post('/bulk-import/:batchId/confirm', async (req, res) => {
     for (const authId of createdAuthIds) {
       await supabaseAdmin.auth.admin.deleteUser(authId)
     }
+    for (const { student_id, enrollment_number } of vacatedOriginals) {
+      await supabaseAdmin.from('users').update({ enrollment_number }).eq('student_id', student_id)
+    }
     return res.status(500).json({
       error: `Import failed and was rolled back: ${err.message}`,
     })
@@ -285,7 +316,7 @@ router.post('/bulk-import/:batchId/confirm', async (req, res) => {
   })
 })
 
-// POST /accounts/bulk-import/:batchId/cancel
+// POST /bulk-import/:batchId/cancel
 router.post('/bulk-import/:batchId/cancel', async (req, res) => {
   const { batchId } = req.params
   const { error } = await supabaseAdmin

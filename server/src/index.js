@@ -37,7 +37,7 @@ app.use('/proxy', proxyRouter)
 app.use('/confirmation', confirmationRouter)
 app.use('/claims', claimsRouter)
 app.use('/accounts', accountsRouter)
-app.use('/accounts', bulkImportRouter)
+app.use('/', bulkImportRouter)
 app.use('/tips', tipsRouter)
 
 app.use((err, req, res, next) => {
