@@ -1,8 +1,19 @@
 import { supabase } from '../supabase'
 import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
+import { seedCache } from '../imageCache'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+
+// A newly-authored photo's bytes are already sitting locally (this file)
+// well before it's ever uploaded to storage - seed the cache with them
+// under the same public-URL key CachedImage will later request, so the
+// thumbnail/gallery shows the user's own photo instantly instead of
+// waiting on the upload to land and a network fetch to complete.
+function publicUrl(storagePath) {
+  const { data } = supabase.storage.from('report-photos').getPublicUrl(storagePath)
+  return data?.publicUrl ?? null
+}
 
 registerHandler('createReport', async (payload) => {
   const { report, photos } = payload
@@ -124,6 +135,7 @@ export async function updateReport({
     // for this path shape haven't been verified.
     const storage_path = `${reportId}/${id}.${ext}`
     await db.blobs.put({ id, data: file, mimeType: file.type, createdAt: Date.now() })
+    seedCache(publicUrl(storage_path), file)
     newPhotos.push({ id, report_id: reportId, storage_path, position: startPosition + i })
   }
 
@@ -164,6 +176,7 @@ export async function createReport({ title, description, location, category, rep
     const ext = file.name.split('.').pop()
     const storage_path = `reports/${report.id}/${id}.${ext}`
     await db.blobs.put({ id, data: file, mimeType: file.type, createdAt: Date.now() })
+    seedCache(publicUrl(storage_path), file)
     photos.push({ id, report_id: report.id, storage_path, position })
   }
 

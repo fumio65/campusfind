@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { supabase } from '../supabase'
 import { db } from '../db'
 import { isOnline } from '../network'
+import { ensureCached } from '../imageCache'
 
 const VISIBLE_STATUSES = ['open', 'claimed', 'approved', 'resolved']
 
@@ -9,6 +10,22 @@ function thumbnailUrl(storagePath) {
   if (!storagePath) return null
   const { data } = supabase.storage.from('report-photos').getPublicUrl(storagePath)
   return data?.publicUrl ?? null
+}
+
+// Warms the image cache for the reports list's visible thumbnails (one per
+// report, matching what useReports actually renders) so by the time the
+// live query below picks up the refreshed data, the thumbnail bytes are
+// already on their way in - or already sitting in cache - instead of each
+// ReportCard's CachedImage discovering the miss on its own only once mounted.
+function prefetchThumbnails(photos) {
+  const firstByReport = new Map()
+  for (const photo of [...photos].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))) {
+    if (!firstByReport.has(photo.report_id)) firstByReport.set(photo.report_id, photo.storage_path)
+  }
+  for (const storagePath of firstByReport.values()) {
+    const url = thumbnailUrl(storagePath)
+    if (url) ensureCached(url, url)
+  }
 }
 
 // Cache-aside refresh: fetches from Supabase when online and writes into
@@ -43,7 +60,10 @@ export async function refreshReports({ search, category, location, status } = {}
     .select('id, report_id, storage_path, position')
     .in('report_id', reportIds)
     .order('position', { ascending: true })
-  if (photos?.length) await db.report_photos.bulkPut(photos)
+  if (photos?.length) {
+    await db.report_photos.bulkPut(photos)
+    prefetchThumbnails(photos)
+  }
 }
 
 export async function fetchAvailableLocations() {

@@ -258,7 +258,23 @@ export default function ReportDetailPage() {
   }
 
   useEffect(() => {
-    fetchAll();
+    // Show whatever's already cached immediately (same cache-first pattern
+    // as Home's report list), then refresh from network in the background -
+    // instead of always blocking on a network round-trip before rendering
+    // anything, which made every visit (even a repeat one) show the full
+    // loading skeleton.
+    let cancelled = false;
+    getCachedReportDetail(id).then((cached) => {
+      if (cancelled || !cached) {
+        fetchAll();
+        return;
+      }
+      setReport(cached.report);
+      setClaim(cached.claim);
+      setTips(cached.tips);
+      setLoading(false);
+      fetchAll(true);
+    });
 
     const channelName = `report-detail-${id}`;
     const existing = supabase
@@ -372,6 +388,7 @@ export default function ReportDetailPage() {
     const unsubscribeSync = onSyncTrigger(() => fetchAll(true));
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
       unsubscribeSync();
     };
