@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { X, Link as LinkIcon, Share2, Download, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
+import { SaveFile } from '../../shared/lib/saveFilePlugin'
 
 const BRAND = '#06433C'
 const BRAND_LIGHT = '#E1F5EE'
@@ -209,7 +210,10 @@ export default function ShareSheet({ report, onClose }) {
   const [actionError, setActionError] = useState(null)
   const [sharing, setSharing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const shareUrl = `${window.location.origin}/reports/${report.id}`
+  // In the packaged Android app window.location.origin is Capacitor's internal
+  // WebView origin (e.g. https://localhost), not a reachable address - shared
+  // links must point at the public site instead.
+  const shareUrl = `${import.meta.env.VITE_PUBLIC_SHARE_URL ?? window.location.origin}/reports/${report.id}`
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -279,7 +283,13 @@ export default function ShareSheet({ report, onClose }) {
       }
       await handleDownload()
     } catch (err) {
-      if (err?.name !== 'AbortError') {
+      // The native Share plugin rejects with a plain CapacitorException
+      // (message "Share canceled") when the user backs out of the chooser
+      // instead of picking an app - that's not a failure, so it shouldn't
+      // surface an error, same as the browser's AbortError on cancel.
+      const isCancel = err?.name === 'AbortError' || /cancel/i.test(err?.message ?? '')
+      if (!isCancel) {
+        console.error('handleShareImage failed:', err)
         setActionError("Couldn't share the image. Please try again.")
       }
     } finally {
@@ -296,8 +306,18 @@ export default function ShareSheet({ report, onClose }) {
       const filename = `campusfind-${report.id.slice(0, 8)}.png`
 
       if (Capacitor.isNativePlatform()) {
+        // Directory.Documents can't be written to directly on modern Android
+        // (Scoped Storage blocks it outright - a long-standing upstream
+        // Capacitor bug, not something fixable from app code: see
+        // https://github.com/ionic-team/capacitor/issues/5218). Instead,
+        // write to the app's own Cache dir (always writable, no permission
+        // needed) then hand that off to SaveFilePlugin.java, which inserts
+        // it straight into a "CampusFind" album under Pictures/ via the
+        // MediaStore API - shows up in Gallery/Photos immediately, no picker
+        // and no storage permission needed on Android 10+.
         const base64 = await canvasToBase64Png(canvas)
-        await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents })
+        const { uri } = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache })
+        await SaveFile.saveToGallery({ sourcePath: uri, filename, mimeType: 'image/png', albumName: 'CampusFind' })
         setDownloaded(true)
         setTimeout(() => setDownloaded(false), 2500)
         return
@@ -308,8 +328,12 @@ export default function ShareSheet({ report, onClose }) {
       a.download = filename
       a.href = canvas.toDataURL('image/png')
       a.click()
-    } catch {
-      setActionError("Couldn't save the card. Please try again.")
+    } catch (err) {
+      const isCancel = err?.name === 'AbortError' || /cancel/i.test(err?.message ?? '')
+      if (!isCancel) {
+        console.error('handleDownload failed:', err)
+        setActionError("Couldn't save the card. Please try again.")
+      }
     } finally {
       setSaving(false)
     }
@@ -329,8 +353,38 @@ export default function ShareSheet({ report, onClose }) {
         exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 400, damping: 40 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface-card rounded-t-2xl w-full max-w-sm pb-safe"
+        className="relative bg-surface-card rounded-t-2xl w-full max-w-sm pb-safe overflow-hidden"
       >
+        {/* Saved confirmation */}
+        <AnimatePresence>
+          {downloaded && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-10 flex items-center justify-center bg-black/40"
+            >
+              <motion.div
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.85, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                className="bg-surface-card rounded-2xl px-7 py-6 flex flex-col items-center gap-2.5 shadow-xl"
+              >
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 18, delay: 0.05 }}
+                  className="w-14 h-14 rounded-full bg-brand-50 flex items-center justify-center"
+                >
+                  <CheckCircle2 size={30} className="text-brand-600" />
+                </motion.div>
+                <p className="text-sm font-semibold text-text-primary">Saved to Photos!</p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-border-strong" />
@@ -389,7 +443,7 @@ export default function ShareSheet({ report, onClose }) {
                 : <LinkIcon size={18} className="text-brand-600" />
               }
             </div>
-            <div className="text-left">
+            <div className="text-left flex-1 min-w-0">
               <p className="text-sm font-medium text-text-primary">
                 {copied ? 'Link copied!' : 'Copy link'}
               </p>
@@ -430,7 +484,7 @@ export default function ShareSheet({ report, onClose }) {
               <p className="text-sm font-medium text-text-primary">
                 {saving ? 'Saving…' : downloaded ? 'Saved!' : 'Download card'}
               </p>
-              <p className="text-xs text-text-muted">Save to your device</p>
+              <p className="text-xs text-text-muted">Saves to your Photos album</p>
             </div>
           </button>
         </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabaseClient'
-import nwssuSeal from '../../assets/nwssu-seal.png'
+import campusfind from '../../assets/icon-only.png'
 
 export default function AdminLoginPage() {
   const [studentId, setStudentId] = useState('')
@@ -55,7 +55,7 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-surface-page flex flex-col items-center justify-center px-6">
       <div className="flex flex-col items-center mb-8">
-        <img src={nwssuSeal} alt="NwSSU seal" className="w-20 h-20 mb-4" />
+        <img src={campusfind} alt="NwSSU seal" className="w-20 h-20 mb-4" />
         <div className="text-center">
           <div className="text-xs font-semibold tracking-widest text-brand-600 uppercase mb-1">
             Northwest Samar State University

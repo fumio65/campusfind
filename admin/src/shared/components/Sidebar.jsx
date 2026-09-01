@@ -12,7 +12,7 @@ import {
   PackageCheck,
   AlertTriangle,
 } from 'lucide-react'
-import sealSrc from '../../assets/nwssu-seal.png'
+import sealSrc from '../../assets/icon-only.png'
 import { supabase } from '../lib/supabaseClient'
 import NotificationBell from './NotificationBell'
 
