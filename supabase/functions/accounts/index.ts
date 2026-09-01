@@ -153,6 +153,46 @@ Deno.serve(async (req) => {
       })
     }
 
+    // PATCH /accounts/:id/reset-password
+    if (req.method === 'PATCH' && id && action === 'reset-password') {
+      const { data: user, error: fetchError } = await supabaseAdmin
+        .from('users')
+        .select('id, student_id, enrollment_number')
+        .eq('id', id)
+        .single()
+
+      if (fetchError) {
+        return new Response(JSON.stringify({ error: 'Account not found.' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        password: user.enrollment_number,
+      })
+
+      if (authError) {
+        return new Response(JSON.stringify({ error: authError.message }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      const { error } = await supabaseAdmin
+        .from('users')
+        .update({ force_password_change: true })
+        .eq('id', id)
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      return new Response(JSON.stringify({ id: user.id, student_id: user.student_id }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

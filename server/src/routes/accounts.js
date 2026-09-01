@@ -113,4 +113,32 @@ router.patch('/:id/status', async (req, res) => {
   res.json(data)
 })
 
+// PATCH /accounts/:id/reset-password — resets password to the student's enrollment number
+router.patch('/:id/reset-password', async (req, res) => {
+  const { id } = req.params
+
+  const { data: user, error: fetchError } = await supabaseAdmin
+    .from('users')
+    .select('id, student_id, enrollment_number')
+    .eq('id', id)
+    .single()
+
+  if (fetchError) return res.status(404).json({ error: 'Account not found.' })
+
+  const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+    password: user.enrollment_number,
+  })
+
+  if (authError) return res.status(500).json({ error: authError.message })
+
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ force_password_change: true })
+    .eq('id', id)
+
+  if (error) return res.status(500).json({ error: error.message })
+
+  res.json({ id: user.id, student_id: user.student_id })
+})
+
 export default router

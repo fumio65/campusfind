@@ -30,3 +30,12 @@ export async function toggleAccountStatus(id, status) {
   if (!res.ok) throw new Error(body.error ?? 'Could not update status.')
   return body
 }
+
+export async function resetAccountPassword(id) {
+  const res = await fetch(`${SERVER_URL}/accounts/${id}/reset-password`, {
+    method: 'PATCH',
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Could not reset password.')
+  return body
+}

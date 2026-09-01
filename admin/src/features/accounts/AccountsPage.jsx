@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Plus, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
-import { fetchAccounts, createSingleAccount, toggleAccountStatus } from './api'
+import { fetchAccounts, createSingleAccount, toggleAccountStatus, resetAccountPassword } from './api'
 import StatusPill from '../../shared/components/StatusPill'
 import Dialog from '../../shared/components/Dialog'
 
@@ -22,6 +22,9 @@ export default function AccountsPage() {
   const [togglingId, setTogglingId] = useState(null)
   const [confirmToggle, setConfirmToggle] = useState(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [resettingId, setResettingId] = useState(null)
+  const [confirmReset, setConfirmReset] = useState(null)
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const debounceRef = useRef(null)
 
   useEffect(() => {
@@ -74,6 +77,32 @@ export default function AccountsPage() {
       setError(err.message)
     } finally {
       setTogglingId(null)
+    }
+  }
+
+  function handleResetPassword(account) {
+    setConfirmReset(account)
+    setConfirmResetOpen(true)
+  }
+
+  function handleCloseConfirmReset() {
+    setConfirmResetOpen(false)
+  }
+
+  async function handleConfirmResetPassword() {
+    if (!confirmReset) return
+    const account = confirmReset
+    setConfirmResetOpen(false)
+    setResettingId(account.id)
+    try {
+      await resetAccountPassword(account.id)
+      setSuccessMsg(
+        `Password for ${account.first_name} ${account.last_name} (${account.student_id}) has been reset to their enrollment number. They'll be asked to change it on next login.`
+      )
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setResettingId(null)
     }
   }
 
@@ -143,7 +172,7 @@ export default function AccountsPage() {
         {error}
       </Dialog>
 
-      <Dialog open={!!successMsg} onClose={() => setSuccessMsg(null)} tone="success" title="Account created">
+      <Dialog open={!!successMsg} onClose={() => setSuccessMsg(null)} tone="success" title="Success">
         {successMsg}
       </Dialog>
 
@@ -177,6 +206,26 @@ export default function AccountsPage() {
               records and trust score intact.
             </>
           )
+        )}
+      </Dialog>
+
+      <Dialog
+        open={confirmResetOpen}
+        onClose={handleCloseConfirmReset}
+        tone="info"
+        title="Reset password?"
+        primaryAction={{ label: 'Yes, reset', onClick: handleConfirmResetPassword }}
+        secondaryAction={{ label: 'Cancel', onClick: handleCloseConfirmReset }}
+      >
+        {confirmReset && (
+          <>
+            <span className="font-medium text-text-primary">
+              {confirmReset.first_name} {confirmReset.last_name}
+            </span>{' '}
+            ({confirmReset.student_id})'s password will be reset to their enrollment number,{' '}
+            <span className="font-medium text-text-primary">{confirmReset.enrollment_number}</span>.
+            They'll be required to set a new password on next login.
+          </>
         )}
       </Dialog>
 
@@ -280,21 +329,30 @@ export default function AccountsPage() {
                     <td className="py-2 px-3"><StatusPill status={a.status} /></td>
                     <td className="py-2 px-3">
                       {a.role !== 'admin' && (
-                        <button
-                          onClick={() => handleToggleStatus(a)}
-                          disabled={togglingId === a.id}
-                          className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors disabled:opacity-40 ${
-                            a.status === 'active'
-                              ? 'border-status-rejected-text/30 text-status-rejected-text hover:bg-status-rejected-bg'
-                              : 'border-status-open-text/30 text-status-open-text hover:bg-status-open-bg'
-                          }`}
-                        >
-                          {togglingId === a.id
-                            ? '...'
-                            : a.status === 'active'
-                              ? 'Deactivate'
-                              : 'Reactivate'}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleResetPassword(a)}
+                            disabled={resettingId === a.id}
+                            className="px-2.5 py-1 text-xs font-medium rounded-md border border-border-strong text-text-secondary hover:bg-surface-muted transition-colors disabled:opacity-40"
+                          >
+                            {resettingId === a.id ? '...' : 'Reset password'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleStatus(a)}
+                            disabled={togglingId === a.id}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors disabled:opacity-40 ${
+                              a.status === 'active'
+                                ? 'border-status-rejected-text/30 text-status-rejected-text hover:bg-status-rejected-bg'
+                                : 'border-status-open-text/30 text-status-open-text hover:bg-status-open-bg'
+                            }`}
+                          >
+                            {togglingId === a.id
+                              ? '...'
+                              : a.status === 'active'
+                                ? 'Deactivate'
+                                : 'Reactivate'}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
