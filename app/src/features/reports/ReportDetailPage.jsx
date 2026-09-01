@@ -270,7 +270,9 @@ export default function ReportDetailPage() {
         return;
       }
       setReport(cached.report);
+      setReporter(cached.reporter);
       setClaim(cached.claim);
+      setClaimant(cached.claimant);
       setTips(cached.tips);
       setLoading(false);
       fetchAll(true);
@@ -448,7 +450,9 @@ export default function ReportDetailPage() {
       const cached = await getCachedReportDetail(id);
       if (cached) {
         setReport(cached.report);
+        setReporter(cached.reporter);
         setClaim(cached.claim);
+        setClaimant(cached.claimant);
         setTips(cached.tips);
       } else {
         setError("Report not found.");
@@ -456,14 +460,42 @@ export default function ReportDetailPage() {
       if (!silent) setLoading(false);
       return;
     }
-    setReport(data);
+    // Keep whatever photoUrls are already showing (from cache or the
+    // previous fetch) until the report_photos query below resolves, so a
+    // background refresh doesn't blank the images out and back in.
+    setReport((prev) => ({ ...data, photoUrls: prev?.photoUrls }));
     await cacheReport(data);
 
-    const { data: reportPhotos } = await supabase
-      .from("report_photos")
-      .select("id, storage_path, position")
-      .eq("report_id", id)
-      .order("position", { ascending: true });
+    // report_photos, the walk-in finder lookup, and the reporter lookup
+    // are all independent of each other - run them together instead of
+    // one after another, so the reporter's name doesn't visibly lag
+    // behind everything else that's already on screen.
+    const [{ data: reportPhotos }, walkinFinderName, reporterUser] =
+      await Promise.all([
+        supabase
+          .from("report_photos")
+          .select("id, storage_path, position")
+          .eq("report_id", id)
+          .order("position", { ascending: true }),
+        data.type === "found_walkin" && data.walkin_finder_ref
+          ? supabase
+              .from("users")
+              .select("first_name, last_name")
+              .eq("student_id", data.walkin_finder_ref)
+              .maybeSingle()
+              .then(({ data: finder }) =>
+                finder ? `${finder.first_name} ${finder.last_name}` : null,
+              )
+          : Promise.resolve(null),
+        data.reporter_id
+          ? supabase
+              .from("users")
+              .select("first_name, last_name")
+              .eq("id", data.reporter_id)
+              .single()
+              .then(({ data: user }) => user ?? null)
+          : Promise.resolve(null),
+      ]);
     await cacheReportPhotos(
       id,
       (reportPhotos ?? []).map((p) => ({ ...p, report_id: id })),
@@ -475,28 +507,19 @@ export default function ReportDetailPage() {
       return publicUrl;
     });
 
-    let walkinFinderName = null;
-    if (data.type === "found_walkin" && data.walkin_finder_ref) {
-      const { data: finder } = await supabase
-        .from("users")
-        .select("first_name, last_name")
-        .eq("student_id", data.walkin_finder_ref)
-        .maybeSingle();
-      if (finder) {
-        walkinFinderName = `${finder.first_name} ${finder.last_name}`;
-      }
-    }
-
-    setReport({ ...data, photoUrls, walkin_finder_name: walkinFinderName });
-
-    if (data.reporter_id) {
-      const { data: user } = await supabase
-        .from("users")
-        .select("first_name, last_name")
-        .eq("id", data.reporter_id)
-        .single();
-      setReporter(user);
-    }
+    // Stash the reporter's name on the cached report row too - there's no
+    // local directory of other users, so this is what lets a repeat visit
+    // show the name immediately instead of it popping in late every time.
+    const enrichedReport = {
+      ...data,
+      photoUrls,
+      walkin_finder_name: walkinFinderName,
+      reporter_first_name: reporterUser?.first_name ?? null,
+      reporter_last_name: reporterUser?.last_name ?? null,
+    };
+    setReport(enrichedReport);
+    await cacheReport(enrichedReport);
+    setReporter(reporterUser);
 
     let activeClaim = null;
     if (data.status === "claimed" || data.status === "approved") {
@@ -509,14 +532,42 @@ export default function ReportDetailPage() {
 
       if (claimData) {
         activeClaim = claimData;
-        setClaim(claimData);
+        // Keep whatever photoUrls/derived fields are already showing (from
+        // cache or the previous fetch) until the queries below resolve, so
+        // a background refresh doesn't blank the claim photo out and back
+        // in - same fix as the report photos above.
+        setClaim((prev) => ({
+          ...claimData,
+          photoUrls: prev?.id === claimData.id ? prev.photoUrls : undefined,
+          drop_off_chosen:
+            prev?.id === claimData.id ? prev.drop_off_chosen : undefined,
+          claimant_message:
+            prev?.id === claimData.id ? prev.claimant_message : undefined,
+        }));
         await cacheClaim(claimData);
 
-        const { data: claimPhotos } = await supabase
-          .from("claim_photos")
-          .select("id, storage_path, position")
-          .eq("claim_id", claimData.id)
-          .order("position", { ascending: true });
+        // claim_photos, claim_messages, and the claimant lookup are all
+        // independent of each other - run them together instead of one
+        // after another, so the claimant's name doesn't visibly lag behind
+        // everything else that's already on screen.
+        const [{ data: claimPhotos }, { data: msgs }, { data: claimantData }] =
+          await Promise.all([
+            supabase
+              .from("claim_photos")
+              .select("id, storage_path, position")
+              .eq("claim_id", claimData.id)
+              .order("position", { ascending: true }),
+            supabase
+              .from("claim_messages")
+              .select("id, body, sender_role, created_at")
+              .eq("claim_id", claimData.id)
+              .order("created_at", { ascending: true }),
+            supabase
+              .from("users")
+              .select("first_name, last_name, trust_score, student_id")
+              .eq("id", claimData.claimant_id)
+              .single(),
+          ]);
         await cacheClaimPhotos(
           claimData.id,
           (claimPhotos ?? []).map((p) => ({ ...p, claim_id: claimData.id })),
@@ -529,12 +580,6 @@ export default function ReportDetailPage() {
             .getPublicUrl(p.storage_path);
           return publicUrl;
         });
-
-        const { data: msgs } = await supabase
-          .from("claim_messages")
-          .select("id, body, sender_role, created_at")
-          .eq("claim_id", claimData.id)
-          .order("created_at", { ascending: true });
         await cacheClaimMessages(
           claimData.id,
           (msgs ?? []).map((m) => ({ ...m, claim_id: claimData.id })),
@@ -546,18 +591,21 @@ export default function ReportDetailPage() {
           (msgs ?? []).find(
             (m) => m.sender_role === "claimant" && !m.body?.startsWith("📍"),
           )?.body ?? null;
-        setClaim({
+
+        // Stash the claimant's name on the cached claim row too - same
+        // reasoning as the reporter name above.
+        const enrichedClaim = {
           ...claimData,
           photoUrls,
           drop_off_chosen: dropOffChosen,
           claimant_message: claimantMessage,
-        });
-
-        const { data: claimantData } = await supabase
-          .from("users")
-          .select("first_name, last_name, trust_score, student_id")
-          .eq("id", claimData.claimant_id)
-          .single();
+          claimant_first_name: claimantData?.first_name ?? null,
+          claimant_last_name: claimantData?.last_name ?? null,
+          claimant_trust_score: claimantData?.trust_score ?? null,
+          claimant_student_id: claimantData?.student_id ?? null,
+        };
+        setClaim(enrichedClaim);
+        await cacheClaim(enrichedClaim);
         setClaimant(claimantData);
       }
     }
@@ -795,8 +843,9 @@ export default function ReportDetailPage() {
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={() => setLightboxUrl(null)}
         >
-          <img
+          <CachedImage
             src={lightboxUrl}
+            cacheKey={lightboxUrl}
             alt=""
             className="max-w-full max-h-full rounded-xl object-contain"
           />
