@@ -23,6 +23,7 @@ import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { submitTip } from "../../shared/lib/operations/tips";
 import SyncStateChip from "../../shared/components/SyncStateChip";
+import CachedImage from "../../shared/components/CachedImage";
 import {
   cacheReport,
   cacheReportPhotos,
@@ -1002,8 +1003,9 @@ export default function ReportDetailPage() {
                 onClick={() => setLightboxUrl(url)}
                 className="shrink-0"
               >
-                <img
+                <CachedImage
                   src={url}
+                  cacheKey={url}
                   alt=""
                   className="w-32 h-32 rounded-xl object-cover border border-border"
                 />
@@ -1106,8 +1108,9 @@ export default function ReportDetailPage() {
                     onClick={() => setLightboxUrl(url)}
                     className="shrink-0"
                   >
-                    <img
+                    <CachedImage
                       src={url}
+                      cacheKey={url}
                       alt=""
                       className="w-24 h-24 rounded-xl object-cover border border-border"
                     />
