@@ -14,6 +14,7 @@ import { useAuth } from "../../shared/lib/AuthContext";
 import { staggerContainer, staggerItem } from "../../shared/lib/motion";
 import { useReports, refreshReports, fetchAvailableLocations } from "../../shared/lib/repositories/reports";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
+import { timeAgo } from "../../shared/lib/timeAgo";
 import CachedImage from "../../shared/components/CachedImage";
 import SyncStateChip from "../../shared/components/SyncStateChip";
 
@@ -44,17 +45,6 @@ const CATEGORIES = [
 // the list (the newest report) instead of back where they were - reading
 // as if the report they'd been looking at had vanished.
 let savedHomeScrollTop = 0;
-
-function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  if (diff < 0) return "just now";
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 function ReportCard({ report }) {
   const thumbnail = report.thumbnail;
