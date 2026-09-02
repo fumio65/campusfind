@@ -98,12 +98,12 @@ function ReportCard({ report }) {
           </div>
           <div className="flex items-center gap-3 text-xs text-text-muted">
             {report.location && (
-              <span className="flex items-center gap-1 truncate">
+              <span className="flex items-center gap-1 flex-1 min-w-0">
                 <MapPin size={11} aria-hidden="true" className="shrink-0" />
                 <span className="truncate">{report.location}</span>
               </span>
             )}
-            <span className="flex items-center gap-1 shrink-0">
+            <span className="flex items-center gap-1 shrink-0 ml-auto">
               <Clock size={11} aria-hidden="true" />
               {timeAgo(report.created_at)}
             </span>
