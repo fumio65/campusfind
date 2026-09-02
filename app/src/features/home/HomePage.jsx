@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -36,6 +36,14 @@ const CATEGORIES = [
   "Documents",
   "Other",
 ];
+
+// Module-level, not component state, so it survives HomePage unmounting -
+// AppShell's <main> is shared across routes and forces scrollTop back to 0
+// whenever a report detail page mounts, so without this a student who
+// scrolled down, opened a report, then hit back would land on the top of
+// the list (the newest report) instead of back where they were - reading
+// as if the report they'd been looking at had vanished.
+let savedHomeScrollTop = 0;
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -141,6 +149,83 @@ export default function HomePage() {
     status: selectedStatus,
   });
   const loading = reports === undefined;
+
+  // Track scroll position on the shared <main> container continuously (not
+  // just on unmount) since navigating away is a route change, not always a
+  // clean unmount-with-cleanup-time-to-spare.
+  //
+  // Guarded by a live ref (not the `loading` closure captured when this
+  // effect first attached) because a background data refresh can bounce
+  // `loading` back to true later in the session too, not just on the very
+  // first mount. Whenever the skeleton is showing, the list is only 3-4
+  // short placeholder rows - clearing the real list's DOM to show it makes
+  // the browser reset scrollTop to 0 on its own, and without this guard
+  // that spurious 0 gets recorded as if the student had scrolled there,
+  // permanently overwriting the real saved position with garbage. That's
+  // what produced the "looks right for a second, then flicks to the top"
+  // report: the position was fine until this corrupted it, and the very
+  // next restore faithfully (and now wrongly) put it back at 0.
+  const loadingRef = useRef(loading);
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!main) return;
+    function handleScroll() {
+      if (loadingRef.current) return;
+      savedHomeScrollTop = main.scrollTop;
+    }
+    main.addEventListener("scroll", handleScroll, { passive: true });
+    return () => main.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Restore it once the list has actually rendered (right after `loading`
+  // flips to false) - restoring any earlier would have nothing to scroll to.
+  // useLayoutEffect (not useEffect) matters here: useEffect runs after the
+  // browser has already painted the freshly-loaded list at scrollTop 0, so
+  // a student would see it flash at the top for a frame before snapping
+  // down - useLayoutEffect applies the scroll position before that paint,
+  // so the list never visibly touches the top at all.
+  //
+  // A single assignment isn't enough on a real touchscreen, though: tapping
+  // a report that isn't right at the bottom of the list often lands while
+  // the fling from scrolling to it is still gently decelerating (tapping
+  // the very last report, by contrast, only happens after the scroll has
+  // hit its hard boundary and fully stopped) - that residual native
+  // momentum can keep nudging <main>'s scrollTop for a few more frames
+  // after we set it, independently of React, undoing the restore. Keep
+  // reasserting the target for a short window to win that fight.
+  useLayoutEffect(() => {
+    if (loading) return;
+    const main = document.querySelector("main");
+    if (!main) return;
+    const target = savedHomeScrollTop;
+    main.scrollTop = target;
+    let cancelled = false;
+    const deadline = Date.now() + 300;
+    function reassert() {
+      if (cancelled) return;
+      if (main.scrollTop !== target) main.scrollTop = target;
+      if (Date.now() < deadline) requestAnimationFrame(reassert);
+    }
+    const rafId = requestAnimationFrame(reassert);
+    // If the student actually starts interacting, stop fighting them -
+    // this loop is only meant to win against leftover momentum from the
+    // *previous* scroll, never to override a new one of their own.
+    function stopOnInteraction() {
+      cancelled = true;
+    }
+    main.addEventListener("touchstart", stopOnInteraction, { passive: true });
+    main.addEventListener("wheel", stopOnInteraction, { passive: true });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      main.removeEventListener("touchstart", stopOnInteraction);
+      main.removeEventListener("wheel", stopOnInteraction);
+    };
+  }, [loading]);
 
   useEffect(() => {
     const filters = {

@@ -202,6 +202,21 @@ export default function ReportDetailPage() {
   const [reporter, setReporter] = useState(null);
   const [claim, setClaim] = useState(null);
   const [claimant, setClaimant] = useState(null);
+  // Same idea as claimReady below, but for the reporter's name: Home's
+  // list only caches bare report rows (no reporter_first_name/last_name),
+  // so a report opened straight from Home shows everything except the
+  // reporter's name until the background fetch resolves it - without this
+  // flag that line just silently appears a moment after the rest of the
+  // card, which reads as "my name didn't show up" for the report's owner.
+  const [reporterReady, setReporterReady] = useState(false);
+  // True once we actually know the claim state for this report - either
+  // from a cached claim (a previous real visit to this detail page) or
+  // from a completed fetchAll(). Home's list caches bare report rows
+  // (status included) but never claims, so a first-ever open of a
+  // "claimed"/"approved" report from Home hits the cache-first branch
+  // below with report data but no claim yet - without this flag the claim
+  // panel would just pop in silently once the background fetch resolves.
+  const [claimReady, setClaimReady] = useState(false);
   const [tips, setTips] = useState([]);
   const [tipText, setTipText] = useState("");
   const [parentTipId, setParentTipId] = useState(null);
@@ -275,7 +290,27 @@ export default function ReportDetailPage() {
       setClaimant(cached.claimant);
       setTips(cached.tips);
       setLoading(false);
-      fetchAll(true);
+      // A cached reporter name means a prior real visit already resolved
+      // it - trust it. Otherwise (report row only got here via Home's list
+      // cache, or there's genuinely no reporter_id) we don't know yet.
+      setReporterReady(Boolean(cached.reporter) || !cached.report.reporter_id);
+      // A cached claim means a prior real visit already resolved the claim
+      // state for this report - trust it. Otherwise (e.g. the report row
+      // only got here via Home's list cache) we don't actually know yet,
+      // so leave claimReady false until fetchAll below checks for real.
+      setClaimReady(
+        Boolean(cached.claim) ||
+          !["claimed", "approved"].includes(cached.report.status),
+      );
+      // preserveScroll: false - this is the very first load (right after
+      // showing cached content), not a background refresh of a page the
+      // student has already scrolled around on. The other scroll-on-load
+      // effect below already puts them at the top; capturing whatever
+      // stray scrollTop <main> happens to hold mid-transition here (and
+      // then forcing it back once this fetch resolves) would undo that
+      // and yank the page down out from under them a moment after it
+      // loaded.
+      fetchAll(true, { preserveScroll: false });
     });
 
     const channelName = `report-detail-${id}`;
@@ -423,11 +458,13 @@ export default function ReportDetailPage() {
     }
   }, [loading, highlightedTipId]);
 
-  async function fetchAll(silent = false) {
-    const scrollY = silent ? getScrollTop() : 0;
+  async function fetchAll(silent = false, { preserveScroll = true } = {}) {
+    const scrollY = silent && preserveScroll ? getScrollTop() : 0;
     if (!silent) setLoading(true);
     if (!silent) setClaim(null);
     if (!silent) setClaimant(null);
+    if (!silent) setClaimReady(false);
+    if (!silent) setReporterReady(false);
 
     if (session?.user?.id && prevScoreRef.current === null) {
       const { data: userData } = await supabase
@@ -520,6 +557,7 @@ export default function ReportDetailPage() {
     setReport(enrichedReport);
     await cacheReport(enrichedReport);
     setReporter(reporterUser);
+    setReporterReady(true);
 
     let activeClaim = null;
     if (data.status === "claimed" || data.status === "approved") {
@@ -623,6 +661,7 @@ export default function ReportDetailPage() {
         await cacheClaim(rejectedClaim);
       }
     }
+    setClaimReady(true);
 
     const { data: tipsData } = await supabase
       .from("tips")
@@ -635,7 +674,7 @@ export default function ReportDetailPage() {
     await cacheTips(id, (tipsData ?? []).map((t) => ({ ...t, report_id: id })));
 
     if (!silent) setLoading(false);
-    if (silent) {
+    if (silent && preserveScroll) {
       requestAnimationFrame(() => {
         scrollContainerTo(scrollY);
       });
@@ -1116,13 +1155,21 @@ export default function ReportDetailPage() {
               // Only the reporter themselves, or the claimant once their
               // claim has actually been approved, gets to see who reported
               // it - not every student browsing the list.
-              reporter &&
-              (isOwner || (isApproved && claim?.claimant_id === session?.user?.id)) && (
+              (isOwner || (isApproved && claim?.claimant_id === session?.user?.id)) &&
+              report.reporter_id &&
+              (reporterReady ? (
+                reporter && (
+                  <span className="flex items-center gap-1.5">
+                    <User size={13} className="shrink-0" />{" "}
+                    {reporter.first_name} {reporter.last_name}
+                  </span>
+                )
+              ) : (
                 <span className="flex items-center gap-1.5">
-                  <User size={13} className="shrink-0" /> {reporter.first_name}{" "}
-                  {reporter.last_name}
+                  <User size={13} className="shrink-0" />
+                  <span className="h-3 w-24 rounded bg-surface-muted animate-pulse" />
                 </span>
-              )
+              ))
             )}
             {report.category && (
               <span className="bg-surface-muted text-text-secondary px-2 py-0.5 rounded-full text-[11px] inline-flex w-fit">
@@ -1132,8 +1179,31 @@ export default function ReportDetailPage() {
           </div>
         </motion.div>
 
+        {/* Reporter: claim review panel - loading placeholder while we
+            still don't know the claim details for this report (see
+            claimReady above). Says explicitly that a claim is being
+            checked, rather than a bare pulsing block that a student could
+            read as "no claim here" during the gap before the real panel
+            (with its own "Someone claims to have found your item" label)
+            shows up. */}
+        {isOwner && isClaimed && !claimReady && (
+          <div className="bg-surface-card rounded-2xl border border-status-claimed-text/20 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3.5 h-3.5 rounded-full border-2 border-status-claimed-text/30 border-t-status-claimed-text animate-spin shrink-0" />
+              <p className="text-xs font-semibold text-status-claimed-text">
+                Checking the claim on your item…
+              </p>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-full bg-surface-muted animate-pulse shrink-0" />
+              <div className="h-3 w-28 rounded bg-surface-muted animate-pulse" />
+            </div>
+            <div className="h-16 rounded-xl bg-surface-muted animate-pulse" />
+          </div>
+        )}
+
         {/* Reporter: claim review panel */}
-        {isOwner && isClaimed && claim && (
+        {isOwner && isClaimed && claimReady && claim && (
           <motion.div
             id="claim"
             initial={{ opacity: 0, y: 8 }}
@@ -1204,7 +1274,7 @@ export default function ReportDetailPage() {
         )}
 
         {/* Reporter: approved — mark as resolved (only when not drop-off) */}
-        {isOwner && isApproved && !claim?.drop_off_chosen && (
+        {isOwner && isApproved && claimReady && !claim?.drop_off_chosen && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1318,9 +1388,16 @@ export default function ReportDetailPage() {
             </Link>
           )}
 
+        {/* Non-owner: claim pending notice - loading placeholder until we
+            know whether this is the viewer's own claim (see claimReady). */}
+        {!isOwner && isClaimed && !claimReady && (
+          <div className="h-16 bg-surface-card rounded-xl border border-border animate-pulse" />
+        )}
+
         {/* Non-owner: claim pending notice */}
         {!isOwner &&
           isClaimed &&
+          claimReady &&
           (claim?.claimant_id === session?.user.id ? (
             <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
               <div className="flex items-center gap-1.5 mb-0.5">
