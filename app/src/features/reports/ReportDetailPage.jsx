@@ -1530,7 +1530,7 @@ export default function ReportDetailPage() {
               & sightings
             </h2>
             <span
-              className={`text-[11px] font-medium ${tips.length >= 25 ? "text-status-rejected-text" : "text-text-muted"}`}
+              className={`text-[11px] font-medium ${tips.length >= 20 ? "text-status-rejected-text" : "text-text-muted"}`}
             >
               {tips.length}/25
             </span>

@@ -14,6 +14,8 @@ import { timeAgo } from '../../shared/lib/timeAgo'
 import ValidationDialog from '../../shared/components/ValidationDialog'
 
 const MESSAGE_LIMIT = 10
+// Matches Tips' 20/25 (80%) warning threshold, scaled to this limit.
+const MESSAGE_WARNING_THRESHOLD = 8
 
 const EMPTY_MESSAGES = []
 
@@ -38,14 +40,30 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
   // it opens the keyboard, which shrinks the page's visible viewport, but
   // the browser's own "scroll input into view" only guarantees the input
   // itself is visible, not the thread above it (or that it clears the
-  // app's fixed bottom nav bar). Once the keyboard's resize settles, scroll
-  // this whole card into view instead so the conversation and input both
-  // end up visible together, rather than leaving the user to scroll up
-  // manually to see anything above the input.
+  // app's fixed bottom nav bar). Scroll this whole card into view instead
+  // so the conversation and input both end up visible together, rather
+  // than leaving the user to scroll manually to see anything above the
+  // input, or the input itself once the keyboard opens.
+  //
+  // The keyboard's open/close animation resizes the viewport asynchronously
+  // and takes a variable amount of time (device-dependent) - scrolling on a
+  // fixed delay guesses at that duration and is wrong whenever the real
+  // animation takes longer (scrolls too early, using stale dimensions, so
+  // the keyboard finishes opening afterwards and covers the input anyway).
+  // Wait for the actual resize instead, with a fixed-delay fallback only for
+  // when no resize happens at all (e.g. the keyboard was already open, so
+  // refocusing the input doesn't change the viewport size).
   function scrollThreadIntoView() {
-    setTimeout(() => {
+    let done = false
+    const doScroll = () => {
+      if (done) return
+      done = true
       rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }, 300)
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', doScroll, { once: true })
+    }
+    setTimeout(doScroll, 400)
   }
 
   useEffect(() => {
@@ -225,7 +243,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
           {isReporter ? `with ${claimantName ?? 'Finder'}` : `with ${reporterName ?? 'Reporter'}`}
         </span>
         <span
-          className={`ml-auto text-[10px] font-medium ${messages.length >= MESSAGE_LIMIT ? 'text-status-rejected-text' : 'text-text-muted'}`}
+          className={`ml-auto text-[10px] font-medium ${messages.length >= MESSAGE_WARNING_THRESHOLD ? 'text-status-rejected-text' : 'text-text-muted'}`}
         >
           {messages.length}/{MESSAGE_LIMIT}
         </span>
@@ -343,6 +361,14 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
               className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
             />
             <button
+              // Tapping a button moves focus to it, which blurs the input
+              // and closes the keyboard - then it reopens once the input is
+              // focused again for the next message, and that close/reopen
+              // flicker is what threw off the scroll position after sending.
+              // Prevent the button from taking focus at all, so the
+              // keyboard (and the page's scroll position) stays put through
+              // a send.
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleSend}
               disabled={sending || !text.trim()}
               className="h-10 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5 hover:bg-brand-700 transition-colors"
