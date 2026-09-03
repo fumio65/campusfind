@@ -650,7 +650,7 @@ export default function ReportDetailPage() {
               .order("position", { ascending: true }),
             supabase
               .from("claim_messages")
-              .select("id, body, sender_role, created_at")
+              .select("id, body, sender_role, created_at, sender_id")
               .eq("claim_id", claimData.id)
               .order("created_at", { ascending: true }),
             supabase
