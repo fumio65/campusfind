@@ -22,6 +22,8 @@ import {
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { submitTip } from "../../shared/lib/operations/tips";
+import { liveQuery } from "dexie";
+import { db } from "../../shared/lib/db";
 import SyncStateChip from "../../shared/components/SyncStateChip";
 import CachedImage from "../../shared/components/CachedImage";
 import {
@@ -41,6 +43,7 @@ import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import ShareSheet from "./ShareSheet";
 import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
+import ValidationDialog from "../../shared/components/ValidationDialog";
 
 // FIX: claim actions and resolve were hitting dead Express server
 // Now correctly call Supabase Edge Functions
@@ -50,11 +53,11 @@ const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
 
 function getScrollContainer() {
-  return document.querySelector("main") ?? window;
+  return document.querySelector("main");
 }
 
 function scrollContainerTo(top) {
-  const el = document.querySelector("main");
+  const el = getScrollContainer();
   if (el) {
     el.scrollTop = top;
   } else {
@@ -62,9 +65,33 @@ function scrollContainerTo(top) {
   }
 }
 
-function getScrollTop() {
-  const el = document.querySelector("main");
-  return el ? el.scrollTop : window.scrollY;
+// Anchors on whichever element (with a stable id, e.g. a TipCard's
+// `tip-<id>`) sits at the top of the viewport, instead of a raw pixel
+// offset - a raw offset drifts whenever content changes height between
+// capture and restore (e.g. a tip's "pending" sync chip disappearing once
+// it lands on the server after a background refresh), landing the restored
+// scroll on different content than what the user was actually looking at.
+function captureScrollAnchor() {
+  const container = getScrollContainer();
+  if (!container) return null;
+  const containerTop = container.getBoundingClientRect().top;
+  for (const el of container.querySelectorAll("[id]")) {
+    const rect = el.getBoundingClientRect();
+    if (rect.bottom > containerTop) {
+      return { id: el.id, offset: rect.top - containerTop };
+    }
+  }
+  return null;
+}
+
+function restoreScrollAnchor(anchor) {
+  if (!anchor) return;
+  const container = getScrollContainer();
+  const el = anchor.id ? document.getElementById(anchor.id) : null;
+  if (!container || !el) return;
+  const containerTop = container.getBoundingClientRect().top;
+  const currentOffset = el.getBoundingClientRect().top - containerTop;
+  container.scrollTop += currentOffset - anchor.offset;
 }
 
 function TipCard({
@@ -236,10 +263,20 @@ export default function ReportDetailPage() {
 
   const claimantIdRef = useRef(null);
   const prevScoreRef = useRef(null);
+  const tipSyncSubsRef = useRef([]);
 
   useEffect(() => {
     claimantIdRef.current = claim?.claimant_id ?? null;
   }, [claim]);
+
+  // Unsubscribe any still-pending tip-sync watchers (see handleTipSubmit) on
+  // unmount, so a tip sent right before navigating away doesn't try to
+  // update state on an unmounted component once it finishes syncing.
+  useEffect(() => {
+    return () => {
+      for (const sub of tipSyncSubsRef.current) sub.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -401,7 +438,17 @@ export default function ReportDetailPage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "tips" },
         (payload) => {
-          if (payload.new?.report_id === id) fetchAll(true);
+          // Skip the refetch for a tip the current user just sent themselves
+          // - it's already showing optimistically, so this would just be a
+          // disruptive full-page refresh moments after they submitted (often
+          // while they're still interacting with the input), for no new
+          // information. Still refetch for tips other people posted.
+          if (
+            payload.new?.report_id === id &&
+            payload.new?.user_id !== session?.user?.id
+          ) {
+            fetchAll(true);
+          }
         },
       )
       .on(
@@ -450,7 +497,7 @@ export default function ReportDetailPage() {
   }, [loading, highlightedTipId]);
 
   async function fetchAll(silent = false, { preserveScroll = true } = {}) {
-    const scrollY = silent && preserveScroll ? getScrollTop() : 0;
+    const scrollAnchor = silent && preserveScroll ? captureScrollAnchor() : null;
     if (!silent) setLoading(true);
     if (!silent) setClaim(null);
     if (!silent) setClaimant(null);
@@ -682,7 +729,7 @@ export default function ReportDetailPage() {
     if (!silent) setLoading(false);
     if (silent && preserveScroll) {
       requestAnimationFrame(() => {
-        scrollContainerTo(scrollY);
+        restoreScrollAnchor(scrollAnchor);
       });
     }
   }
@@ -829,6 +876,28 @@ export default function ReportDetailPage() {
       ]);
       setTipText("");
       setParentTipId(null);
+
+      // The realtime listener skips refetching for the sender's own tip (see
+      // the tips INSERT handler above - a full refetch there is what caused
+      // the disruptive scroll jump this was built to avoid), so nothing else
+      // updates this tip's "Syncing" badge once the background upload
+      // actually completes. Watch its local cache row directly instead - a
+      // targeted update to just this one tip, no full-list refetch involved.
+      const subscription = liveQuery(() => db.tips.get(tip.id)).subscribe({
+        next: (row) => {
+          if (!row || row._syncStatus === "pending") return;
+          setTips((prev) =>
+            prev.map((t) =>
+              t.id === tip.id ? { ...t, _syncStatus: row._syncStatus } : t,
+            ),
+          );
+          subscription.unsubscribe();
+          tipSyncSubsRef.current = tipSyncSubsRef.current.filter(
+            (s) => s !== subscription,
+          );
+        },
+      });
+      tipSyncSubsRef.current.push(subscription);
     } catch (err) {
       setTipError(err?.message ?? "Something went wrong submitting your tip.");
     }
@@ -1552,31 +1621,37 @@ export default function ReportDetailPage() {
             </div>
           ) : (
             !isResolved && (
-              <form onSubmit={handleTipSubmit} className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Share a sighting or lead…"
-                  value={tipText}
-                  onChange={(e) => setTipText(e.target.value)}
-                  maxLength={200}
-                  className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
-                />
-                <button
-                  type="submit"
-                  disabled={submittingTip || !tipText.trim()}
-                  className="h-10 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold disabled:opacity-50"
+              <>
+                {/* Repeated next to the input, not just the section header
+                    above - with a long tip list, the header (and its count)
+                    can scroll out of view long before reaching the input. */}
+                <p
+                  className={`text-[10px] font-medium text-right mb-1.5 ${tips.length >= 20 ? "text-status-rejected-text" : "text-text-muted"}`}
                 >
-                  Send
-                </button>
-              </form>
+                  {tips.length}/25 tips
+                </p>
+                <form onSubmit={handleTipSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Share a sighting or lead…"
+                    value={tipText}
+                    onChange={(e) => setTipText(e.target.value)}
+                    maxLength={200}
+                    className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submittingTip || !tipText.trim()}
+                    className="h-10 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold disabled:opacity-50"
+                  >
+                    Send
+                  </button>
+                </form>
+              </>
             )
           )}
 
-          {tipError && (
-            <p className="text-[11px] text-status-rejected-text mt-2">
-              {tipError}
-            </p>
-          )}
+          <ValidationDialog message={tipError} onDismiss={() => setTipError(null)} />
         </div>
       </div>
     </div>
