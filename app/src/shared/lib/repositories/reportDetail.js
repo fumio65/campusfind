@@ -23,6 +23,16 @@ export async function cacheReportPhotos(reportId, photos) {
   if (photos.length) await db.report_photos.bulkPut(photos)
 }
 
+// Reads locally-cached photo rows without touching the network - used by
+// fetchAll() to tell a genuinely photo-less report apart from a
+// just-created one whose photo upload/insert hasn't reached the server yet
+// (report_photos is written after the report row itself, sequentially per
+// photo - see operations/reports.js), so an empty network read racing that
+// window doesn't get mistaken for "no photos" and wipe the optimistic cache.
+export async function getCachedReportPhotos(reportId) {
+  return db.report_photos.where('report_id').equals(reportId).sortBy('position')
+}
+
 // Same merge reasoning as cacheReport - avoids an early raw write (before
 // the claimant's name has resolved) clobbering a later enriched one.
 export async function cacheClaim(claim) {

@@ -32,6 +32,7 @@ import {
   cacheClaimMessages,
   cacheTips,
   getCachedReportDetail,
+  getCachedReportPhotos,
 } from "../../shared/lib/repositories/reportDetail";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
@@ -523,11 +524,26 @@ export default function ReportDetailPage() {
               .then(({ data: user }) => user ?? null)
           : Promise.resolve(null),
       ]);
-    await cacheReportPhotos(
-      id,
-      (reportPhotos ?? []).map((p) => ({ ...p, report_id: id })),
-    );
-    const photoUrls = (reportPhotos ?? []).map((p) => {
+    // An empty result here doesn't always mean "no photos" - a just-created
+    // report's photo rows are inserted after the report row itself, so this
+    // query can race ahead of that background sync and see zero rows for a
+    // report that does have photos pending upload. Fall back to whatever's
+    // already cached locally instead of trusting the empty read and wiping it.
+    let reportPhotoRows = reportPhotos ?? [];
+    if (reportPhotoRows.length === 0) {
+      const localPhotos = await getCachedReportPhotos(id);
+      if (localPhotos.length > 0) {
+        reportPhotoRows = localPhotos;
+      } else {
+        await cacheReportPhotos(id, []);
+      }
+    } else {
+      await cacheReportPhotos(
+        id,
+        reportPhotoRows.map((p) => ({ ...p, report_id: id })),
+      );
+    }
+    const photoUrls = reportPhotoRows.map((p) => {
       const {
         data: { publicUrl },
       } = supabase.storage.from("report-photos").getPublicUrl(p.storage_path);
