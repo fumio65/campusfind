@@ -22,8 +22,7 @@ import {
 import StatusPill from "../../shared/components/StatusPill";
 import { staggerContainer, staggerItem } from "../../shared/lib/motion";
 import { supabase } from "../../shared/lib/supabaseClient";
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
+import { adminFetch, SERVER_URL } from "../../shared/lib/apiClient";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,8 +76,8 @@ export default function OverviewPage() {
 
   function fetchAll() {
     Promise.all([
-      fetch(`${SERVER_URL}/overview`).then((r) => r.json()),
-      fetch(`${SERVER_URL}/analytics`).then((r) => r.json()),
+      adminFetch(`/overview`).then((r) => r.json()),
+      adminFetch(`/analytics`).then((r) => r.json()),
       fetch(`${SERVER_URL}/reports?status=approved`).then((r) => r.json()),
     ])
       .then(([overviewBody, analyticsBody, reportsBody]) => {

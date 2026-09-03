@@ -1,16 +1,16 @@
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+import { adminFetch } from '../../shared/lib/apiClient'
 
 export async function fetchAccounts({ limit = 50, offset = 0, search = '' } = {}) {
   const params = new URLSearchParams({ limit, offset })
   if (search) params.set('search', search)
-  const res = await fetch(`${SERVER_URL}/accounts?${params}`)
+  const res = await adminFetch(`/accounts?${params}`)
   const body = await res.json()
   if (!res.ok) throw new Error(body.error ?? 'Could not load accounts.')
   return body
 }
 
 export async function createSingleAccount({ studentId, enrollmentNumber, lastName, firstName }) {
-  const res = await fetch(`${SERVER_URL}/accounts/single`, {
+  const res = await adminFetch('/accounts/single', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId, enrollmentNumber, lastName, firstName }),
@@ -21,7 +21,7 @@ export async function createSingleAccount({ studentId, enrollmentNumber, lastNam
 }
 
 export async function toggleAccountStatus(id, status) {
-  const res = await fetch(`${SERVER_URL}/accounts/${id}/status`, {
+  const res = await adminFetch(`/accounts/${id}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -32,7 +32,7 @@ export async function toggleAccountStatus(id, status) {
 }
 
 export async function resetAccountPassword(id) {
-  const res = await fetch(`${SERVER_URL}/accounts/${id}/reset-password`, {
+  const res = await adminFetch(`/accounts/${id}/reset-password`, {
     method: 'PATCH',
   })
   const body = await res.json()

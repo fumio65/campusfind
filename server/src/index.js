@@ -11,6 +11,7 @@ import proxyRouter from './routes/proxy.js'
 import confirmationRouter from './routes/confirmation.js'
 import claimsRouter from './routes/claims.js'
 import tipsRouter from './routes/tips.js'
+import { requireAdmin } from './middleware/requireAdmin.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -29,15 +30,15 @@ app.use(express.json())
 
 app.get('/health', (req, res) => res.json({ ok: true }))
 
-app.use('/overview', overviewRouter)
-app.use('/analytics', analyticsRouter)
+app.use('/overview', requireAdmin, overviewRouter)
+app.use('/analytics', requireAdmin, analyticsRouter)
 app.use('/reports', reportsRouter)
 app.use('/notifications', notificationsRouter)
 app.use('/proxy', proxyRouter)
 app.use('/confirmation', confirmationRouter)
 app.use('/claims', claimsRouter)
-app.use('/accounts', accountsRouter)
-app.use('/', bulkImportRouter)
+app.use('/accounts', requireAdmin, accountsRouter)
+app.use('/', requireAdmin, bulkImportRouter)
 app.use('/tips', tipsRouter)
 
 app.use((err, req, res, next) => {

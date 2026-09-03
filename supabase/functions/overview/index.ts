@@ -1,4 +1,5 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { requireAdmin } from '../_shared/requireAdmin.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
   }
+
+  const adminOrResponse = await requireAdmin(req, supabaseAdmin)
+  if (adminOrResponse instanceof Response) return adminOrResponse
 
   try {
     if (req.method === 'GET') {

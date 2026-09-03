@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Camera, X, CheckCircle2, Package, AlertCircle } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabaseClient'
 import { useAuth } from '../../shared/lib/AuthContext'
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+import { adminFetch, SERVER_URL } from '../../shared/lib/apiClient'
 
 const CATEGORIES = [
   'Electronics', 'IDs & Cards', 'Bags', 'Clothing',
@@ -28,7 +27,7 @@ export default function WalkInIntakePage() {
     if (!studentId.trim()) { setFinderValidation(null); setFinderName(''); return }
     setValidatingFinder(true)
     try {
-      const res = await fetch(`${SERVER_URL}/accounts?search=${encodeURIComponent(studentId.trim())}&limit=5`)
+      const res = await adminFetch(`/accounts?search=${encodeURIComponent(studentId.trim())}&limit=5`)
       const body = await res.json()
       const exact = (body.accounts ?? []).find(
         (a) => a.student_id === studentId.trim().toUpperCase()

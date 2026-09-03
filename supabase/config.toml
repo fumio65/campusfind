@@ -78,7 +78,7 @@ entrypoint = "./functions/notifications/index.ts"
 
 [functions.overview]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/overview/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -89,7 +89,7 @@ entrypoint = "./functions/overview/index.ts"
 
 [functions.analytics]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/analytics/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -100,7 +100,7 @@ entrypoint = "./functions/analytics/index.ts"
 
 [functions.accounts]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/accounts/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -111,7 +111,7 @@ entrypoint = "./functions/accounts/index.ts"
 
 [functions.bulk-import]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/bulk-import/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
