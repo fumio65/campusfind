@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Camera, ImagePlus, X, MapPin, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Camera, ImagePlus, X, MapPin, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../shared/lib/AuthContext'
 import { createReport } from '../../shared/lib/operations/reports'
+import ValidationDialog from '../../shared/components/ValidationDialog'
+import ConfirmDialog from '../../shared/components/ConfirmDialog'
 
 const MAX_PHOTOS = 3
 
@@ -24,8 +26,18 @@ export default function NewReportPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
+
+  const isDirty = Boolean(
+    title.trim() || description.trim() || location.trim() || category || photos.length > 0
+  )
+
+  function handleBack() {
+    if (isDirty) setShowLeaveConfirm(true)
+    else navigate(-1)
+  }
 
   function handlePhotoChange(e) {
     const files = Array.from(e.target.files ?? [])
@@ -99,7 +111,7 @@ export default function NewReportPage() {
       {/* Header */}
       <div className="bg-brand-600 px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
           aria-label="Go back"
         >
@@ -108,14 +120,18 @@ export default function NewReportPage() {
         <h1 className="text-base font-bold text-white">Report a lost item</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="px-4 py-5 flex flex-col gap-5 pb-10">
-        {error && (
-          <div className="flex items-start gap-2 bg-status-rejected-bg text-status-rejected-text text-xs rounded-xl px-3 py-2.5">
-            <AlertCircle size={14} className="shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
+      <ValidationDialog message={error} onDismiss={() => setError(null)} />
+      <ConfirmDialog
+        visible={showLeaveConfirm}
+        title="Discard this report?"
+        message="You'll lose the details you've entered if you leave now."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onConfirm={() => navigate(-1)}
+        onCancel={() => setShowLeaveConfirm(false)}
+      />
 
+      <form onSubmit={handleSubmit} className="px-4 py-5 flex flex-col gap-5 pb-10">
         {/* Title */}
         <div>
           <label className="text-xs font-semibold text-text-secondary block mb-1.5">
@@ -127,7 +143,6 @@ export default function NewReportPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={80}
-            required
             className="w-full h-11 px-4 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
           />
         </div>

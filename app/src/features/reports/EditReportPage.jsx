@@ -6,6 +6,8 @@ import { useAuth } from '../../shared/lib/AuthContext'
 import { db } from '../../shared/lib/db'
 import { cacheReport, cacheReportPhotos } from '../../shared/lib/repositories/reportDetail'
 import { updateReport } from '../../shared/lib/operations/reports'
+import ValidationDialog from '../../shared/components/ValidationDialog'
+import ConfirmDialog from '../../shared/components/ConfirmDialog'
 
 const CATEGORIES = [
   'Electronics', 'IDs & Cards', 'Bags', 'Clothing',
@@ -29,10 +31,28 @@ export default function EditReportPage() {
   const galleryInputRef = useRef(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const original = useRef(null)
 
   useEffect(() => {
     fetchReport()
   }, [id])
+
+  const isDirty = Boolean(
+    original.current && (
+      title !== original.current.title ||
+      description !== original.current.description ||
+      location !== original.current.location ||
+      category !== original.current.category ||
+      removedPhotoIds.length > 0 ||
+      newPhotos.length > 0
+    )
+  )
+
+  function handleBack() {
+    if (isDirty) setShowLeaveConfirm(true)
+    else navigate(-1)
+  }
 
   function toPhotoUrl(storagePath) {
     const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(storagePath)
@@ -55,6 +75,12 @@ export default function EditReportPage() {
       setDescription(cached.description ?? '')
       setLocation(cached.location ?? '')
       setCategory(cached.category ?? '')
+      original.current = {
+        title: cached.title ?? '',
+        description: cached.description ?? '',
+        location: cached.location ?? '',
+        category: cached.category ?? '',
+      }
       const cachedPhotos = await db.report_photos.where('report_id').equals(id).sortBy('position')
       setExistingPhotos(cachedPhotos.map((p) => ({ ...p, url: toPhotoUrl(p.storage_path) })))
       setLoading(false)
@@ -65,6 +91,12 @@ export default function EditReportPage() {
     setDescription(report.description ?? '')
     setLocation(report.location ?? '')
     setCategory(report.category ?? '')
+    original.current = {
+      title: report.title ?? '',
+      description: report.description ?? '',
+      location: report.location ?? '',
+      category: report.category ?? '',
+    }
     await cacheReport(report)
 
     const { data: photos } = await supabase
@@ -145,9 +177,20 @@ export default function EditReportPage() {
 
   return (
     <div className="min-h-screen bg-surface-page safe-top pb-10">
+      <ValidationDialog message={error} onDismiss={() => setError(null)} />
+      <ConfirmDialog
+        visible={showLeaveConfirm}
+        title="Discard your changes?"
+        message="The edits you've made won't be saved if you leave now."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onConfirm={() => navigate(-1)}
+        onCancel={() => setShowLeaveConfirm(false)}
+      />
+
       {/* Header */}
       <div className="bg-brand-600 px-4 pt-12 pb-3 flex items-center gap-3 sticky top-0 z-10">
-        <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10">
+        <button onClick={handleBack} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10">
           <ArrowLeft size={20} className="text-white" />
         </button>
         <h1 className="text-base font-bold text-white flex-1">Edit report</h1>
@@ -295,10 +338,6 @@ export default function EditReportPage() {
             className="hidden"
           />
         </div>
-
-        {error && (
-          <p className="text-xs text-status-rejected-text bg-status-rejected-bg rounded-xl px-3 py-2.5">{error}</p>
-        )}
 
         <button
           type="submit"
