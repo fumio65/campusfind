@@ -114,11 +114,17 @@ export default function ActivityPage() {
       await markNotificationRead(notification.id)
     }
     if (notification.report_id) {
+      // The conversation itself lives on its own page now - these three
+      // notification types go straight there instead of to a preview on
+      // the report detail page.
+      const messageTypes = ['new_message', 'dropoff_chosen', 'claim_approved']
+      if (messageTypes.includes(notification.type)) {
+        navigate(`/reports/${notification.report_id}/messages`)
+        return
+      }
+
       const hashMap = {
-        new_message:     '#messages',
-        dropoff_chosen:  '#messages',
         claim_submitted: '#claim',
-        claim_approved:  '#messages',
         claim_rejected:  '#claim',
         tip_submitted:   '#tips',
         tip_reply:       '#tips',

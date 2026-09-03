@@ -18,6 +18,7 @@ import {
   Camera,
   Share2,
   ImagePlus,
+  ChevronRight,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
@@ -38,7 +39,7 @@ import {
 } from "../../shared/lib/repositories/reportDetail";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
-import MessageThread from "../claims/MessageThread";
+import { useMessages } from "../../shared/lib/repositories/messages";
 import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import ShareSheet from "./ShareSheet";
@@ -92,6 +93,13 @@ function restoreScrollAnchor(anchor) {
   const containerTop = container.getBoundingClientRect().top;
   const currentOffset = el.getBoundingClientRect().top - containerTop;
   container.scrollTop += currentOffset - anchor.offset;
+}
+
+function messagePreviewText(messages, currentUserId) {
+  const last = messages[messages.length - 1];
+  if (!last) return "No messages yet. Tap to start the conversation.";
+  if (last.body?.startsWith("📍")) return "📍 ISSC drop-off chosen";
+  return last.sender_id === currentUserId ? `You: ${last.body}` : last.body;
 }
 
 function TipCard({
@@ -220,6 +228,9 @@ export default function ReportDetailPage() {
   const [reporter, setReporter] = useState(null);
   const [claim, setClaim] = useState(null);
   const [claimant, setClaimant] = useState(null);
+  // Read reactively from the local cache purely for the preview badge/text
+  // below - the actual conversation lives on its own full-screen page now.
+  const threadMessages = useMessages(claim?.id) ?? [];
   // Same idea as claimReady below, but for the reporter's name: Home's
   // list only caches bare report rows (no reporter_first_name/last_name),
   // so a report opened straight from Home shows everything except the
@@ -1387,21 +1398,32 @@ export default function ReportDetailPage() {
                   </p>
                 </div>
               )}
-              <MessageThread
-                claim={claim}
-                report={report}
-                isReporter={isOwner}
-                reporterName={
-                  reporter
-                    ? `${reporter.first_name} ${reporter.last_name}`
-                    : "Reporter"
-                }
-                claimantName={
-                  claimant
-                    ? `${claimant.first_name} ${claimant.last_name}`
-                    : "Finder"
-                }
-              />
+              <button
+                onClick={() => navigate(`/reports/${id}/messages`)}
+                className="bg-surface-card rounded-2xl border border-border p-4 flex items-center gap-3 text-left hover:border-brand-300 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-brand-50 border border-brand-200 flex items-center justify-center shrink-0">
+                  <MessageSquare size={18} className="text-brand-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-text-primary">
+                      Message thread
+                    </p>
+                    {threadMessages.length > 0 && (
+                      <span
+                        className={`text-[10px] font-medium shrink-0 ${threadMessages.length >= 8 ? "text-status-rejected-text" : "text-text-muted"}`}
+                      >
+                        {threadMessages.length}/10
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-muted truncate mt-0.5">
+                    {messagePreviewText(threadMessages, session?.user.id)}
+                  </p>
+                </div>
+                <ChevronRight size={18} className="text-text-muted shrink-0" />
+              </button>
             </div>
           )}
 

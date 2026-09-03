@@ -22,6 +22,7 @@ import ActivityPage from './features/activity/ActivityPage'
 import ProfilePage from './features/profile/ProfilePage'
 import HistoryPage from './features/history/HistoryPage'
 import ClaimPage from './features/claims/ClaimPage'
+import MessageThreadPage from './features/claims/MessageThreadPage'
 
 import './index.css'
 
@@ -41,6 +42,19 @@ function ProtectedRoutes() {
   if (needsPasswordChange) return <Navigate to="/change-password" replace />
 
   return <AppShell />
+}
+
+// Same auth gate as ProtectedRoutes, without AppShell's chrome (bottom nav,
+// install prompt) - for full-screen pages like the message thread, where a
+// persistent fixed bottom nav bar competing with an on-screen keyboard is
+// exactly the problem being avoided.
+function RequireAuthOnly({ children }) {
+  const { session, needsPasswordChange } = useAuth()
+
+  if (!session) return <Navigate to="/login" replace />
+  if (needsPasswordChange) return <Navigate to="/change-password" replace />
+
+  return children
 }
 
 function AppRoutes() {
@@ -94,6 +108,10 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route
+        path="/reports/:id/messages"
+        element={<RequireAuthOnly><MessageThreadPage /></RequireAuthOnly>}
+      />
       <Route path="/*" element={<ProtectedRoutes />}>
         <Route index element={<HomePage />} />
         <Route path="reports/new" element={<NewReportPage />} />

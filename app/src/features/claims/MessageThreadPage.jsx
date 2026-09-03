@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 import { sendMessage, chooseDropoff } from '../../shared/lib/operations/messages'
@@ -9,6 +11,7 @@ import {
   useDropOffStatus,
   refreshDropOffStatus,
 } from '../../shared/lib/repositories/messages'
+import { getCachedReportDetail } from '../../shared/lib/repositories/reportDetail'
 import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
 import ValidationDialog from '../../shared/components/ValidationDialog'
@@ -19,8 +22,37 @@ const MESSAGE_WARNING_THRESHOLD = 8
 
 const EMPTY_MESSAGES = []
 
-export default function MessageThread({ claim, report, isReporter, reporterName, claimantName }) {
+// Full-screen conversation view, not a card embedded in the report detail
+// page - a chat interface needs the input pinned to the bottom of its own
+// flex layout so it's never something the browser's keyboard has to guess
+// how to scroll into view. Fetches its own {report, claim, names} context
+// so it works from a direct link (a push notification, a reopened tab) as
+// well as navigating in from the report detail page.
+export default function MessageThreadPage() {
+  const { id } = useParams()
+  const navigate = useNavigate()
   const { session } = useAuth()
+
+  const [context, setContext] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchThreadContext(id, session.user.id).then((ctx) => {
+      if (!cancelled) {
+        setContext(ctx)
+        setLoading(false)
+      }
+    })
+    return () => { cancelled = true }
+  }, [id, session.user.id])
+
+  const claim = context?.claim
+  const report = context?.report
+  const isReporter = context?.isReporter ?? false
+  const reporterName = context?.reporterName
+  const claimantName = context?.claimantName
+
   // Read reactively from the local cache (works offline); refreshMessages /
   // refreshDropOffStatus below keep the cache in sync with Supabase whenever
   // we're online. Writes (sendMessage / chooseDropoff) write straight into
@@ -32,39 +64,8 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
   const [sending, setSending]             = useState(false)
   const [sendError, setSendError]         = useState('')
   const messagesContainerRef = useRef(null)
-  const rootRef               = useRef(null)
   const prevCountRef         = useRef(0)
   const isInitialLoad        = useRef(true)
-
-  // The input lives in normal page flow, below the message list - focusing
-  // it opens the keyboard, which shrinks the page's visible viewport, but
-  // the browser's own "scroll input into view" only guarantees the input
-  // itself is visible, not the thread above it (or that it clears the
-  // app's fixed bottom nav bar). Scroll this whole card into view instead
-  // so the conversation and input both end up visible together, rather
-  // than leaving the user to scroll manually to see anything above the
-  // input, or the input itself once the keyboard opens.
-  //
-  // The keyboard's open/close animation resizes the viewport asynchronously
-  // and takes a variable amount of time (device-dependent) - scrolling on a
-  // fixed delay guesses at that duration and is wrong whenever the real
-  // animation takes longer (scrolls too early, using stale dimensions, so
-  // the keyboard finishes opening afterwards and covers the input anyway).
-  // Wait for the actual resize instead, with a fixed-delay fallback only for
-  // when no resize happens at all (e.g. the keyboard was already open, so
-  // refocusing the input doesn't change the viewport size).
-  function scrollThreadIntoView() {
-    let done = false
-    const doScroll = () => {
-      if (done) return
-      done = true
-      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', doScroll, { once: true })
-    }
-    setTimeout(doScroll, 400)
-  }
 
   useEffect(() => {
     if (!claim?.id) return
@@ -132,7 +133,6 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
         body: text.trim(),
       })
       setText('')
-      scrollThreadIntoView()
     } catch {
       setSendError('Message failed to send. Please try again.')
     }
@@ -233,29 +233,57 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
   const otherInitials = getInitials(otherName)
   const myName        = 'You'
 
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-surface-page">
+        <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!claim) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-3 bg-surface-page px-6 text-center">
+        <p className="text-sm text-text-secondary">This conversation isn't available.</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="text-sm font-semibold text-brand-600"
+        >
+          Go back
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div ref={rootRef} className="bg-surface-card rounded-2xl border border-border overflow-hidden">
+    <div className="h-screen flex flex-col bg-surface-page safe-top safe-bottom">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-        <MessageSquareIcon />
-        <span className="text-xs font-semibold text-text-primary">Message thread</span>
-        <span className="text-[10px] text-text-muted">
-          {isReporter ? `with ${claimantName ?? 'Finder'}` : `with ${reporterName ?? 'Reporter'}`}
-        </span>
+      <div className="bg-brand-600 px-4 pt-12 pb-3 flex items-center gap-3 shrink-0">
+        <button
+          onClick={() => navigate(-1)}
+          className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors shrink-0"
+          aria-label="Go back"
+        >
+          <ArrowLeft size={20} className="text-white" />
+        </button>
+        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
+          {otherInitials}
+        </div>
+        <span className="text-sm font-semibold text-white truncate">{otherName}</span>
         <span
-          className={`ml-auto text-[10px] font-medium ${messages.length >= MESSAGE_WARNING_THRESHOLD ? 'text-status-rejected-text' : 'text-text-muted'}`}
+          className={`ml-auto text-[10px] font-medium shrink-0 ${messages.length >= MESSAGE_WARNING_THRESHOLD ? 'text-status-rejected-bg' : 'text-brand-200'}`}
         >
           {messages.length}/{MESSAGE_LIMIT}
         </span>
       </div>
 
-      {/* Messages */}
+      {/* Messages - fills all remaining space, the only scrollable region */}
       <div
         ref={messagesContainerRef}
-        className="flex flex-col gap-3 px-4 py-4 max-h-72 overflow-y-auto"
+        className="flex-1 overflow-y-auto flex flex-col gap-3 px-4 py-4"
       >
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-6 gap-2">
+          <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <div className="w-10 h-10 rounded-full bg-surface-muted flex items-center justify-center">
               <MessageSquareIcon size={18} className="text-text-muted" />
             </div>
@@ -330,7 +358,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
 
       {/* Drop-off button — claimant only, once */}
       {!isReporter && !dropOffSent && (
-        <div className="px-4 pb-2">
+        <div className="px-4 pb-2 shrink-0">
           <button
             onClick={handleDropOff}
             disabled={sending}
@@ -341,9 +369,9 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
         </div>
       )}
 
-      {/* Input */}
+      {/* Input - pinned to the bottom of the flex column, not scrolled to */}
       <ValidationDialog message={sendError} onDismiss={() => setSendError('')} />
-      <div className="px-4 pb-4 pt-1">
+      <div className="px-4 py-3 border-t border-border bg-surface-card shrink-0">
         {messages.length >= MESSAGE_LIMIT ? (
           <div className="bg-surface-muted rounded-xl px-3 py-2.5 text-xs text-text-secondary text-center">
             This conversation has reached the maximum of {MESSAGE_LIMIT} messages.
@@ -356,18 +384,13 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend(e)}
-              onFocus={scrollThreadIntoView}
               maxLength={300}
               className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
             />
             <button
               // Tapping a button moves focus to it, which blurs the input
-              // and closes the keyboard - then it reopens once the input is
-              // focused again for the next message, and that close/reopen
-              // flicker is what threw off the scroll position after sending.
-              // Prevent the button from taking focus at all, so the
-              // keyboard (and the page's scroll position) stays put through
-              // a send.
+              // and closes the keyboard - keep focus on the input so the
+              // keyboard stays put through a send.
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleSend}
               disabled={sending || !text.trim()}
@@ -383,6 +406,49 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
       </div>
     </div>
   )
+}
+
+async function fetchThreadContext(reportId, sessionUserId) {
+  const { data: reportData, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('id', reportId)
+    .single()
+
+  if (error || !reportData) {
+    // Offline (or otherwise unreachable) - fall back to whatever was cached
+    // from a previous visit to the report detail page.
+    const cached = await getCachedReportDetail(reportId)
+    if (!cached?.claim) return null
+    return {
+      report: cached.report,
+      claim: cached.claim,
+      isReporter: cached.report.reporter_id === sessionUserId,
+      reporterName: cached.reporter ? `${cached.reporter.first_name} ${cached.reporter.last_name}` : 'Reporter',
+      claimantName: cached.claimant ? `${cached.claimant.first_name} ${cached.claimant.last_name}` : 'Finder',
+    }
+  }
+
+  const { data: claimsData } = await supabase
+    .from('claims')
+    .select('*')
+    .eq('report_id', reportId)
+  const activeClaim = claimsData?.find((c) => ['pending', 'approved'].includes(c.status)) ?? null
+  if (!activeClaim) return { report: reportData, claim: null }
+
+  const isReporter = reportData.reporter_id === sessionUserId
+  const [{ data: reporterUser }, { data: claimantUser }] = await Promise.all([
+    supabase.from('users').select('first_name, last_name').eq('id', reportData.reporter_id).single(),
+    supabase.from('users').select('first_name, last_name').eq('id', activeClaim.claimant_id).single(),
+  ])
+
+  return {
+    report: reportData,
+    claim: activeClaim,
+    isReporter,
+    reporterName: reporterUser ? `${reporterUser.first_name} ${reporterUser.last_name}` : 'Reporter',
+    claimantName: claimantUser ? `${claimantUser.first_name} ${claimantUser.last_name}` : 'Finder',
+  }
 }
 
 function MessageSquareIcon({ size = 14, className = "text-brand-600" }) {
