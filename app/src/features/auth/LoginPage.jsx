@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { supabase } from '../../shared/lib/supabase'
+import appIcon from '../../assets/app-icon.png'
 
 export default function LoginPage() {
   const [studentId, setStudentId] = useState('')
@@ -27,7 +29,14 @@ export default function LoginPage() {
     })
 
     if (signInError) {
-      setError('Invalid Student ID or password. Please try again.')
+      // Can't reach the auth server at all - offline, not a bad credential.
+      // The generic "invalid" message would tell a correctly-typed user
+      // their password is wrong when the real problem is no connection.
+      if (isAuthRetryableFetchError(signInError) || !navigator.onLine) {
+        setError("You're offline. Connect to the internet and try again.")
+      } else {
+        setError('Invalid Student ID or password. Please try again.')
+      }
     }
 
     setLoading(false)
@@ -44,12 +53,11 @@ export default function LoginPage() {
           transition={{ duration: 0.4 }}
           className="text-center mb-8"
         >
-          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/>
-              <path d="m21 21-4.35-4.35"/>
-            </svg>
-          </div>
+          <img
+            src={appIcon}
+            alt="CampusFind"
+            className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-lg"
+          />
           <h1 className="text-2xl font-bold text-white">CampusFind</h1>
           <p className="text-brand-200 text-sm mt-1">NwSSU Lost & Found</p>
         </motion.div>
