@@ -30,8 +30,23 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
   const [sending, setSending]             = useState(false)
   const [sendError, setSendError]         = useState('')
   const messagesContainerRef = useRef(null)
+  const rootRef               = useRef(null)
   const prevCountRef         = useRef(0)
   const isInitialLoad        = useRef(true)
+
+  // The input lives in normal page flow, below the message list - focusing
+  // it opens the keyboard, which shrinks the page's visible viewport, but
+  // the browser's own "scroll input into view" only guarantees the input
+  // itself is visible, not the thread above it (or that it clears the
+  // app's fixed bottom nav bar). Once the keyboard's resize settles, scroll
+  // this whole card into view instead so the conversation and input both
+  // end up visible together, rather than leaving the user to scroll up
+  // manually to see anything above the input.
+  function scrollThreadIntoView() {
+    setTimeout(() => {
+      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 300)
+  }
 
   useEffect(() => {
     if (!claim?.id) return
@@ -99,6 +114,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
         body: text.trim(),
       })
       setText('')
+      scrollThreadIntoView()
     } catch {
       setSendError('Message failed to send. Please try again.')
     }
@@ -200,7 +216,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
   const myName        = 'You'
 
   return (
-    <div className="bg-surface-card rounded-2xl border border-border overflow-hidden">
+    <div ref={rootRef} className="bg-surface-card rounded-2xl border border-border overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <MessageSquareIcon />
@@ -322,6 +338,7 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend(e)}
+              onFocus={scrollThreadIntoView}
               maxLength={300}
               className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
             />
