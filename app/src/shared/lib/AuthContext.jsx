@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, readPersistedSession } from '../lib/supabase'
 import { db } from './db'
 import { onSyncTrigger } from './appLifecycle'
 const AuthContext = createContext(null)
@@ -9,12 +9,25 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      if (session) fetchProfile(session.user.id)
+      // Offline with an access token that's actually past its real expiry:
+      // getSession() can't refresh it and returns null, even though the
+      // refresh token (and account) are still valid - it just can't prove
+      // that without a network call. There's no API call to protect while
+      // offline anyway, so fall back to the raw cached session rather than
+      // bouncing to /login; a real revocation still applies as soon as a
+      // network request is actually made once back online.
+      const effectiveSession = session ?? (!navigator.onLine ? readPersistedSession() : null)
+      setSession(effectiveSession)
+      if (effectiveSession) fetchProfile(effectiveSession.user.id)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      if (session) fetchProfile(session.user.id)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // onAuthStateChange also fires its own INITIAL_SESSION event (same
+      // offline-null result as the getSession() call above) - apply the same
+      // offline fallback there so it doesn't immediately clobber it with null.
+      const effectiveSession =
+        session ?? (event === 'INITIAL_SESSION' && !navigator.onLine ? readPersistedSession() : null)
+      setSession(effectiveSession)
+      if (effectiveSession) fetchProfile(effectiveSession.user.id)
       else setProfile(null)
     })
     return () => subscription.unsubscribe()
@@ -37,8 +50,15 @@ export function AuthProvider({ children }) {
       .subscribe()
 
     // Realtime events missed while offline aren't replayed on reconnect, so
-    // explicitly refresh once connectivity (or the app) comes back.
-    const unsubscribeSync = onSyncTrigger(() => fetchProfile(session.user.id))
+    // explicitly refresh once connectivity (or the app) comes back. Also
+    // re-checks the session itself: if we were running on the offline
+    // fallback session (real expiry passed, no network to renew it), this
+    // lets the auto-refresh logic validate/renew it right away instead of
+    // waiting for the next 30s tick.
+    const unsubscribeSync = onSyncTrigger(() => {
+      supabase.auth.getSession()
+      fetchProfile(session.user.id)
+    })
 
     return () => {
       supabase.removeChannel(channel)
