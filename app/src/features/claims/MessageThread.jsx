@@ -11,6 +11,9 @@ import {
 } from '../../shared/lib/repositories/messages'
 import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
+import ValidationDialog from '../../shared/components/ValidationDialog'
+
+const MESSAGE_LIMIT = 10
 
 const EMPTY_MESSAGES = []
 
@@ -81,8 +84,8 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
   async function handleSend(e) {
     e.preventDefault()
     if (!text.trim() || sending) return
-    if (messages.length >= 10) {
-      setSendError('This conversation has reached the 10-message limit.')
+    if (messages.length >= MESSAGE_LIMIT) {
+      setSendError(`This conversation has reached the ${MESSAGE_LIMIT}-message limit.`)
       return
     }
     setSending(true)
@@ -202,8 +205,13 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <MessageSquareIcon />
         <span className="text-xs font-semibold text-text-primary">Message thread</span>
-        <span className="ml-auto text-[10px] text-text-muted">
+        <span className="text-[10px] text-text-muted">
           {isReporter ? `with ${claimantName ?? 'Finder'}` : `with ${reporterName ?? 'Reporter'}`}
+        </span>
+        <span
+          className={`ml-auto text-[10px] font-medium ${messages.length >= MESSAGE_LIMIT ? 'text-status-rejected-text' : 'text-text-muted'}`}
+        >
+          {messages.length}/{MESSAGE_LIMIT}
         </span>
       </div>
 
@@ -300,32 +308,35 @@ export default function MessageThread({ claim, report, isReporter, reporterName,
       )}
 
       {/* Input */}
-      {sendError && (
-        <p className="px-4 pb-1 text-[11px] text-status-rejected-text">{sendError}</p>
-      )}
-      <div className="px-4 pb-4 pt-1 flex gap-2">
-        <input
-          type="text"
-          placeholder="Type a message…"
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value)
-            if (sendError) setSendError('')
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend(e)}
-          maxLength={300}
-          className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
-        />
-        <button
-          onClick={handleSend}
-          disabled={sending || !text.trim()}
-          className="h-10 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5 hover:bg-brand-700 transition-colors"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
-          </svg>
-          Send
-        </button>
+      <ValidationDialog message={sendError} onDismiss={() => setSendError('')} />
+      <div className="px-4 pb-4 pt-1">
+        {messages.length >= MESSAGE_LIMIT ? (
+          <div className="bg-surface-muted rounded-xl px-3 py-2.5 text-xs text-text-secondary text-center">
+            This conversation has reached the maximum of {MESSAGE_LIMIT} messages.
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Type a message…"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend(e)}
+              maxLength={300}
+              className="flex-1 h-10 px-3 text-xs rounded-xl border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
+            />
+            <button
+              onClick={handleSend}
+              disabled={sending || !text.trim()}
+              className="h-10 px-4 rounded-xl bg-brand-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5 hover:bg-brand-700 transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+              </svg>
+              Send
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
