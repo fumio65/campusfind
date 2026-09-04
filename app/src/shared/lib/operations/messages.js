@@ -53,6 +53,10 @@ export async function sendMessage({ claimId, senderId, senderRole, body }) {
   return message
 }
 
+export const DROPOFF_CHOSEN_BODY    = '📍 ISSC_DROPOFF'
+export const DROPOFF_REQUESTED_BODY = '🔔 ISSC_DROPOFF_REQUESTED'
+export const DROPOFF_DECLINED_BODY  = '🚫 ISSC_DROPOFF_DECLINED'
+
 registerHandler('chooseDropoff', async (payload) => {
   const { message, reportId, claimId, claimantId, reporterId } = payload
   await insertMessage(message)
@@ -72,13 +76,17 @@ registerHandler('chooseDropoff', async (payload) => {
 // Sends the drop-off marker message and registers the drop-off with ISSC via
 // the edge function, as one queued/retried unit (previously the edge-function
 // call was fire-and-forget and silently lost if it failed while offline).
+// Called from the "Accept" action on either side of a suggest/accept exchange
+// (see requestDropoff/declineDropoffRequest below) - claimantId/reporterId are
+// always the claim's actual roles, independent of who clicked accept, since
+// the claimant is the one who will physically bring the item to ISSC.
 export async function chooseDropoff({ reportId, claimId, claimantId, reporterId, senderId }) {
   const message = {
     id: crypto.randomUUID(),
     claim_id: claimId,
     sender_id: senderId,
     sender_role: 'claimant',
-    body: '📍 ISSC_DROPOFF',
+    body: DROPOFF_CHOSEN_BODY,
     created_at: new Date().toISOString(),
   }
   message._syncStatus = 'pending'
@@ -91,4 +99,15 @@ export async function chooseDropoff({ reportId, claimId, claimantId, reporterId,
     rows: [{ table: 'claim_messages', id: message.id }],
   })
   return message
+}
+
+// Suggest/decline are plain synced chat messages (reusing sendMessage), not a
+// new sync op - either party can send one, and only chooseDropoff above
+// actually registers anything with ISSC.
+export function requestDropoff({ claimId, senderId, senderRole }) {
+  return sendMessage({ claimId, senderId, senderRole, body: DROPOFF_REQUESTED_BODY })
+}
+
+export function declineDropoffRequest({ claimId, senderId, senderRole }) {
+  return sendMessage({ claimId, senderId, senderRole, body: DROPOFF_DECLINED_BODY })
 }

@@ -40,6 +40,11 @@ import {
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
 import { useMessages } from "../../shared/lib/repositories/messages";
+import {
+  DROPOFF_CHOSEN_BODY,
+  DROPOFF_REQUESTED_BODY,
+  DROPOFF_DECLINED_BODY,
+} from "../../shared/lib/operations/messages";
 import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import ShareSheet from "./ShareSheet";
@@ -98,7 +103,9 @@ function restoreScrollAnchor(anchor) {
 function messagePreviewText(messages, currentUserId) {
   const last = messages[messages.length - 1];
   if (!last) return "No messages yet. Tap to start the conversation.";
-  if (last.body?.startsWith("📍")) return "📍 ISSC drop-off chosen";
+  if (last.body === DROPOFF_CHOSEN_BODY) return "📍 ISSC drop-off chosen";
+  if (last.body === DROPOFF_REQUESTED_BODY) return "🔔 ISSC drop-off suggested";
+  if (last.body === DROPOFF_DECLINED_BODY) return "🚫 ISSC drop-off declined";
   return last.sender_id === currentUserId ? `You: ${last.body}` : last.body;
 }
 

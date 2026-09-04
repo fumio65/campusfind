@@ -3,7 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
-import { sendMessage, chooseDropoff } from '../../shared/lib/operations/messages'
+import {
+  sendMessage,
+  chooseDropoff,
+  requestDropoff,
+  declineDropoffRequest,
+  DROPOFF_CHOSEN_BODY,
+  DROPOFF_REQUESTED_BODY,
+  DROPOFF_DECLINED_BODY,
+} from '../../shared/lib/operations/messages'
 import SyncStateChip from '../../shared/components/SyncStateChip'
 import {
   useMessages,
@@ -58,7 +66,16 @@ export default function MessageThreadPage() {
   // we're online. Writes (sendMessage / chooseDropoff) write straight into
   // the same cache, so sent messages appear here immediately.
   const messages = useMessages(claim?.id) ?? EMPTY_MESSAGES
-  const dropOffSent = messages.some((m) => m.body?.startsWith('📍'))
+  const dropOffSent = messages.some((m) => m.body === DROPOFF_CHOSEN_BODY)
+  // Suggest/accept/decline is negotiated as plain messages, not a DB status -
+  // only look at these once there's no confirmed drop-off yet. The most
+  // recent 🔔/🚫 marker (if any) is the only one still "live"; anything
+  // before it is inert history (a prior declined suggestion, say).
+  const openRequest = !dropOffSent
+    ? [...messages].reverse().find((m) => m.body === DROPOFF_REQUESTED_BODY || m.body === DROPOFF_DECLINED_BODY)
+    : null
+  const hasOpenRequest = openRequest?.body === DROPOFF_REQUESTED_BODY
+  const requestedByMe = hasOpenRequest && openRequest.sender_id === session.user.id
   const dropOffStatus = useDropOffStatus(claim?.id) // null | 'pending' | 'received' | 'resolved'
   const [text, setText]                   = useState('')
   const [sending, setSending]             = useState(false)
@@ -139,14 +156,31 @@ export default function MessageThreadPage() {
     setSending(false)
   }
 
-  async function handleDropOff(e) {
+  const myRole = isReporter ? 'reporter' : 'claimant'
+
+  async function handleSuggestDropoff(e) {
+    e.preventDefault()
+    if (sending) return
+    setSending(true)
+    try {
+      await requestDropoff({ claimId: claim.id, senderId: session.user.id, senderRole: myRole })
+    } catch {
+      /* local cache write failed unexpectedly; leave UI as-is */
+    }
+    setSending(false)
+  }
+
+  async function handleAcceptDropoff(e) {
     e.preventDefault()
     if (sending) return
     setSending(true)
     try {
       // Writes straight into the cache sendMessage/dropOffSent read from, so
       // the drop-off marker and banner ("pending" is the default fallback
-      // below until refreshDropOffStatus resolves) appear immediately.
+      // below until refreshDropOffStatus resolves) appear immediately. Always
+      // attributes claimant/reporter by their fixed claim roles, regardless
+      // of which side clicked Accept - the claimant is the one who will
+      // physically bring the item to ISSC either way.
       await chooseDropoff({
         reportId: report?.id,
         claimId: claim.id,
@@ -154,6 +188,18 @@ export default function MessageThreadPage() {
         reporterId: report?.reporter_id,
         senderId: session.user.id,
       })
+    } catch {
+      /* local cache write failed unexpectedly; leave UI as-is */
+    }
+    setSending(false)
+  }
+
+  async function handleDeclineDropoff(e) {
+    e.preventDefault()
+    if (sending) return
+    setSending(true)
+    try {
+      await declineDropoffRequest({ claimId: claim.id, senderId: session.user.id, senderRole: myRole })
     } catch {
       /* local cache write failed unexpectedly; leave UI as-is */
     }
@@ -295,10 +341,9 @@ export default function MessageThreadPage() {
 
         {messages.map((msg) => {
           const isMine   = msg.sender_id === session.user.id
-          const isSystem = msg.body?.startsWith('📍')
           const senderName = getSenderName(msg)
 
-          if (isSystem) {
+          if (msg.body === DROPOFF_CHOSEN_BODY) {
             const { title, message } = getDropOffBanner()
             return (
               <div
@@ -314,6 +359,69 @@ export default function MessageThreadPage() {
                     {message}
                   </p>
                   <p className="text-[10px] text-status-claimed-text/50 mt-1">
+                    {timeAgo(msg.created_at)}
+                  </p>
+                </div>
+              </div>
+            )
+          }
+
+          if (msg.body === DROPOFF_REQUESTED_BODY) {
+            // Only the current open request (the most recent 🔔 with no 🚫/📍
+            // after it) is actionable - anything older is inert history, e.g.
+            // a suggestion that was already declined.
+            const isCurrent = hasOpenRequest && openRequest.id === msg.id
+            return (
+              <div
+                key={msg.id}
+                className="flex items-start gap-2.5 bg-status-claimed-bg border border-status-claimed-text/20 rounded-xl px-3 py-2.5"
+              >
+                <span className="text-status-claimed-text mt-0.5 shrink-0">🔔</span>
+                <div className="flex-1">
+                  <p className="text-[11px] font-semibold text-status-claimed-text">
+                    {isMine ? 'You' : senderName} suggested ISSC drop-off
+                  </p>
+                  <p className="text-[11px] text-status-claimed-text/80 mt-0.5 leading-relaxed">
+                    Bring the item to the ISSC office as a safe, verified handoff point.
+                  </p>
+                  <p className="text-[10px] text-status-claimed-text/50 mt-1">
+                    {timeAgo(msg.created_at)}
+                  </p>
+                  {isCurrent && !isMine && (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={handleAcceptDropoff}
+                        disabled={sending}
+                        className="h-7 px-3 rounded-lg bg-status-claimed-text text-white text-[11px] font-semibold disabled:opacity-50 hover:opacity-90 transition-opacity"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={handleDeclineDropoff}
+                        disabled={sending}
+                        className="h-7 px-3 rounded-lg border border-status-claimed-text/30 text-status-claimed-text text-[11px] font-semibold disabled:opacity-50 hover:bg-status-claimed-bg transition-colors"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          }
+
+          if (msg.body === DROPOFF_DECLINED_BODY) {
+            return (
+              <div
+                key={msg.id}
+                className="flex items-start gap-2.5 bg-surface-muted border border-border rounded-xl px-3 py-2.5"
+              >
+                <span className="text-text-muted mt-0.5 shrink-0">🚫</span>
+                <div>
+                  <p className="text-[11px] font-semibold text-text-secondary">
+                    {isMine ? 'You' : senderName} declined the ISSC drop-off suggestion
+                  </p>
+                  <p className="text-[10px] text-text-muted mt-1">
                     {timeAgo(msg.created_at)}
                   </p>
                 </div>
@@ -356,16 +464,25 @@ export default function MessageThreadPage() {
         })}
       </div>
 
-      {/* Drop-off button — claimant only, once */}
-      {!isReporter && !dropOffSent && (
+      {/* Suggest ISSC drop-off — either party, once, until accepted/declined */}
+      {!dropOffSent && !hasOpenRequest && messages.length < MESSAGE_LIMIT && (
         <div className="px-4 pb-2 shrink-0">
           <button
-            onClick={handleDropOff}
+            onClick={handleSuggestDropoff}
             disabled={sending}
             className="w-full h-9 rounded-xl border border-status-claimed-text/30 bg-status-claimed-bg text-status-claimed-text text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
-            📍 Choose ISSC drop-off
+            🔔 Suggest ISSC drop-off
           </button>
+        </div>
+      )}
+
+      {/* Waiting on the other party to accept/decline my own suggestion */}
+      {!dropOffSent && hasOpenRequest && requestedByMe && (
+        <div className="px-4 pb-2 shrink-0">
+          <div className="w-full h-9 rounded-xl border border-border bg-surface-muted text-text-muted text-xs font-medium flex items-center justify-center gap-1.5">
+            Waiting for {otherName} to respond…
+          </div>
         </div>
       )}
 
