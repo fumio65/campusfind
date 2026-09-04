@@ -3,10 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import {
   Search, X, ChevronLeft, ChevronRight, MapPin, CheckCircle2,
   AlertCircle, Pencil, Trash2, Eye, Tag, Calendar, User,
-  Package, FileText,
+  Package, FileText, Share2,
 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabaseClient'
 import Dialog from '../../shared/components/Dialog'
+import ShareCardDialog from './ShareCardDialog'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
@@ -57,6 +58,7 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onAnnounce, onR
   const [claimPhotos, setClaimPhotos]     = useState([])
   const [lightbox, setLightbox]           = useState(null)
   const [loadingPhotos, setLoadingPhotos] = useState(true)
+  const [shareOpen, setShareOpen]         = useState(false)
 
   useEffect(() => {
     if (!report) return
@@ -103,6 +105,11 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onAnnounce, onR
 
   return (
     <>
+      {/* Share card */}
+      {shareOpen && (
+        <ShareCardDialog report={report} photoUrl={photos[0] ?? null} onClose={() => setShareOpen(false)} />
+      )}
+
       {/* Lightbox */}
       {lightbox && (
         <div
@@ -272,6 +279,12 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onAnnounce, onR
 
           {/* Footer actions */}
           <div className="flex items-center gap-2 px-6 py-4 border-t border-border shrink-0 flex-wrap">
+            <button
+              onClick={() => setShareOpen(true)}
+              className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-surface-muted text-text-secondary text-xs font-semibold hover:bg-surface-card border border-border transition-colors"
+            >
+              <Share2 size={12} /> Share
+            </button>
             {report.status === 'open' && report.type === 'found_walkin' && (
               <>
                 <button
