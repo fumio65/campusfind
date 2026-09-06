@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import { App as CapacitorApp } from '@capacitor/app'
 import { AuthProvider, useAuth } from './shared/lib/AuthContext'
 import AppShell from './shared/components/AppShell'
+import AdminAppShell from './shared/components/admin/AdminAppShell'
 import SplashScreen from './shared/components/SplashScreen'
 
 // Minimum time to hold the branded splash screen on screen, so it's
@@ -24,6 +25,15 @@ import HistoryPage from './features/history/HistoryPage'
 import ClaimPage from './features/claims/ClaimPage'
 import MessageThreadPage from './features/claims/MessageThreadPage'
 
+// Admin screens
+import OverviewPage from './features/admin/overview/OverviewPage'
+import AdminReportsPage from './features/admin/reports/ReportsPage'
+import DropoffRequestsPage from './features/admin/dropoff/DropoffRequestsPage'
+import WalkInIntakePage from './features/admin/walk-in/WalkInIntakePage'
+import AccountsPage from './features/admin/accounts/AccountsPage'
+import BulkImportPage from './features/admin/bulk-import/BulkImportPage'
+import AnalyticsPage from './features/admin/analytics/AnalyticsPage'
+
 import './index.css'
 
 function extractReportId(url) {
@@ -42,6 +52,40 @@ function ProtectedRoutes() {
   if (needsPasswordChange) return <Navigate to="/change-password" replace />
 
   return <AppShell />
+}
+
+// Role-gated branch for /admin/* - mirrors ProtectedRoutes but also requires
+// isAdmin, and (like admin/ originally did) waits for profile to arrive
+// before deciding, so an admin whose profile hasn't loaded yet isn't
+// flash-redirected to the student home before its role is known.
+function AdminProtectedRoutes() {
+  const { session, loading, isAdmin, profile } = useAuth()
+
+  if (loading || (session && !profile)) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-surface-page admin-theme">
+        <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!session) return <Navigate to="/login" replace />
+  if (!isAdmin) return <Navigate to="/" replace />
+
+  return (
+    <Routes>
+      <Route element={<AdminAppShell />}>
+        <Route index element={<OverviewPage />} />
+        <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="dropoff" element={<DropoffRequestsPage />} />
+        <Route path="walk-in" element={<WalkInIntakePage />} />
+        <Route path="accounts" element={<AccountsPage />} />
+        <Route path="bulk-import" element={<BulkImportPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Route>
+    </Routes>
+  )
 }
 
 // Same auth gate as ProtectedRoutes, without AppShell's chrome (bottom nav,
@@ -112,6 +156,7 @@ function AppRoutes() {
         path="/reports/:id/messages"
         element={<RequireAuthOnly><MessageThreadPage /></RequireAuthOnly>}
       />
+      <Route path="/admin/*" element={<AdminProtectedRoutes />} />
       <Route path="/*" element={<ProtectedRoutes />}>
         <Route index element={<HomePage />} />
         <Route path="reports/new" element={<NewReportPage />} />
@@ -138,7 +183,8 @@ export default function App() {
 }
 
 function PublicOnlyRoute({ children }) {
-  const { session } = useAuth()
-  if (session) return <Navigate to="/" replace />
+  const { session, loading, isAdmin, profile } = useAuth()
+  if (loading || (session && !profile)) return null
+  if (session) return <Navigate to={isAdmin ? '/admin' : '/'} replace />
   return children
 }
