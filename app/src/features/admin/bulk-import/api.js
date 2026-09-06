@@ -14,10 +14,14 @@ export async function fetchBulkImportBatch(batchId) {
   return body // { batch, rows }
 }
 
-export async function uploadBulkImportCsv(file, uploadedBy, { signal } = {}) {
+export async function uploadBulkImportCsv(file, uploadedBy, mapping, { signal } = {}) {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('uploadedBy', uploadedBy)
+  // Rename dictionary from the column-mapping step (csv header -> canonical
+  // field name), only present when the file's headers didn't already match
+  // the Registrar template.
+  if (mapping) formData.append('mapping', JSON.stringify(mapping))
 
   sessionStorage.setItem(UPLOAD_IN_PROGRESS_KEY, '1')
 

@@ -21,6 +21,8 @@ export default function TemplateCard() {
         </div>
         <p className="text-xs text-text-secondary mb-3">
           Download a template with the {TEMPLATE_HEADERS.length} expected columns and a few example rows.
+          Already have your own file? Upload it below — if its column names don't match, you'll get a
+          chance to match them up before anything is imported.
         </p>
 
         <div className="rounded-lg border border-border overflow-hidden inline-block max-w-full">

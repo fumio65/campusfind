@@ -253,6 +253,28 @@ Deno.serve(async (req) => {
         return json({ error: 'CSV has no data rows.' }, 400)
       }
 
+      // Column mapping: when the uploaded CSV's headers don't match the
+      // Registrar template, the client's mapping step sends a rename
+      // dictionary (csv header -> canonical field name). Applying it here
+      // means validateHeaders/classifyRows below never need to know about
+      // the original header names. Mirrors server/src/routes/bulkImport.js.
+      const mappingRaw = formData.get('mapping') as string | null
+      if (mappingRaw) {
+        let mapping: Record<string, string>
+        try {
+          mapping = JSON.parse(mappingRaw)
+        } catch {
+          return json({ error: 'Invalid column mapping.' }, 400)
+        }
+        rawRows = rawRows.map((row) => {
+          const mapped: Record<string, unknown> = {}
+          for (const [csvHeader, value] of Object.entries(row)) {
+            mapped[mapping[csvHeader] ?? csvHeader] = value
+          }
+          return mapped
+        })
+      }
+
       const headerError = validateHeaders(Object.keys(rawRows[0]))
       if (headerError) {
         return json({ error: headerError }, 400)

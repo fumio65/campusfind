@@ -92,7 +92,9 @@ export default function CsvDropzone({ onFileSelected, onCancelUpload, uploading,
         ) : (
           <>
             <div className="text-sm font-semibold text-text-primary">Drop your Registrar CSV here</div>
-            <div className="text-xs text-text-secondary">or click to browse for a file</div>
+            <div className="text-xs text-text-secondary">
+              or click to browse — column names don't need to match exactly
+            </div>
           </>
         )}
       </div>

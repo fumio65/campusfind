@@ -8,6 +8,8 @@ import EditPanel from './EditPanel'
 import DataRow from './DataRow'
 import CsvDropzone from './CsvDropzone'
 import TemplateCard from './TemplateCard'
+import ColumnMappingStep from './ColumnMappingStep'
+import { parseCsvHeaderRow, headersAlreadyMatch } from './columnMapping'
 import Dialog from '../../../shared/components/admin/Dialog'
 import { staggerContainer } from '../../../shared/lib/adminMotion'
 
@@ -29,6 +31,8 @@ export default function BulkImportPage() {
   const [loadingBatch, setLoadingBatch] = useState(true)
   const [resumingUpload, setResumingUpload] = useState(false)
   const [justFixedRowId, setJustFixedRowId] = useState(null)
+  const [mappingHeaders, setMappingHeaders] = useState(null)
+  const [pendingFile, setPendingFile] = useState(null)
   const uploadAbortRef = useRef(null)
   const { session } = useAuth()
 
@@ -100,14 +104,14 @@ export default function BulkImportPage() {
     }
   }, [])
 
-  async function handleFileSelected(file) {
+  async function performUpload(file, mapping) {
     setUploading(true)
     setError(null)
     setConfirmResult(null)
     const controller = new AbortController()
     uploadAbortRef.current = controller
     try {
-      const result = await uploadBulkImportCsv(file, session?.user?.id, {
+      const result = await uploadBulkImportCsv(file, session?.user?.id, mapping, {
         signal: controller.signal,
       })
       setBatch(result.batch)
@@ -123,6 +127,42 @@ export default function BulkImportPage() {
       setUploading(false)
       uploadAbortRef.current = null
     }
+  }
+
+  // Peeks at the CSV's header row before uploading. Files that already use
+  // the Registrar template's exact column names skip straight to the same
+  // upload as before; anything else goes through the mapping step first.
+  async function handleFileSelected(file) {
+    setError(null)
+    let headers
+    try {
+      headers = parseCsvHeaderRow(await file.text())
+    } catch {
+      setError('Could not read the selected file.')
+      return
+    }
+    if (headers.length === 0) {
+      setError('CSV appears to be empty.')
+      return
+    }
+    if (headersAlreadyMatch(headers)) {
+      performUpload(file, null)
+    } else {
+      setPendingFile(file)
+      setMappingHeaders(headers)
+    }
+  }
+
+  function handleMappingConfirm(mapping) {
+    const file = pendingFile
+    setMappingHeaders(null)
+    setPendingFile(null)
+    performUpload(file, mapping)
+  }
+
+  function handleMappingCancel() {
+    setMappingHeaders(null)
+    setPendingFile(null)
   }
 
   function handleCancelUpload() {
@@ -169,6 +209,8 @@ export default function BulkImportPage() {
     setConfirmResult(null)
     setIsConfirmed(false)
     setEditingRowId(null)
+    setMappingHeaders(null)
+    setPendingFile(null)
   }
 
   if (loadingBatch) {
@@ -220,7 +262,14 @@ export default function BulkImportPage() {
         )}
       </Dialog>
 
-      {!hasBatch ? (
+      {mappingHeaders ? (
+        <ColumnMappingStep
+          headers={mappingHeaders}
+          filename={pendingFile?.name}
+          onConfirm={handleMappingConfirm}
+          onCancel={handleMappingCancel}
+        />
+      ) : !hasBatch ? (
         resumingUpload ? (
           <div className="bg-surface-card border border-border rounded-xl py-14 text-center">
             <div className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />

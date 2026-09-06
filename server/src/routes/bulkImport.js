@@ -52,6 +52,27 @@ router.post('/bulk-import', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: 'CSV has no data rows.' })
   }
 
+  // Column mapping: when the uploaded CSV's headers don't match the
+  // Registrar template, the client's mapping step sends a rename dictionary
+  // (csv header -> canonical field name). Applying it here means
+  // validateHeaders/classifyRows below never need to know about the
+  // original header names.
+  if (req.body.mapping) {
+    let mapping
+    try {
+      mapping = JSON.parse(req.body.mapping)
+    } catch {
+      return res.status(400).json({ error: 'Invalid column mapping.' })
+    }
+    rawRows = rawRows.map((row) => {
+      const mapped = {}
+      for (const [csvHeader, value] of Object.entries(row)) {
+        mapped[mapping[csvHeader] ?? csvHeader] = value
+      }
+      return mapped
+    })
+  }
+
   const headerError = validateHeaders(Object.keys(rawRows[0]))
   if (headerError) {
     return res.status(400).json({ error: headerError })
