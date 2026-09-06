@@ -32,6 +32,35 @@
   --color-status-rejected-text: #B91C1C;
 }
 
+/* Admin dashboard palette — admin/ (now merged in under features/admin and
+   shared/components/admin) used its own literal values for these same token
+   names. Scope its originals to .admin-theme (set on AdminAppShell's root)
+   so migrating it in doesn't reskin the student app's colors. */
+.admin-theme {
+  --color-brand-50: #E3F0EC;
+  --color-brand-100: #B9D6CF;
+  --color-brand-400: #0F6E56;
+  --color-brand-700: #04342C;
+  --color-brand-900: #021F1A;
+
+  --color-surface-page: #F4F6F5;
+  --color-surface-muted: #F4F6F5;
+  --color-border-strong: #C9D6D2;
+
+  --color-text-primary: #0E1B19;
+  --color-text-secondary: #5C6B68;
+  --color-text-muted: #8A8270;
+
+  --color-status-open-bg: #E3F0EC;
+  --color-status-claimed-bg: #FAEEDA;
+  --color-status-approved-bg: #E6F1FB;
+  --color-status-approved-text: #0C447C;
+  --color-status-resolved-bg: #F1EFE8;
+  --color-status-resolved-text: #5F5E5A;
+  --color-status-rejected-bg: #FCEBEB;
+  --color-status-rejected-text: #A32D2D;
+}
+
 * { -webkit-tap-highlight-color: transparent; }
 
 /* Hide scrollbars globally while keeping scroll functionality */
