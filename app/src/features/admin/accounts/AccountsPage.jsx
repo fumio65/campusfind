@@ -150,7 +150,7 @@ export default function AccountsPage() {
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden="true" />
           <input
-            type="search"
+            type="text"
             placeholder="Search by name or student ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

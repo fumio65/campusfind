@@ -317,7 +317,7 @@ export default function HomePage() {
               aria-hidden="true"
             />
             <input
-              type="search"
+              type="text"
               placeholder="Search lost items…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}

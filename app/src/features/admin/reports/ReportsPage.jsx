@@ -794,7 +794,7 @@ export default function ReportsPage() {
       <div className="px-6 pt-4">
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input type="search" placeholder="Search by title or location…" value={search} onChange={handleSearchChange} className="w-full h-9 pl-9 pr-9 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400" />
+          <input type="text" placeholder="Search by title or location…" value={search} onChange={handleSearchChange} className="w-full h-9 pl-9 pr-9 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400" />
           {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"><X size={14} /></button>}
         </div>
         <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
