@@ -23,6 +23,7 @@ import { getCachedReportDetail } from '../../shared/lib/repositories/reportDetai
 import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
 import ValidationDialog from '../../shared/components/ValidationDialog'
+import ConfirmDialog from '../../shared/components/ConfirmDialog'
 
 const MESSAGE_LIMIT = 10
 // Matches Tips' 20/25 (80%) warning threshold, scaled to this limit.
@@ -60,6 +61,13 @@ export default function MessageThreadPage() {
   const isReporter = context?.isReporter ?? false
   const reporterName = context?.reporterName
   const claimantName = context?.claimantName
+  // undefined (not just falsy) when falling back to the offline cache, which
+  // doesn't carry status - the notice/bypass below only ever show when this
+  // is confirmed 'deactivated', so being offline just means it stays hidden
+  // rather than showing anything based on stale data.
+  const otherPartyDeactivated = isReporter
+    ? context?.claimantStatus === 'deactivated'
+    : context?.reporterStatus === 'deactivated'
 
   // Read reactively from the local cache (works offline); refreshMessages /
   // refreshDropOffStatus below keep the cache in sync with Supabase whenever
@@ -170,17 +178,17 @@ export default function MessageThreadPage() {
     setSending(false)
   }
 
-  async function handleAcceptDropoff(e) {
-    e.preventDefault()
+  // Writes straight into the cache sendMessage/dropOffSent read from, so the
+  // drop-off marker and banner ("pending" is the default fallback below
+  // until refreshDropOffStatus resolves) appear immediately. Always
+  // attributes claimant/reporter by their fixed claim roles, regardless of
+  // who triggers it - the claimant is the one who will physically bring the
+  // item to ISSC either way. Shared by the normal Accept button and the
+  // "request ISSC help" bypass when the other party is deactivated.
+  async function performChooseDropoff() {
     if (sending) return
     setSending(true)
     try {
-      // Writes straight into the cache sendMessage/dropOffSent read from, so
-      // the drop-off marker and banner ("pending" is the default fallback
-      // below until refreshDropOffStatus resolves) appear immediately. Always
-      // attributes claimant/reporter by their fixed claim roles, regardless
-      // of which side clicked Accept - the claimant is the one who will
-      // physically bring the item to ISSC either way.
       await chooseDropoff({
         reportId: report?.id,
         claimId: claim.id,
@@ -192,6 +200,18 @@ export default function MessageThreadPage() {
       /* local cache write failed unexpectedly; leave UI as-is */
     }
     setSending(false)
+  }
+
+  async function handleAcceptDropoff(e) {
+    e.preventDefault()
+    await performChooseDropoff()
+  }
+
+  const [showIsscHelpConfirm, setShowIsscHelpConfirm] = useState(false)
+
+  async function handleConfirmIsscHelp() {
+    setShowIsscHelpConfirm(false)
+    await performChooseDropoff()
   }
 
   async function handleDeclineDropoff(e) {
@@ -464,8 +484,26 @@ export default function MessageThreadPage() {
         })}
       </div>
 
+      {/* Other party deactivated - the normal suggest/accept negotiation
+          can't complete since they can never respond again, so offer a
+          direct route to admin instead of the usual suggest/wait UI. */}
+      {!dropOffSent && otherPartyDeactivated && (
+        <div className="px-4 pb-2 shrink-0 flex flex-col gap-2">
+          <div className="bg-status-rejected-bg border border-status-rejected-text/20 rounded-xl px-3 py-2.5 text-[11px] text-status-rejected-text">
+            {otherName}'s account is no longer active and can't respond here anymore.
+          </div>
+          <button
+            onClick={() => setShowIsscHelpConfirm(true)}
+            disabled={sending}
+            className="w-full h-9 rounded-xl border border-status-claimed-text/30 bg-status-claimed-bg text-status-claimed-text text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            Request ISSC to complete this handoff
+          </button>
+        </div>
+      )}
+
       {/* Suggest ISSC drop-off — either party, once, until accepted/declined */}
-      {!dropOffSent && !hasOpenRequest && messages.length < MESSAGE_LIMIT && (
+      {!dropOffSent && !otherPartyDeactivated && !hasOpenRequest && messages.length < MESSAGE_LIMIT && (
         <div className="px-4 pb-2 shrink-0">
           <button
             onClick={handleSuggestDropoff}
@@ -478,7 +516,7 @@ export default function MessageThreadPage() {
       )}
 
       {/* Waiting on the other party to accept/decline my own suggestion */}
-      {!dropOffSent && hasOpenRequest && requestedByMe && (
+      {!dropOffSent && !otherPartyDeactivated && hasOpenRequest && requestedByMe && (
         <div className="px-4 pb-2 shrink-0">
           <div className="w-full h-9 rounded-xl border border-border bg-surface-muted text-text-muted text-xs font-medium flex items-center justify-center gap-1.5">
             Waiting for {otherName} to respond…
@@ -488,6 +526,15 @@ export default function MessageThreadPage() {
 
       {/* Input - pinned to the bottom of the flex column, not scrolled to */}
       <ValidationDialog message={sendError} onDismiss={() => setSendError('')} />
+      <ConfirmDialog
+        visible={showIsscHelpConfirm}
+        title="Request ISSC help?"
+        message={`This lets ISSC complete the handoff directly since ${otherName} can no longer respond. The item will be routed through the ISSC office the same way an accepted drop-off would.`}
+        confirmLabel="Request help"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmIsscHelp}
+        onCancel={() => setShowIsscHelpConfirm(false)}
+      />
       <div className="px-4 py-3 border-t border-border bg-surface-card shrink-0">
         {messages.length >= MESSAGE_LIMIT ? (
           <div className="bg-surface-muted rounded-xl px-3 py-2.5 text-xs text-text-secondary text-center">
@@ -555,8 +602,8 @@ async function fetchThreadContext(reportId, sessionUserId) {
 
   const isReporter = reportData.reporter_id === sessionUserId
   const [{ data: reporterUser }, { data: claimantUser }] = await Promise.all([
-    supabase.from('users').select('first_name, last_name').eq('id', reportData.reporter_id).single(),
-    supabase.from('users').select('first_name, last_name').eq('id', activeClaim.claimant_id).single(),
+    supabase.from('users').select('first_name, last_name, status').eq('id', reportData.reporter_id).single(),
+    supabase.from('users').select('first_name, last_name, status').eq('id', activeClaim.claimant_id).single(),
   ])
 
   return {
@@ -565,6 +612,8 @@ async function fetchThreadContext(reportId, sessionUserId) {
     isReporter,
     reporterName: reporterUser ? `${reporterUser.first_name} ${reporterUser.last_name}` : 'Reporter',
     claimantName: claimantUser ? `${claimantUser.first_name} ${claimantUser.last_name}` : 'Finder',
+    reporterStatus: reporterUser?.status,
+    claimantStatus: claimantUser?.status,
   }
 }
 

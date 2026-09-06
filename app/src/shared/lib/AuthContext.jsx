@@ -3,6 +3,11 @@ import { supabase, readPersistedSession } from '../lib/supabase'
 import { db } from './db'
 import { onSyncTrigger } from './appLifecycle'
 const AuthContext = createContext(null)
+// Set right before a forced sign-out that happens away from /login (i.e. the
+// account was deactivated while already in use, not during a login attempt
+// LoginPage's own check already messages inline) - LoginPage checks this on
+// mount to show a "you were signed out" dialog explaining what happened.
+export const FORCED_SIGNOUT_KEY = 'campusfind:forced-signout-deactivated'
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined)
   const [profile, setProfile] = useState(null)
@@ -79,6 +84,21 @@ export function AuthProvider({ children }) {
       if (error) throw error
       setProfile(data)
       db.profile.put(data).catch(() => {})
+      // Covers both a stale-but-still-active session (login-time check in
+      // LoginPage is the primary guard there) and an admin deactivating this
+      // account mid-session - the Realtime subscription above re-runs this
+      // on any change to the row, so this fires within seconds either way.
+      // Signing out flips `session` to null, which every route guard in
+      // App.jsx already reacts to by redirecting to /login.
+      if (data.status === 'deactivated') {
+        // Only flag this for LoginPage's dialog when it happens away from
+        // /login - an in-progress login attempt already gets its own
+        // inline message there, so this avoids showing both at once.
+        if (window.location.pathname !== '/login') {
+          sessionStorage.setItem(FORCED_SIGNOUT_KEY, '1')
+        }
+        supabase.auth.signOut()
+      }
     } catch {
       // Offline or request failed - keep the cached profile (if any) rather
       // than clobbering it with null.

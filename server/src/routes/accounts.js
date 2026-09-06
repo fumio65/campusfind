@@ -110,6 +110,20 @@ router.patch('/:id/status', async (req, res) => {
     .single()
 
   if (error) return res.status(500).json({ error: error.message })
+
+  if (status === 'deactivated') {
+    // Best-effort - the status change itself already succeeded, so a failed
+    // notification shouldn't fail the request. The insert alone triggers
+    // the existing push pipeline (see 0003_push_notifications.sql).
+    const { error: notifyError } = await supabaseAdmin.from('user_notifications').insert({
+      user_id: id,
+      type: 'account_deactivated',
+      title: 'Account Deactivated',
+      body: 'Your CampusFind account has been deactivated. Please contact the ISSC office for assistance.',
+    })
+    if (notifyError) console.error('Failed to notify deactivated user:', notifyError.message)
+  }
+
   res.json(data)
 })
 

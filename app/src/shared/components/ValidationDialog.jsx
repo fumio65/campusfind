@@ -4,7 +4,7 @@ import { AlertCircle } from 'lucide-react'
 // Centered modal for form validation/submit errors - an inline banner at the
 // top of a long scrollable form can sit off-screen by the time the user has
 // scrolled down to the submit button, so they never see why it failed.
-export default function ValidationDialog({ message, onDismiss }) {
+export default function ValidationDialog({ message, onDismiss, title = 'Almost there' }) {
   return (
     <AnimatePresence>
       {message && (
@@ -26,7 +26,7 @@ export default function ValidationDialog({ message, onDismiss }) {
             <div className="w-12 h-12 rounded-full bg-status-rejected-bg flex items-center justify-center mx-auto mb-4">
               <AlertCircle size={24} className="text-status-rejected-text" />
             </div>
-            <p className="text-sm font-semibold text-text-primary mb-1">Almost there</p>
+            <p className="text-sm font-semibold text-text-primary mb-1">{title}</p>
             <p className="text-sm text-text-secondary mb-5">{message}</p>
             <button
               onClick={onDismiss}

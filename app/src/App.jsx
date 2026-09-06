@@ -130,11 +130,14 @@ function AppRoutes() {
     })
 
     // Warm start: app was already running and the link was tapped again.
+    // addListener returns a Promise<PluginListenerHandle>, not a handle
+    // directly - awaiting it before calling remove() avoids "remove is not
+    // a function" on cleanup.
     const listener = CapacitorApp.addListener('appUrlOpen', ({ url }) => {
       const id = extractReportId(url)
       if (id) setPendingReportId(id)
     })
-    return () => { listener.remove() }
+    return () => { listener.then((handle) => handle.remove()) }
   }, [])
 
   // Resume to the pending report as soon as there's a session to view it
@@ -184,7 +187,14 @@ export default function App() {
 
 function PublicOnlyRoute({ children }) {
   const { session, loading, isAdmin, profile } = useAuth()
-  if (loading || (session && !profile)) return null
+  if (loading) return null
+  // Keep showing the login form (rather than blanking to null, or worse,
+  // navigating away) while we don't yet know the role, or while the
+  // profile we just got back is a deactivated one. Navigating to "/" here
+  // would briefly mount HomePage and fetch data before AuthContext's own
+  // signOut() (for a deactivated account) clears the session back out -
+  // this must never navigate on anything but a genuinely active session.
+  if (session && (!profile || profile.status === 'deactivated')) return children
   if (session) return <Navigate to={isAdmin ? '/admin' : '/'} replace />
   return children
 }

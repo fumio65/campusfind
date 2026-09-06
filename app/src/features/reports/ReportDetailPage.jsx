@@ -583,7 +583,7 @@ export default function ReportDetailPage() {
         data.reporter_id
           ? supabase
               .from("users")
-              .select("first_name, last_name")
+              .select("first_name, last_name, status")
               .eq("id", data.reporter_id)
               .single()
               .then(({ data: user }) => user ?? null)
@@ -673,7 +673,7 @@ export default function ReportDetailPage() {
               .order("created_at", { ascending: true }),
             supabase
               .from("users")
-              .select("first_name, last_name, trust_score, student_id")
+              .select("first_name, last_name, trust_score, student_id, status")
               .eq("id", claimData.claimant_id)
               .single(),
           ]);
@@ -928,6 +928,13 @@ export default function ReportDetailPage() {
   const isApproved = report?.status === "approved";
   const isResolved = report?.status === "resolved";
   const canShare = isOpen || isResolved;
+  // "claimant" is only ever populated once an active (pending/approved) claim
+  // exists on this report, so this is naturally falsy until there's actually
+  // another party to check.
+  const isTheClaimant = claim?.claimant_id === session?.user?.id;
+  const otherPartyDeactivated = isOwner
+    ? claimant?.status === "deactivated"
+    : isTheClaimant && reporter?.status === "deactivated";
 
   if (loading) {
     return (
@@ -1271,6 +1278,23 @@ export default function ReportDetailPage() {
             )}
           </div>
         </motion.div>
+
+        {/* Counterpart deactivated notice */}
+        {otherPartyDeactivated && (
+          <div className="bg-status-rejected-bg border border-status-rejected-text/20 rounded-2xl px-4 py-3 flex flex-col gap-1">
+            <p className="text-xs font-semibold text-status-rejected-text">
+              {isOwner
+                ? `${claimant?.first_name ?? "The claimant"}'s account is no longer active`
+                : `${reporter?.first_name ?? "The reporter"}'s account is no longer active`}
+            </p>
+            <p className="text-xs text-status-rejected-text/80">
+              They won't be able to respond further.{" "}
+              {isApproved
+                ? "Open the message thread below to request ISSC's help completing this handoff."
+                : "Contact the ISSC office for help resolving this report."}
+            </p>
+          </div>
+        )}
 
         {/* Reporter: claim review panel - loading placeholder while we
             still don't know the claim details for this report (see

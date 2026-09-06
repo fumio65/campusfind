@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { supabase } from '../../shared/lib/supabase'
+import { FORCED_SIGNOUT_KEY } from '../../shared/lib/AuthContext'
+import ValidationDialog from '../../shared/components/ValidationDialog'
 import appIcon from '../../assets/app-icon.png'
 
 export default function LoginPage() {
@@ -11,6 +13,18 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [forcedSignOutNotice, setForcedSignOutNotice] = useState(false)
+
+  // Arrives here already signed out - AuthContext set this flag right
+  // before force-signing out an account it detected was deactivated while
+  // the app was already open elsewhere (not this in-progress login attempt,
+  // which gets its own inline `error` message instead).
+  useEffect(() => {
+    if (sessionStorage.getItem(FORCED_SIGNOUT_KEY)) {
+      sessionStorage.removeItem(FORCED_SIGNOUT_KEY)
+      setForcedSignOutNotice(true)
+    }
+  }, [])
 
   function toEmail(sid) {
     return `${sid.toLowerCase().replace('-', '')}@nwssu.local`
@@ -23,7 +37,7 @@ export default function LoginPage() {
 
     const formatted = studentId.trim().toUpperCase()
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email: toEmail(formatted),
       password,
     })
@@ -37,6 +51,21 @@ export default function LoginPage() {
       } else {
         setError('Invalid Student ID or password. Please try again.')
       }
+      setLoading(false)
+      return
+    }
+
+    const { data: profile } = await supabase
+      .from('users')
+      .select('status')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profile?.status === 'deactivated') {
+      await supabase.auth.signOut()
+      setError('This account has been deactivated. Please contact the ISSC office for assistance.')
+      setLoading(false)
+      return
     }
 
     setLoading(false)
@@ -44,6 +73,15 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-brand-600 flex items-center justify-center px-4">
+      <ValidationDialog
+        title="Signed out"
+        message={
+          forcedSignOutNotice
+            ? 'Your account has been deactivated, so you were signed out. Please contact the ISSC office for assistance.'
+            : null
+        }
+        onDismiss={() => setForcedSignOutNotice(false)}
+      />
       <div className="w-full max-w-sm">
 
         {/* Branding */}
