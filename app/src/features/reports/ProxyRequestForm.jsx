@@ -16,6 +16,10 @@ export default function ProxyRequestForm({
   const [error, setError]                   = useState(null);
   const [existingRequest, setExistingRequest] = useState(null);
   const validateRef = useRef(null);
+  // Fetched once (not per-keystroke) and awaited from validateStudentId -
+  // reporterId's student_id never changes for the life of this form, so
+  // there's no need to re-query it on every validation attempt.
+  const ownerStudentIdRef = useRef(null);
   // This form validates and registers a proxy against the live student
   // directory, so - like login - it requires connectivity rather than
   // going through the offline write queue.
@@ -24,6 +28,15 @@ export default function ProxyRequestForm({
   useEffect(() => {
     checkExisting();
   }, [reportId]);
+
+  useEffect(() => {
+    ownerStudentIdRef.current = supabase
+      .from("users")
+      .select("student_id")
+      .eq("id", reporterId)
+      .single()
+      .then(({ data }) => data?.student_id?.toUpperCase() ?? null);
+  }, [reporterId]);
 
   async function checkExisting() {
     const { data } = await supabase
@@ -48,14 +61,11 @@ export default function ProxyRequestForm({
     try {
       const inputId = studentId.trim().toUpperCase();
 
-      // Block owner's own Student ID
-      const { data: owner } = await supabase
-        .from("users")
-        .select("student_id")
-        .eq("id", reporterId)
-        .single();
+      // Block owner's own Student ID - awaits the cached fetch from mount
+      // rather than re-querying it here.
+      const ownerStudentId = await ownerStudentIdRef.current;
 
-      if (owner?.student_id?.toUpperCase() === inputId) {
+      if (ownerStudentId === inputId) {
         setValidation("is_owner");
         setVerifiedName(null);
         setValidating(false);
