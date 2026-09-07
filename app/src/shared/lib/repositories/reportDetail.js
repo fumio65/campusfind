@@ -71,6 +71,7 @@ export async function getCachedReportDetail(reportId) {
 
   const photos = await db.report_photos.where('report_id').equals(reportId).sortBy('position')
   const photoUrls = photos.map((p) => publicUrl(p.storage_path))
+  const thumbUrls = photos.map((p) => publicUrl(p.thumbnail_path ?? p.storage_path))
 
   const reporter = report.reporter_first_name
     ? { first_name: report.reporter_first_name, last_name: report.reporter_last_name }
@@ -109,7 +110,7 @@ export async function getCachedReportDetail(reportId) {
   const tips = await db.tips.where('report_id').equals(reportId).sortBy('created_at')
 
   return {
-    report: { ...report, photoUrls, walkin_finder_name: null },
+    report: { ...report, photoUrls, thumbUrls, walkin_finder_name: null },
     reporter,
     claim,
     claimant,

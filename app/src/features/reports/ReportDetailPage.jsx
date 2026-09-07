@@ -556,7 +556,7 @@ export default function ReportDetailPage() {
     // Keep whatever photoUrls are already showing (from cache or the
     // previous fetch) until the report_photos query below resolves, so a
     // background refresh doesn't blank the images out and back in.
-    setReport((prev) => ({ ...data, photoUrls: prev?.photoUrls }));
+    setReport((prev) => ({ ...data, photoUrls: prev?.photoUrls, thumbUrls: prev?.thumbUrls }));
     await cacheReport(data);
 
     // report_photos, the walk-in finder lookup, and the reporter lookup
@@ -567,7 +567,7 @@ export default function ReportDetailPage() {
       await Promise.all([
         supabase
           .from("report_photos")
-          .select("id, storage_path, position")
+          .select("id, storage_path, thumbnail_path, position")
           .eq("report_id", id)
           .order("position", { ascending: true }),
         data.type === "found_walkin" && data.walkin_finder_ref
@@ -614,6 +614,14 @@ export default function ReportDetailPage() {
       } = supabase.storage.from("report-photos").getPublicUrl(p.storage_path);
       return publicUrl;
     });
+    const thumbUrls = reportPhotoRows.map((p) => {
+      const {
+        data: { publicUrl },
+      } = supabase.storage
+        .from("report-photos")
+        .getPublicUrl(p.thumbnail_path ?? p.storage_path);
+      return publicUrl;
+    });
 
     // Stash the reporter's name on the cached report row too - there's no
     // local directory of other users, so this is what lets a repeat visit
@@ -621,6 +629,7 @@ export default function ReportDetailPage() {
     const enrichedReport = {
       ...data,
       photoUrls,
+      thumbUrls,
       walkin_finder_name: walkinFinderName,
       reporter_first_name: reporterUser?.first_name ?? null,
       reporter_last_name: reporterUser?.last_name ?? null,
@@ -1202,20 +1211,23 @@ export default function ReportDetailPage() {
             animate={{ opacity: 1 }}
             className="flex gap-2 overflow-x-auto pb-1"
           >
-            {report.photoUrls.map((url, i) => (
-              <button
-                key={i}
-                onClick={() => setLightboxUrl(url)}
-                className="shrink-0"
-              >
-                <CachedImage
-                  src={url}
-                  cacheKey={url}
-                  alt=""
-                  className="w-32 h-32 rounded-xl object-cover border border-border"
-                />
-              </button>
-            ))}
+            {report.photoUrls.map((url, i) => {
+              const thumbUrl = report.thumbUrls?.[i] ?? url;
+              return (
+                <button
+                  key={i}
+                  onClick={() => setLightboxUrl(url)}
+                  className="shrink-0"
+                >
+                  <CachedImage
+                    src={thumbUrl}
+                    cacheKey={thumbUrl}
+                    alt=""
+                    className="w-32 h-32 rounded-xl object-cover border border-border"
+                  />
+                </button>
+              );
+            })}
           </motion.div>
         )}
 

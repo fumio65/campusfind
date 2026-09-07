@@ -69,6 +69,22 @@ export function ensureCached(src, cacheKey) {
   return promise
 }
 
+// Runs ensureCached for a list of {src, cacheKey} entries with a capped
+// number in flight at once, pulled in list order - so with many thumbnails
+// requested at the same time (e.g. the reports list), earlier ones claim a
+// slot first and tend to resolve first, instead of all 30+ firing at once
+// and completing in whatever order the network happens to return them.
+export async function ensureCachedInOrder(entries, concurrency = 4) {
+  let next = 0
+  async function worker() {
+    while (next < entries.length) {
+      const { src, cacheKey } = entries[next++]
+      await ensureCached(src, cacheKey)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, entries.length) }, worker))
+}
+
 // Seeds the cache directly from a locally-authored file, before it's ever
 // uploaded - used when creating/editing a report, so its thumbnail is
 // available instantly from the user's own photo instead of waiting on the

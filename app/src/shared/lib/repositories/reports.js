@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { supabase } from '../supabase'
 import { db } from '../db'
 import { isOnline } from '../network'
-import { ensureCached } from '../imageCache'
+import { ensureCachedInOrder } from '../imageCache'
 
 const VISIBLE_STATUSES = ['open', 'claimed', 'approved', 'resolved']
 
@@ -17,15 +17,23 @@ function thumbnailUrl(storagePath) {
 // live query below picks up the refreshed data, the thumbnail bytes are
 // already on their way in - or already sitting in cache - instead of each
 // ReportCard's CachedImage discovering the miss on its own only once mounted.
-function prefetchThumbnails(photos) {
+// orderedReportIds fixes the fetch priority to match the list's own order
+// (newest first) so thumbnails tend to resolve top-to-bottom instead of in
+// whatever order the network happens to return them.
+function prefetchThumbnails(orderedReportIds, photos) {
   const firstByReport = new Map()
   for (const photo of [...photos].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))) {
-    if (!firstByReport.has(photo.report_id)) firstByReport.set(photo.report_id, photo.storage_path)
+    if (!firstByReport.has(photo.report_id)) firstByReport.set(photo.report_id, photo)
   }
-  for (const storagePath of firstByReport.values()) {
-    const url = thumbnailUrl(storagePath)
-    if (url) ensureCached(url, url)
-  }
+  const entries = orderedReportIds
+    .map((id) => firstByReport.get(id))
+    .filter(Boolean)
+    .map((photo) => {
+      const url = thumbnailUrl(photo.thumbnail_path ?? photo.storage_path)
+      return url ? { src: url, cacheKey: url } : null
+    })
+    .filter(Boolean)
+  ensureCachedInOrder(entries)
 }
 
 // Cache-aside refresh: fetches from Supabase when online and writes into
@@ -57,12 +65,12 @@ export async function refreshReports({ search, category, location, status } = {}
   if (!reportIds.length) return
   const { data: photos } = await supabase
     .from('report_photos')
-    .select('id, report_id, storage_path, position')
+    .select('id, report_id, storage_path, thumbnail_path, position')
     .in('report_id', reportIds)
     .order('position', { ascending: true })
   if (photos?.length) {
     await db.report_photos.bulkPut(photos)
-    prefetchThumbnails(photos)
+    prefetchThumbnails(reportIds, photos)
   }
 }
 
@@ -102,13 +110,16 @@ export function useReports({ search, category, location, status } = {}) {
 
     const firstPhotoByReport = {}
     for (const photo of [...photos].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))) {
-      if (!(photo.report_id in firstPhotoByReport)) firstPhotoByReport[photo.report_id] = photo.storage_path
+      if (!(photo.report_id in firstPhotoByReport)) firstPhotoByReport[photo.report_id] = photo
     }
 
     return reports
       .filter((r) => matchesFilters(r, { search, category, location, status }))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 30)
-      .map((r) => ({ ...r, thumbnail: thumbnailUrl(firstPhotoByReport[r.id]) }))
+      .map((r) => {
+        const photo = firstPhotoByReport[r.id]
+        return { ...r, thumbnail: thumbnailUrl(photo?.thumbnail_path ?? photo?.storage_path) }
+      })
   }, [search, category, location, status])
 }

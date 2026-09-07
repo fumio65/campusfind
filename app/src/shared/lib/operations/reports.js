@@ -2,6 +2,12 @@ import { supabase } from '../supabase'
 import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
 import { seedCache } from '../imageCache'
+import { makeThumbnail } from '../imageThumbnail'
+
+// Blobs table key for a photo's thumbnail - kept separate from the
+// full-resolution blob (keyed by the photo id alone) so either can be
+// deleted independently once its own upload lands.
+const thumbBlobId = (photoId) => `${photoId}::thumb`
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
@@ -39,15 +45,27 @@ registerHandler('createReport', async (payload) => {
       if (uploadError) throw uploadError
     }
 
+    if (photo.thumbnail_path) {
+      const thumbBlob = await db.blobs.get(thumbBlobId(photo.id))
+      if (thumbBlob) {
+        const { error: thumbUploadError } = await supabase.storage
+          .from('report-photos')
+          .upload(photo.thumbnail_path, thumbBlob.data, { cacheControl: '3600', upsert: true })
+        if (thumbUploadError) throw thumbUploadError
+      }
+    }
+
     const { error: photoError } = await supabase.from('report_photos').insert({
       id: photo.id,
       report_id: report.id,
       storage_path: photo.storage_path,
+      thumbnail_path: photo.thumbnail_path,
       position: photo.position,
     })
     if (photoError && !isPrimaryKeyConflict(photoError)) throw photoError
 
     await db.blobs.delete(photo.id)
+    await db.blobs.delete(thumbBlobId(photo.id))
   }
 
   notifyReportServer(report).catch(() => {})
@@ -89,15 +107,27 @@ registerHandler('updateReport', async (payload) => {
       if (uploadError) throw uploadError
     }
 
+    if (photo.thumbnail_path) {
+      const thumbBlob = await db.blobs.get(thumbBlobId(photo.id))
+      if (thumbBlob) {
+        const { error: thumbUploadError } = await supabase.storage
+          .from('report-photos')
+          .upload(photo.thumbnail_path, thumbBlob.data, { cacheControl: '3600', upsert: true })
+        if (thumbUploadError) throw thumbUploadError
+      }
+    }
+
     const { error: photoError } = await supabase.from('report_photos').insert({
       id: photo.id,
       report_id: reportId,
       storage_path: photo.storage_path,
+      thumbnail_path: photo.thumbnail_path,
       position: photo.position,
     })
     if (photoError && !isPrimaryKeyConflict(photoError)) throw photoError
 
     await db.blobs.delete(photo.id)
+    await db.blobs.delete(thumbBlobId(photo.id))
   }
 })
 
@@ -136,7 +166,15 @@ export async function updateReport({
     const storage_path = `${reportId}/${id}.${ext}`
     await db.blobs.put({ id, data: file, mimeType: file.type, createdAt: Date.now() })
     seedCache(publicUrl(storage_path), file)
-    newPhotos.push({ id, report_id: reportId, storage_path, position: startPosition + i })
+
+    const thumbBlob = await makeThumbnail(file)
+    const thumbnail_path = thumbBlob ? `${reportId}/${id}_thumb.jpg` : null
+    if (thumbBlob) {
+      await db.blobs.put({ id: thumbBlobId(id), data: thumbBlob, mimeType: 'image/jpeg', createdAt: Date.now() })
+      seedCache(publicUrl(thumbnail_path), thumbBlob)
+    }
+
+    newPhotos.push({ id, report_id: reportId, storage_path, thumbnail_path, position: startPosition + i })
   }
 
   const cachedReport = await db.reports.get(reportId)
@@ -177,7 +215,15 @@ export async function createReport({ title, description, location, category, rep
     const storage_path = `reports/${report.id}/${id}.${ext}`
     await db.blobs.put({ id, data: file, mimeType: file.type, createdAt: Date.now() })
     seedCache(publicUrl(storage_path), file)
-    photos.push({ id, report_id: report.id, storage_path, position })
+
+    const thumbBlob = await makeThumbnail(file)
+    const thumbnail_path = thumbBlob ? `reports/${report.id}/${id}_thumb.jpg` : null
+    if (thumbBlob) {
+      await db.blobs.put({ id: thumbBlobId(id), data: thumbBlob, mimeType: 'image/jpeg', createdAt: Date.now() })
+      seedCache(publicUrl(thumbnail_path), thumbBlob)
+    }
+
+    photos.push({ id, report_id: report.id, storage_path, thumbnail_path, position })
   }
 
   report._syncStatus = 'pending'
