@@ -46,9 +46,20 @@ function extractReportId(url) {
 }
 
 function ProtectedRoutes() {
-  const { session, needsPasswordChange } = useAuth()
+  const { session, loading, isAdmin, profile, needsPasswordChange } = useAuth()
+
+  // Wait for the profile (and thus isAdmin) to resolve before deciding, so
+  // an admin isn't briefly flashed the student app before its role is known.
+  if (loading || (session && !profile)) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-surface-page">
+        <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   if (!session) return <Navigate to="/login" replace />
+  if (isAdmin) return <Navigate to="/admin" replace />
   if (needsPasswordChange) return <Navigate to="/change-password" replace />
 
   return <AppShell />
@@ -93,9 +104,11 @@ function AdminProtectedRoutes() {
 // persistent fixed bottom nav bar competing with an on-screen keyboard is
 // exactly the problem being avoided.
 function RequireAuthOnly({ children }) {
-  const { session, needsPasswordChange } = useAuth()
+  const { session, loading, isAdmin, profile, needsPasswordChange } = useAuth()
 
+  if (loading || (session && !profile)) return null
   if (!session) return <Navigate to="/login" replace />
+  if (isAdmin) return <Navigate to="/admin" replace />
   if (needsPasswordChange) return <Navigate to="/change-password" replace />
 
   return children
