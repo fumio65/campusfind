@@ -8,11 +8,7 @@ import { cacheReport, cacheReportPhotos } from '../../shared/lib/repositories/re
 import { updateReport } from '../../shared/lib/operations/reports'
 import ValidationDialog from '../../shared/components/ValidationDialog'
 import ConfirmDialog from '../../shared/components/ConfirmDialog'
-
-const CATEGORIES = [
-  'Electronics', 'IDs & Cards', 'Bags', 'Clothing',
-  'Books & Notes', 'Keys', 'Wallet', 'Jewelry', 'Documents', 'Other',
-]
+import CategoryPicker from '../../shared/components/CategoryPicker'
 
 export default function EditReportPage() {
   const { id } = useParams()
@@ -248,22 +244,7 @@ export default function EditReportPage() {
           <label className="text-xs font-semibold text-text-secondary block mb-1.5">
             Category <span className="text-status-rejected-text">*</span>
           </label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategory(cat === category ? '' : cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors active:scale-95 ${
-                  category === cat
-                    ? 'bg-brand-600 text-white border-brand-600'
-                    : 'border-border-strong text-text-secondary hover:border-brand-400'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+          <CategoryPicker value={category} onChange={setCategory} />
         </div>
 
         {/* Photos */}

@@ -17,6 +17,7 @@ import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
 import CachedImage from "../../shared/components/CachedImage";
 import SyncStateChip from "../../shared/components/SyncStateChip";
+import CategoryPicker from "../../shared/components/CategoryPicker";
 
 const STATUS_STYLES = {
   open: "bg-status-open-bg text-status-open-text",
@@ -24,19 +25,6 @@ const STATUS_STYLES = {
   approved: "bg-status-approved-bg text-status-approved-text",
   resolved: "bg-status-resolved-bg text-status-resolved-text",
 };
-
-const CATEGORIES = [
-  "Electronics",
-  "IDs & Cards",
-  "Bags",
-  "Clothing",
-  "Books & Notes",
-  "Keys",
-  "Wallet",
-  "Jewelry",
-  "Documents",
-  "Other",
-];
 
 // Module-level, not component state, so it survives HomePage unmounting -
 // AppShell's <main> is shared across routes and forces scrollTop back to 0
@@ -366,23 +354,13 @@ export default function HomePage() {
                   <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
                     Category
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() =>
-                          setSelectedCategory((c) => (c === cat ? null : cat))
-                        }
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                          selectedCategory === cat
-                            ? "bg-brand-600 text-white border-brand-600"
-                            : "border-border-strong text-text-secondary hover:border-brand-400"
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
+                  <CategoryPicker
+                    value={selectedCategory || ""}
+                    onChange={(v) => setSelectedCategory(v || null)}
+                    allowAll
+                    allowCustomOther={false}
+                    size="sm"
+                  />
                 </div>
 
                 {/* Status filter */}

@@ -6,13 +6,9 @@ import { useAuth } from '../../shared/lib/AuthContext'
 import { createReport } from '../../shared/lib/operations/reports'
 import ValidationDialog from '../../shared/components/ValidationDialog'
 import ConfirmDialog from '../../shared/components/ConfirmDialog'
+import CategoryPicker from '../../shared/components/CategoryPicker'
 
 const MAX_PHOTOS = 3
-
-const CATEGORIES = [
-  'Electronics', 'IDs & Cards', 'Bags', 'Clothing',
-  'Books & Notes', 'Keys', 'Wallet', 'Jewelry', 'Documents', 'Other',
-]
 
 export default function NewReportPage() {
   const { session } = useAuth()
@@ -152,22 +148,7 @@ export default function NewReportPage() {
           <label className="text-xs font-semibold text-text-secondary block mb-1.5">
             Category
           </label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategory(cat === category ? '' : cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors active:scale-95 ${
-                  category === cat
-                    ? 'bg-brand-600 text-white border-brand-600'
-                    : 'bg-surface-card text-text-secondary border-border-strong'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+          <CategoryPicker value={category} onChange={setCategory} />
         </div>
 
         {/* Location */}

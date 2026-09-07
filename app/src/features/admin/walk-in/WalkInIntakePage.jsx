@@ -3,11 +3,7 @@ import { Camera, X, CheckCircle2, Package, AlertCircle } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
 import { useAuth } from '../../../shared/lib/AuthContext'
 import { adminFetch, SERVER_URL } from '../../../shared/lib/apiClient'
-
-const CATEGORIES = [
-  'Electronics', 'IDs & Cards', 'Bags', 'Clothing',
-  'Books & Notes', 'Keys', 'Wallet', 'Jewelry', 'Documents', 'Other',
-]
+import CategoryPicker from '../../../shared/components/CategoryPicker'
 
 export default function WalkInIntakePage() {
   const { session } = useAuth()
@@ -243,22 +239,7 @@ export default function WalkInIntakePage() {
                 <label className="text-xs font-semibold text-text-secondary block mb-1.5">
                   Category <span className="text-status-rejected-text">*</span>
                 </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {CATEGORIES.map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategory(cat === category ? '' : cat)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                        category === cat
-                          ? 'bg-brand-600 text-white border-brand-600'
-                          : 'border-border-strong text-text-secondary hover:border-brand-400'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
+                <CategoryPicker value={category} onChange={setCategory} size="sm" />
               </div>
 
               <div>
