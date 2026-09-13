@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import {
   Search, X, ChevronLeft, ChevronRight, MapPin, CheckCircle2,
   AlertCircle, Pencil, Trash2, Eye, Tag, Calendar, User,
-  Package, FileText, Share2,
+  Package, Share2,
 } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
 import Dialog from '../../../shared/components/admin/Dialog'
@@ -53,7 +53,7 @@ function InfoRow({ icon: Icon, label, value }) {
 }
 
 // ─── Report Detail Dialog ─────────────────────────────────────────────────────
-function ReportDetailDialog({ report, onClose, onEdit, onDelete, onAnnounce, onResolve, resolving, deletingId }) {
+function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, resolving, deletingId }) {
   const [photos, setPhotos]               = useState([])
   const [claimPhotos, setClaimPhotos]     = useState([])
   const [lightbox, setLightbox]           = useState(null)
@@ -279,12 +279,6 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onAnnounce, onR
 
           {/* Footer actions */}
           <div className="flex items-center gap-2 px-6 py-4 border-t border-border shrink-0 flex-wrap">
-            <button
-              onClick={() => setShareOpen(true)}
-              className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-surface-muted text-text-secondary text-xs font-semibold hover:bg-surface-card border border-border transition-colors"
-            >
-              <Share2 size={12} /> Share
-            </button>
             {report.status === 'open' && report.type === 'found_walkin' && (
               <>
                 <button
@@ -304,10 +298,10 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onAnnounce, onR
             )}
             {report.status === 'open' && (
               <button
-                onClick={() => onAnnounce(report.id, report.title)}
+                onClick={() => setShareOpen(true)}
                 className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-surface-muted text-text-secondary text-xs font-semibold hover:bg-surface-card border border-border transition-colors"
               >
-                <FileText size={12} /> Announce
+                <Share2 size={12} /> Share
               </button>
             )}
             {report.status === 'approved' && report.type === 'found_walkin' && !report.active_claim?.drop_off_chosen && (
@@ -361,6 +355,8 @@ export default function ReportsPage() {
   const [confirmDelete, setConfirmDelete]   = useState(null)
   const [deletingId, setDeletingId]         = useState(null)
   const [viewReport, setViewReport]         = useState(null)
+  const [shareReport, setShareReport]       = useState(null)
+  const [sharePhotoUrl, setSharePhotoUrl]   = useState(null)
   const [editReport, setEditReport]         = useState(null)
   const [editForm, setEditForm]             = useState({})
   const [editSaving, setEditSaving]         = useState(false)
@@ -548,17 +544,19 @@ export default function ReportsPage() {
     }
   }
 
-  async function handleAnnounce(reportId, reportTitle) {
+  async function handleShare(report) {
     try {
-      await fetch(`${SERVER_URL}/reports/${reportId}/announce`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId, reportTitle }),
-      })
-      setSuccessMsg('Announcement sent to all students.')
-    } catch (err) {
-      setError(err.message)
+      const { data: rp } = await supabase
+        .from('report_photos')
+        .select('storage_path')
+        .eq('report_id', report.id)
+      const path = rp?.[0]?.storage_path
+      const url = path ? supabase.storage.from('report-photos').getPublicUrl(path).data?.publicUrl : null
+      setSharePhotoUrl(url ?? null)
+    } catch {
+      setSharePhotoUrl(null)
     }
+    setShareReport(report)
   }
 
   function handleResolveFromDialog(report, via, isWalkIn, hasPreAuthorizedProxy = false) {
@@ -593,11 +591,15 @@ export default function ReportsPage() {
           onClose={() => setViewReport(null)}
           onEdit={(r) => { setEditReport(r); setEditForm({ title: r.title, description: r.description ?? '', category: r.category ?? '', walkin_finder_ref: r.walkin_finder_ref ?? '' }) }}
           onDelete={(id) => setConfirmDelete(id)}
-          onAnnounce={handleAnnounce}
           onResolve={handleResolveFromDialog}
           resolving={resolving}
           deletingId={deletingId}
         />
+      )}
+
+      {/* Share card (from the row-level Share action) */}
+      {shareReport && (
+        <ShareCardDialog report={shareReport} photoUrl={sharePhotoUrl} onClose={() => setShareReport(null)} />
       )}
 
       {/* Edit walk-in report dialog */}
@@ -853,8 +855,8 @@ export default function ReportsPage() {
                           <Eye size={11} /> View
                         </button>
                         {r.status === 'open' && (
-                          <button onClick={() => handleAnnounce(r.id, r.title)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold hover:bg-surface-card border border-border transition-colors">
-                            Announce
+                          <button onClick={() => handleShare(r)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold hover:bg-surface-card border border-border transition-colors">
+                            Share
                           </button>
                         )}
                         {r.status === 'approved' && r.type === 'found_walkin' && !r.active_claim?.drop_off_chosen && (
