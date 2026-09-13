@@ -75,9 +75,11 @@ export default function AppShell() {
 
   // Ask for notification permission and register this device for push
   // notifications (delivers via FCM when the app is backgrounded/closed).
+  // Tapping a delivered notification navigates here, same as tapping it in
+  // the in-app Activity list.
   useEffect(() => {
-    registerPushToken(session.user.id)
-  }, [session.user.id])
+    registerPushToken(session.user.id, navigate)
+  }, [session.user.id, navigate])
 
   async function handleInstall() {
     const prompt = deferredPromptRef.current

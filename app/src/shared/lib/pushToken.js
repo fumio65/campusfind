@@ -1,13 +1,19 @@
 import { Capacitor } from '@capacitor/core'
 import { PushNotifications } from '@capacitor/push-notifications'
+import { LocalNotifications } from '@capacitor/local-notifications'
 import { supabase } from './supabase'
 import { notifyActivity } from './localNotifications'
+import { notificationTargetPath } from './notificationRoute'
 
 const PROMPT_STATES = ['prompt', 'prompt-with-rationale']
 
 let initialized = false
 
-export async function registerPushToken(userId) {
+// onNavigate(path) is called when the user taps a delivered notification -
+// whether it arrived as a native push (background/killed) or as the local
+// notification we show ourselves for the foreground case below - so both
+// paths land on the same report the way tapping it in the Activity list does.
+export async function registerPushToken(userId, onNavigate) {
   if (!Capacitor.isNativePlatform() || initialized) return
   initialized = true
 
@@ -39,8 +45,20 @@ export async function registerPushToken(userId) {
     // JS isn't running (backgrounded/killed). While the app is alive, FCM
     // routes the message here instead, so we have to show it ourselves.
     await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      notifyActivity({ title: notification.title, body: notification.body })
+      notifyActivity({ title: notification.title, body: notification.body, data: notification.data })
         .catch((err) => console.error('Failed to display received push:', err))
+    })
+
+    // Tapping a push while the app was backgrounded/killed.
+    await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      const path = notificationTargetPath(action.notification?.data ?? {})
+      if (path) onNavigate?.(path)
+    })
+
+    // Tapping the local notification we show ourselves for the foreground case.
+    await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+      const path = notificationTargetPath(action.notification?.extra ?? {})
+      if (path) onNavigate?.(path)
     })
 
     await PushNotifications.register()

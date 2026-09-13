@@ -15,6 +15,7 @@ import {
 } from '../../shared/lib/repositories/notifications'
 import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
+import { notificationTargetPath } from '../../shared/lib/notificationRoute'
 
 const EMPTY_NOTIFICATIONS = []
 
@@ -29,6 +30,7 @@ const TYPE_CONFIG = {
   new_message:       { icon: MessageSquare, color: 'text-brand-600',           bg: 'bg-brand-50'          },
   dropoff_chosen:    { icon: MapPin,        color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
   new_report:        { icon: Bell,          color: 'text-brand-600',           bg: 'bg-brand-50'          },
+  resolve_reminder:  { icon: CheckCircle2,  color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
   default:           { icon: Bell,          color: 'text-text-muted',          bg: 'bg-surface-muted'     },
 }
 
@@ -113,27 +115,8 @@ export default function ActivityPage() {
     if (!notification.read) {
       await markNotificationRead(notification.id)
     }
-    if (notification.report_id) {
-      // The conversation itself lives on its own page now - these three
-      // notification types go straight there instead of to a preview on
-      // the report detail page.
-      const messageTypes = ['new_message', 'dropoff_chosen', 'claim_approved']
-      if (messageTypes.includes(notification.type)) {
-        navigate(`/reports/${notification.report_id}/messages`)
-        return
-      }
-
-      const hashMap = {
-        claim_submitted: '#claim',
-        claim_rejected:  '#claim',
-        tip_submitted:   '#tips',
-        tip_reply:       '#tips',
-        tip_credited:    '#tips',
-      }
-      const hash = hashMap[notification.type] ?? ''
-      const tipParam = notification.tip_id ? `?tip_id=${notification.tip_id}` : ''
-      navigate(`/reports/${notification.report_id}${tipParam}${hash}`)
-    }
+    const path = notificationTargetPath(notification)
+    if (path) navigate(path)
   }
 
   async function markAllRead() {

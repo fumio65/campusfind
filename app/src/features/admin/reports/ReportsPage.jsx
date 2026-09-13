@@ -309,11 +309,6 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, reso
                 Record collection
               </button>
             )}
-            {report.status === 'approved' && !report.active_claim?.drop_off_chosen && !report.proxy_request && report.type !== 'found_walkin' && (
-              <button onClick={() => { onResolve(report, 'issc_walkin_pickup', false); onClose() }} disabled={resolving === report.id} className="px-3 h-9 rounded-lg bg-surface-muted text-text-secondary text-xs font-semibold border border-border hover:opacity-80 transition-opacity whitespace-nowrap disabled:opacity-50">
-                Force resolve
-              </button>
-            )}
             {report.status === 'approved' && report.active_claim?.drop_off_chosen && (
               <a href="/admin/dropoff" className="px-3 h-9 rounded-lg bg-status-claimed-bg text-status-claimed-text text-xs font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
                 📍 View drop-off request
@@ -575,7 +570,6 @@ export default function ReportsPage() {
   const totalPages     = Math.ceil(total / PAGE_SIZE)
   const dropOffPending = reports.filter((r) => r.status === 'approved' && r.active_claim?.drop_off_chosen)
   const proxyPending   = reports.filter((r) => r.status === 'approved' && r.proxy_request && !r.active_claim?.drop_off_chosen)
-  const isDropOff      = confirmResolve?.via === 'issc_dropoff'
   const isWalkIn       = confirmResolve?.isWalkIn === true
   const ownerAlreadyConfirmed = confirmResolve?.hasPreAuthorizedProxy || ownerConfirmStatus === 'approved'
 
@@ -673,10 +667,10 @@ export default function ReportsPage() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <div>
                 <p className="text-sm font-bold text-text-primary">
-                  {isWalkIn ? 'Record owner collection' : isDropOff ? 'Record ISSC handoff' : 'Force resolve report?'}
+                  {isWalkIn ? 'Record owner collection' : 'Record ISSC handoff'}
                 </p>
                 <p className="text-[11px] text-text-muted mt-0.5">
-                  {isWalkIn ? "Verify the owner's identity before releasing the item." : isDropOff ? 'Verify who is collecting the item from the ISSC office.' : 'This will mark the report as resolved without a verified handoff.'}
+                  {isWalkIn ? "Verify the owner's identity before releasing the item." : 'Verify who is collecting the item from the ISSC office.'}
                 </p>
               </div>
               <button onClick={handleCloseConfirm} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-muted"><X size={16} className="text-text-muted" /></button>
@@ -720,7 +714,7 @@ export default function ReportsPage() {
                     <input value={handoffRecord.notes} onChange={(e) => setHandoffRecord((r) => ({ ...r, notes: e.target.value }))} className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
                 </div>
-              ) : isDropOff ? (
+              ) : (
                 <div className="flex flex-col gap-4 mt-1">
                   <div>
                     <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">Who is picking up the item?</p>
@@ -764,8 +758,6 @@ export default function ReportsPage() {
                     <input value={handoffRecord.notes} onChange={(e) => setHandoffRecord((r) => ({ ...r, notes: e.target.value }))} className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400" />
                   </div>
                 </div>
-              ) : (
-                <p className="text-sm text-text-secondary mt-1">Are you sure you want to mark this report as resolved? This action cannot be undone.</p>
               )}
             </div>
             <div className="flex gap-2 px-5 py-4 border-t border-border shrink-0">
@@ -862,11 +854,6 @@ export default function ReportsPage() {
                         {r.status === 'approved' && r.type === 'found_walkin' && !r.active_claim?.drop_off_chosen && (
                           <button onClick={() => { setConfirmResolve({ id: r.id, via: 'issc_walkin_pickup', reporterStudentId: r.reporter_student_id, hasPreAuthorizedProxy: false, isWalkIn: true }); setConfirmOpen(true) }} disabled={resolving === r.id} className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
                             Record collection
-                          </button>
-                        )}
-                        {r.status === 'approved' && !r.active_claim?.drop_off_chosen && !r.proxy_request && r.type !== 'found_walkin' && (
-                          <button onClick={() => { setConfirmResolve({ id: r.id, via: 'issc_walkin_pickup', reporterStudentId: r.reporter_student_id, hasPreAuthorizedProxy: false }); setConfirmOpen(true) }} disabled={resolving === r.id} className="px-2.5 py-1 rounded-lg bg-surface-muted text-text-secondary text-[11px] font-semibold border border-border hover:opacity-80 transition-opacity whitespace-nowrap">
-                            Force resolve
                           </button>
                         )}
                         {r.status === 'approved' && r.active_claim?.drop_off_chosen && (

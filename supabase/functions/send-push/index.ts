@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { user_id, title, body, report_id } = await req.json()
+    const { user_id, title, body, report_id, type, tip_id } = await req.json()
     if (!user_id || !title) {
       return new Response(JSON.stringify({ error: 'user_id and title are required' }), {
         status: 400,
@@ -77,7 +77,11 @@ Deno.serve(async (req) => {
             message: {
               token,
               notification: { title, body },
-              data: report_id ? { report_id: String(report_id) } : {},
+              data: {
+                ...(report_id ? { report_id: String(report_id) } : {}),
+                ...(type ? { type: String(type) } : {}),
+                ...(tip_id ? { tip_id: String(tip_id) } : {}),
+              },
               android: { priority: 'high' },
             },
           }),
