@@ -16,21 +16,47 @@ function drawShareCard(canvas, report, photoImg) {
   canvas.height = H
   const ctx = canvas.getContext('2d')
 
-  // Background
-  ctx.fillStyle = BRAND
+  const isFound = report.type === 'found_walkin'
+  const accent = isFound ? BRAND_LIGHT : '#FEF3E2'
+  const accentText = isFound ? BRAND : '#854F0B'
+
+  // Background: vertical gradient + soft radial glow
+  const bg = ctx.createLinearGradient(0, 0, 0, H)
+  bg.addColorStop(0, '#0a5049')
+  bg.addColorStop(1, '#052a26')
+  ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
-  // Subtle radial glow center
-  const grd = ctx.createRadialGradient(W / 2, H * 0.38, 0, W / 2, H * 0.38, W * 0.7)
-  grd.addColorStop(0, 'rgba(255,255,255,0.07)')
+  const grd = ctx.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, W * 0.75)
+  grd.addColorStop(0, 'rgba(255,255,255,0.08)')
   grd.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = grd
   ctx.fillRect(0, 0, W, H)
 
+  // Subtle dot-grid texture so the background isn't a flat fill
+  ctx.fillStyle = 'rgba(255,255,255,0.05)'
+  for (let gy = 30; gy < H; gy += 44) {
+    for (let gx = 30; gx < W; gx += 44) {
+      ctx.beginPath()
+      ctx.arc(gx, gy, 1.6, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
   // Photo area
-  const PHOTO_Y = 120
-  const PHOTO_H = 620
-  const RADIUS = 40
+  const PHOTO_Y = 90
+  const PHOTO_H = 600
+  const RADIUS = 36
+
+  // Soft shadow behind the photo card for depth
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'
+  ctx.shadowBlur = 46
+  ctx.shadowOffsetY = 18
+  ctx.fillStyle = '#031f1b'
+  roundRect(ctx, 60, PHOTO_Y, W - 120, PHOTO_H, RADIUS)
+  ctx.fill()
+  ctx.restore()
 
   if (photoImg) {
     // Draw photo with rounded rect clip
@@ -55,29 +81,46 @@ function drawShareCard(canvas, report, photoImg) {
     ctx.fillText('📷', W / 2, PHOTO_Y + PHOTO_H / 2 + 40)
   }
 
-  // Label pill (Lost / Found at ISSC)
-  const labelText = report.type === 'found_walkin' ? 'Found at ISSC' : 'Lost'
-  const pillY = PHOTO_Y + PHOTO_H - 60
+  // Label pill (Lost / Found at ISSC), floating on the photo like a tag -
+  // it carries its own opaque background so it stays legible over any photo
+  const labelText = isFound ? 'Found at ISSC' : 'Lost'
+  const pillPadX = 24
   ctx.font = 'bold 28px system-ui, -apple-system, sans-serif'
-  const labelW = ctx.measureText(labelText).width + 48
-  ctx.fillStyle = report.type === 'found_walkin' ? BRAND_LIGHT : '#FEF3E2'
-  roundRect(ctx, 100, pillY - 36, labelW, 52, 26)
+  const labelW = ctx.measureText(labelText).width + pillPadX * 2
+  const pillH = 52
+  const pillX = 96
+  const pillY = PHOTO_Y + 32
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.25)'
+  ctx.shadowBlur = 16
+  ctx.shadowOffsetY = 4
+  ctx.fillStyle = accent
+  roundRect(ctx, pillX, pillY, labelW, pillH, pillH / 2)
   ctx.fill()
-  ctx.fillStyle = report.type === 'found_walkin' ? BRAND : '#854F0B'
+  ctx.restore()
+  ctx.fillStyle = accentText
   ctx.textAlign = 'left'
-  ctx.fillText(labelText, 124, pillY + 2)
+  ctx.textBaseline = 'middle'
+  ctx.fillText(labelText, pillX + pillPadX, pillY + pillH / 2 + 2)
+  ctx.textBaseline = 'alphabetic'
+
+  // Accent bar above the title
+  const accentBarY = PHOTO_Y + PHOTO_H + 46
+  roundRect(ctx, 60, accentBarY, 64, 6, 3)
+  ctx.fillStyle = accent
+  ctx.fill()
 
   // Title
   ctx.fillStyle = '#ffffff'
   ctx.font = 'bold 72px system-ui, -apple-system, sans-serif'
   ctx.textAlign = 'left'
-  const titleY = PHOTO_Y + PHOTO_H + 90
+  const titleY = accentBarY + 96
   wrapText(ctx, report.title, 60, titleY, W - 120, 88)
 
   // Location
-  let nextY = titleY + 200
+  let nextY = titleY + 190
   if (report.location) {
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.fillStyle = 'rgba(255,255,255,0.62)'
     ctx.font = '36px system-ui, -apple-system, sans-serif'
     ctx.fillText(`📍 ${report.location}`, 60, nextY)
     nextY += 60
@@ -100,7 +143,7 @@ function drawShareCard(canvas, report, photoImg) {
   ctx.stroke()
 
   // Watermark
-  ctx.fillStyle = 'rgba(255,255,255,0.5)'
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
   ctx.font = 'bold 32px system-ui, -apple-system, sans-serif'
   ctx.textAlign = 'left'
   ctx.fillText('CampusFind', 60, H - 140)
@@ -108,11 +151,13 @@ function drawShareCard(canvas, report, photoImg) {
   ctx.font = '28px system-ui, -apple-system, sans-serif'
   ctx.fillText('NwSSU Lost & Found', 60, H - 90)
 
-  // Help text right
-  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  // Honest call-to-action, right side - the image itself has nothing to
+  // scan or tap, so this just encourages sharing instead of claiming a
+  // scannable/interactive element that doesn't exist
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'
   ctx.font = '26px system-ui, -apple-system, sans-serif'
   ctx.textAlign = 'right'
-  ctx.fillText('Scan or tap to help', W - 60, H - 140)
+  ctx.fillText('Share to help reunite it 🤝', W - 60, H - 140)
 }
 
 function roundRect(ctx, x, y, w, h, r) {
