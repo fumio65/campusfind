@@ -843,6 +843,15 @@ export default function ReportDetailPage() {
         .eq("report_id", id);
       for (const claim of claims ?? []) {
         await supabase.from("claim_messages").delete().eq("claim_id", claim.id);
+        const { data: claimPhotos } = await supabase
+          .from("claim_photos")
+          .select("storage_path")
+          .eq("claim_id", claim.id);
+        if (claimPhotos?.length) {
+          await supabase.storage
+            .from("report-photos")
+            .remove(claimPhotos.map((p) => p.storage_path));
+        }
         await supabase.from("claim_photos").delete().eq("claim_id", claim.id);
       }
 

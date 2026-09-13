@@ -519,6 +519,11 @@ export default function ReportsPage() {
         .from('claims').select('id').eq('report_id', reportId)
       for (const c of claimsData ?? []) {
         await supabase.from('claim_messages').delete().eq('claim_id', c.id)
+        const { data: claimPhotos } = await supabase
+          .from('claim_photos').select('storage_path').eq('claim_id', c.id)
+        if (claimPhotos?.length) {
+          await supabase.storage.from('report-photos').remove(claimPhotos.map((p) => p.storage_path))
+        }
         await supabase.from('claim_photos').delete().eq('claim_id', c.id)
       }
       await supabase.from('claims').delete().eq('report_id', reportId)

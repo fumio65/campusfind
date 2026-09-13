@@ -44,6 +44,17 @@ router.patch('/:id', async (req, res) => {
       last_rejected_claimant_id: claimantId,
     }).eq('id', reportId)
 
+    // A rejected claim's photos aren't shown anywhere afterward (the
+    // active-claim lookup used everywhere excludes rejected claims), so
+    // there's nothing left that reads them - clean them up now instead of
+    // leaving them in storage indefinitely.
+    const { data: rejectedPhotos } = await supabaseAdmin
+      .from('claim_photos').select('storage_path').eq('claim_id', claim.id)
+    if (rejectedPhotos?.length) {
+      await supabaseAdmin.storage.from('report-photos').remove(rejectedPhotos.map((p) => p.storage_path))
+    }
+    await supabaseAdmin.from('claim_photos').delete().eq('claim_id', claim.id)
+
     await adjustTrustScore(claimantId, -5, 'claim rejected')
 
     const repeated = await checkRepeatedRejections(claimantId)

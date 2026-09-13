@@ -97,7 +97,7 @@ export default function EditReportPage() {
 
     const { data: photos } = await supabase
       .from('report_photos')
-      .select('id, storage_path, position')
+      .select('id, storage_path, thumbnail_path, position')
       .eq('report_id', id)
       .order('position', { ascending: true })
     await cacheReportPhotos(id, (photos ?? []).map((p) => ({ ...p, report_id: id })))

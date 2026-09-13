@@ -93,7 +93,8 @@ registerHandler('updateReport', async (payload) => {
   for (const photo of removedPhotos) {
     // Both steps are naturally idempotent: removing an already-removed
     // storage object, or deleting an already-deleted row, is a no-op.
-    await supabase.storage.from('report-photos').remove([photo.storage_path])
+    const paths = [photo.storage_path, photo.thumbnail_path].filter(Boolean)
+    await supabase.storage.from('report-photos').remove(paths)
     const { error } = await supabase.from('report_photos').delete().eq('id', photo.id)
     if (error) throw error
   }
@@ -153,7 +154,7 @@ export async function updateReport({
 
   const removedPhotos = existingPhotos
     .filter((p) => removedPhotoIds.includes(p.id))
-    .map(({ id, storage_path }) => ({ id, storage_path }))
+    .map(({ id, storage_path, thumbnail_path }) => ({ id, storage_path, thumbnail_path }))
 
   const startPosition = existingPhotos.filter((p) => !removedPhotoIds.includes(p.id)).length
   const newPhotos = []
