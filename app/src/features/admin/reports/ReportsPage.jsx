@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useCallback, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import {
   Search, X, ChevronLeft, ChevronRight, MapPin, CheckCircle2,
   AlertCircle, Pencil, Trash2, Eye, Tag, Calendar, User,
@@ -310,9 +310,9 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, reso
               </button>
             )}
             {report.status === 'approved' && report.active_claim?.drop_off_chosen && (
-              <a href="/admin/dropoff" className="px-3 h-9 rounded-lg bg-status-claimed-bg text-status-claimed-text text-xs font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
+              <Link to="/admin/dropoff" className="px-3 h-9 rounded-lg bg-status-claimed-bg text-status-claimed-text text-xs font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
                 📍 View drop-off request
-              </a>
+              </Link>
             )}
             {report.status === 'approved' && report.proxy_request && !report.active_claim?.drop_off_chosen && (
               <button onClick={() => { onResolve(report, 'issc_dropoff', false, true); onClose() }} disabled={resolving === report.id} className="px-3 h-9 rounded-lg bg-status-approved-bg text-status-approved-text text-xs font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap disabled:opacity-50">
@@ -857,9 +857,9 @@ export default function ReportsPage() {
                           </button>
                         )}
                         {r.status === 'approved' && r.active_claim?.drop_off_chosen && (
-                          <a href="/admin/dropoff" className="px-2.5 py-1 rounded-lg bg-status-claimed-bg text-status-claimed-text text-[11px] font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1">
+                          <Link to="/admin/dropoff" className="px-2.5 py-1 rounded-lg bg-status-claimed-bg text-status-claimed-text text-[11px] font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1">
                             📍 Drop-off
-                          </a>
+                          </Link>
                         )}
                         {r.status === 'approved' && r.proxy_request && !r.active_claim?.drop_off_chosen && (
                           <button onClick={() => { setConfirmResolve({ id: r.id, via: 'issc_dropoff', reporterStudentId: r.reporter_student_id, hasPreAuthorizedProxy: !!r.proxy_request, finderStudentId: r.active_claim?.claimant_student_id }); setConfirmOpen(true) }} disabled={resolving === r.id} className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
