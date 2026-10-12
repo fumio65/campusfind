@@ -794,52 +794,106 @@ export default function ReportDetailPage() {
     setResolving(false);
   }
 
+  // Turns any thrown value into a non-empty message. Postgrest/storage
+  // errors can carry message: "" (e.g. some RLS-related failures), and
+  // `err.message ?? fallback` only catches null/undefined, not "" - so a
+  // blank message was silently swallowing the error entirely and making
+  // the delete look like it did nothing.
+  function describeDeleteError(err) {
+    const msg = typeof err === "string" ? err : err?.message;
+    return msg && msg.trim().length > 0
+      ? msg
+      : "Failed to delete report. Please try again.";
+  }
+
   async function handleDelete() {
     setDeleting(true);
     try {
-      const { data: photos } = await supabase
+      const { data: photos, error: photosErr } = await supabase
         .from("report_photos")
         .select("storage_path")
         .eq("report_id", id);
+      if (photosErr) throw photosErr;
 
-      const { data: claims } = await supabase
+      const { data: claims, error: claimsSelectErr } = await supabase
         .from("claims")
         .select("id")
         .eq("report_id", id);
+      if (claimsSelectErr) throw claimsSelectErr;
+
       for (const claim of claims ?? []) {
-        await supabase.from("claim_messages").delete().eq("claim_id", claim.id);
-        const { data: claimPhotos } = await supabase
+        const { error: msgErr } = await supabase
+          .from("claim_messages")
+          .delete()
+          .eq("claim_id", claim.id);
+        if (msgErr) throw msgErr;
+
+        const { data: claimPhotos, error: cpSelectErr } = await supabase
           .from("claim_photos")
           .select("storage_path")
           .eq("claim_id", claim.id);
+        if (cpSelectErr) throw cpSelectErr;
+
         if (claimPhotos?.length) {
-          await supabase.storage
+          const { error: cpRemoveErr } = await supabase.storage
             .from("report-photos")
             .remove(claimPhotos.map((p) => p.storage_path));
+          if (cpRemoveErr) console.error("claim photo storage remove:", cpRemoveErr);
         }
-        await supabase.from("claim_photos").delete().eq("claim_id", claim.id);
+
+        const { error: cpDeleteErr } = await supabase
+          .from("claim_photos")
+          .delete()
+          .eq("claim_id", claim.id);
+        if (cpDeleteErr) throw cpDeleteErr;
       }
 
-      await supabase.from("claims").delete().eq("report_id", id);
-      await supabase.from("tips").delete().eq("report_id", id);
+      // tips first - tips.converted_to_claim_id restricts deleting a claim
+      // it still points to, so tips must go before claims.
+      const { error: tipsErr } = await supabase
+        .from("tips")
+        .delete()
+        .eq("report_id", id);
+      if (tipsErr) throw tipsErr;
+
+      const { error: claimsDeleteErr } = await supabase
+        .from("claims")
+        .delete()
+        .eq("report_id", id);
+      if (claimsDeleteErr) throw claimsDeleteErr;
 
       if (photos?.length) {
-        await supabase.storage
+        const { error: photoRemoveErr } = await supabase.storage
           .from("report-photos")
           .remove(photos.map((p) => p.storage_path));
+        if (photoRemoveErr) console.error("report photo storage remove:", photoRemoveErr);
       }
 
-      await supabase.from("report_photos").delete().eq("report_id", id);
+      const { error: reportPhotosErr } = await supabase
+        .from("report_photos")
+        .delete()
+        .eq("report_id", id);
+      if (reportPhotosErr) throw reportPhotosErr;
 
-      const { error } = await supabase.from("reports").delete().eq("id", id);
+      const { data: deletedReports, error } = await supabase
+        .from("reports")
+        .delete()
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!deletedReports?.length) {
+        // RLS silently filtered the row instead of erroring (0 rows
+        // affected, no error) - most likely because the report is no
+        // longer "open" or isn't owned by this user.
+        throw new Error(
+          "This report can no longer be deleted (it may already have a claim or no longer be open).",
+        );
+      }
 
       navigate("/");
     } catch (err) {
       console.error("Delete error:", err);
-      setDeleteError(
-        err.message ?? "Failed to delete report. Please try again.",
-      );
+      setDeleteError(describeDeleteError(err));
       setDeleting(false);
     }
   }
