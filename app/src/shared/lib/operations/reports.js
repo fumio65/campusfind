@@ -24,17 +24,30 @@ function publicUrl(storagePath) {
 registerHandler('createReport', async (payload) => {
   const { report, photos } = payload
 
-  const { error: reportError } = await supabase.from('reports').insert({
-    id: report.id,
-    title: report.title,
-    description: report.description,
-    location: report.location,
-    category: report.category,
-    type: report.type,
-    status: report.status,
-    reporter_id: report.reporter_id,
-  })
+  // .select('id') forces Postgrest to return the inserted row (rather than
+  // the default empty "return=minimal" response), so a request that comes
+  // back with no error but also no row - which has been observed to happen
+  // and silently produces a report that's cached locally as "synced" but
+  // was never actually persisted - gets caught below instead of trusted.
+  const { data: insertedReport, error: reportError } = await supabase
+    .from('reports')
+    .insert({
+      id: report.id,
+      title: report.title,
+      description: report.description,
+      location: report.location,
+      category: report.category,
+      type: report.type,
+      status: report.status,
+      reporter_id: report.reporter_id,
+    })
+    .select('id')
   if (reportError && !isPrimaryKeyConflict(reportError)) throw reportError
+  if (!reportError && !insertedReport?.length) {
+    throw new Error(
+      `createReport: insert for report ${report.id} returned no error but no row - refusing to mark this as synced.`,
+    )
+  }
 
   for (const photo of photos) {
     const blob = await db.blobs.get(photo.id)
