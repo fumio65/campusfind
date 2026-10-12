@@ -27,6 +27,7 @@ import { liveQuery } from "dexie";
 import { db } from "../../shared/lib/db";
 import SyncStateChip from "../../shared/components/SyncStateChip";
 import CachedImage from "../../shared/components/CachedImage";
+import { ensureCachedInOrder } from "../../shared/lib/imageCache";
 import {
   cacheReport,
   cacheReportPhotos,
@@ -622,6 +623,12 @@ export default function ReportDetailPage() {
         .getPublicUrl(p.thumbnail_path ?? p.storage_path);
       return publicUrl;
     });
+    // Warm the full-resolution image cache in the background so tapping a
+    // thumbnail (lightbox) or opening the share sheet - both of which need
+    // the full-res photo, not the thumbnail already shown on screen - don't
+    // have to wait on a fresh network fetch at that moment. Not awaited:
+    // this shouldn't block the rest of the page from rendering.
+    ensureCachedInOrder(photoUrls.map((u) => ({ src: u, cacheKey: u })));
 
     // Stash the reporter's name on the cached report row too - there's no
     // local directory of other users, so this is what lets a repeat visit
@@ -698,6 +705,7 @@ export default function ReportDetailPage() {
             .getPublicUrl(p.storage_path);
           return publicUrl;
         });
+        ensureCachedInOrder(photoUrls.map((u) => ({ src: u, cacheKey: u })));
         await cacheClaimMessages(
           claimData.id,
           (msgs ?? []).map((m) => ({ ...m, claim_id: claimData.id })),
