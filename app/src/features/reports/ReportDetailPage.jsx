@@ -1526,7 +1526,7 @@ export default function ReportDetailPage() {
         {/* Non-owner: claim button */}
         {!isOwner &&
           report?.type !== "found_walkin" &&
-          (isOpen || report?.last_rejected_claimant_id === session?.user?.id) &&
+          isOpen &&
           claim?.status !== "pending" &&
           claim?.status !== "approved" && (
             <Link
