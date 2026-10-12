@@ -754,10 +754,9 @@ export default function ReportDetailPage() {
       await supabase.storage.from("report-photos").upload(path, resolvePhoto);
 
       if (resolveTip) {
-        // Credit first (trust score + credited_for_recovery), then resolve
-        // the report via the normal handoff path - resolved_via_type has no
-        // "tip" value, so this is recorded as a handoff like any other
-        // photo-verified resolution.
+        // Credit the tip first (trust score + credited_for_recovery), then
+        // resolve the report below with resolved_via: 'tip_credited' so it's
+        // tracked separately from a plain claim-approved handoff.
         await fetch(`${EDGE_URL}/tips/${resolveTip.id}/credit`, {
           method: "PATCH",
           headers: {
@@ -779,7 +778,7 @@ export default function ReportDetailPage() {
           "apikey": ANON_KEY,
         },
         body: JSON.stringify({
-          resolvedVia: "handoff",
+          resolvedVia: resolveTip ? "tip_credited" : "handoff",
           resolvePhotoPath: path,
         }),
       });

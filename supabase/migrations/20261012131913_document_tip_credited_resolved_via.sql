@@ -1,0 +1,16 @@
+-- This migration is a no-op / documentation marker.
+--
+-- 'tip_credited' already exists as a value of resolved_via_type in the live
+-- database, added out-of-band (same kind of schema drift as the untracked
+-- tips.credited / tips.parent_tip_id columns found earlier) rather than
+-- through a tracked migration. It's recorded here, with a matching
+-- (no-op) row in supabase_migrations.schema_migrations, so the tracked
+-- migration history and the live schema agree going forward.
+--
+-- resolved_via_type now has: 'handoff', 'issc_dropoff', 'issc_walkin_pickup',
+-- 'tip_credited'. The last is used when a report is resolved because a tip
+-- was credited as having led to recovery (see ReportDetailPage's
+-- "This helped" button, which opens the same photo-proof flow as a normal
+-- handoff but records resolved_via: 'tip_credited' instead).
+--
+-- No DDL to run - already live.

@@ -19,6 +19,7 @@ const RESOLVED_VIA_LABELS = {
   handoff: 'Direct handoff',
   issc_dropoff: 'ISSC drop-off',
   issc_walkin_pickup: 'ISSC walk-in pickup',
+  tip_credited: 'Tip led to recovery',
 }
 
 const COLORS = ['#06433C', '#0a6b61', '#0d8f82', '#10b3a3', '#13d7c4', '#7ae8e0', '#b8f4f0', '#e0faf8']
