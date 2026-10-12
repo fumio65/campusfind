@@ -61,6 +61,27 @@ export async function refreshReports({ search, category, location, status } = {}
   if (!data) return
   await db.reports.bulkPut(data)
 
+  // Reconcile deletions: bulkPut only ever adds/updates, so a report that
+  // dropped out of this result set (deleted server-side, or no longer
+  // matching these filters/status) would otherwise linger in the local
+  // cache forever - e.g. on another user's Home feed, after the reporter
+  // deletes it. Prune any previously-synced cached report that matches
+  // these same filters but isn't in the fresh fetch. Reports still
+  // _syncStatus: 'pending' are excluded - those are offline-created and
+  // legitimately absent from the server fetch until they sync; deleting
+  // them here would discard real unsynced work.
+  const fetchedIds = new Set(data.map((r) => r.id))
+  const cached = await db.reports.toArray()
+  const staleIds = cached
+    .filter((r) => r._syncStatus !== 'pending')
+    .filter((r) => matchesFilters(r, { search, category, location, status }))
+    .filter((r) => !fetchedIds.has(r.id))
+    .map((r) => r.id)
+  if (staleIds.length) {
+    await db.reports.bulkDelete(staleIds)
+    await db.report_photos.where('report_id').anyOf(staleIds).delete()
+  }
+
   const reportIds = data.map((r) => r.id)
   if (!reportIds.length) return
   const { data: photos } = await supabase
