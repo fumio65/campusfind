@@ -823,10 +823,21 @@ export default function ReportDetailPage() {
   // Lets the reporter mark whichever tip actually helped them recover the
   // item. Awards the tipster +2 trust score (tip_credited) and flips
   // credited_for_recovery so it shows up in Analytics' tip conversion rate.
-  // Independent of handleMarkResolved - crediting a tip doesn't resolve the
-  // report by itself, since the reporter may still need to go through
-  // handoff/drop-off separately.
+  //
+  // If the tip is what led to full recovery, the reporter can resolve the
+  // report in the same action - the backend sets status: 'resolved',
+  // resolved_via: 'tip_credited', resolved_at in that case (no photo proof
+  // needed, unlike the separate handoff Mark as Resolved flow, since the
+  // recovery happened off-app, e.g. the reporter met the tipster directly).
+  // If the tip only pointed them in the right direction and recovery still
+  // needs to go through handoff/drop-off, they credit without resolving and
+  // use Mark as Resolved later.
   async function handleCreditTip(tip) {
+    const alsoResolve = window.confirm(
+      "Did this tip lead you to fully recover the item?\n\n" +
+        "OK = Yes, credit the tip and mark this report resolved.\n" +
+        "Cancel = Not yet, just credit the tip for now.",
+    );
     setCreditingTipId(tip.id);
     try {
       await fetch(`${EDGE_URL}/tips/${tip.id}/credit`, {
@@ -838,7 +849,7 @@ export default function ReportDetailPage() {
         body: JSON.stringify({
           userId: tip.user_id,
           reportId: id,
-          resolveReport: false,
+          resolveReport: alsoResolve,
         }),
       });
     } catch (err) {
