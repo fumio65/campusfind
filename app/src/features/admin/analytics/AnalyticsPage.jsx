@@ -6,6 +6,21 @@ import {
 } from 'recharts'
 import { FileText } from 'lucide-react'
 
+const TRUST_REASON_LABELS = {
+  claim_rejected: 'Claim rejected',
+  repeat_rejections_30d: 'Repeat rejections (30d)',
+  no_show_handoff: 'No-show at handoff',
+  claim_approved_handoff_completed: 'Handoff completed',
+  issc_dropoff_returned: 'ISSC drop-off returned',
+  tip_credited: 'Tip credited',
+}
+
+const RESOLVED_VIA_LABELS = {
+  handoff: 'Direct handoff',
+  issc_dropoff: 'ISSC drop-off',
+  issc_walkin_pickup: 'ISSC walk-in pickup',
+}
+
 const COLORS = ['#06433C', '#0a6b61', '#0d8f82', '#10b3a3', '#13d7c4', '#7ae8e0', '#b8f4f0', '#e0faf8']
 
 const CATEGORY_COLORS = {
@@ -36,6 +51,16 @@ export default function AnalyticsPage() {
   const [categoryData, setCategoryData] = useState([])
   const [trendData, setTrendData] = useState([])
   const [topLocations, setTopLocations] = useState([])
+  const [claimsFunnel, setClaimsFunnel] = useState({ pending: 0, approved: 0, rejected: 0, approvalRate: 0 })
+  const [trustDistribution, setTrustDistribution] = useState([])
+  const [avgTrustScore, setAvgTrustScore] = useState(null)
+  const [reportTypeData, setReportTypeData] = useState([])
+  const [resolvedViaData, setResolvedViaData] = useState([])
+  const [tipsStats, setTipsStats] = useState({ total: 0, credited: 0, rate: 0 })
+  const [trustEventReasons, setTrustEventReasons] = useState([])
+  const [accountStatus, setAccountStatus] = useState({ active: 0, deactivated: 0 })
+  const [accountsByProgram, setAccountsByProgram] = useState([])
+  const [accountsByYear, setAccountsByYear] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { load() }, [])
@@ -43,7 +68,18 @@ export default function AnalyticsPage() {
   async function load() {
     setLoading(true)
     try {
-      await Promise.all([fetchStats(), fetchCategoryData(), fetchTrendData(), fetchTopLocations()])
+      await Promise.all([
+        fetchStats(),
+        fetchCategoryData(),
+        fetchTrendData(),
+        fetchTopLocations(),
+        fetchClaimsFunnel(),
+        fetchTrustDistribution(),
+        fetchReportTypeAndResolution(),
+        fetchTipsStats(),
+        fetchTrustEventReasons(),
+        fetchAccountsBreakdown(),
+      ])
     } finally {
       setLoading(false)
     }
@@ -92,6 +128,97 @@ export default function AnalyticsPage() {
     const counts = {}
     for (const r of data) { if (r.location) counts[r.location] = (counts[r.location] ?? 0) + 1 }
     setTopLocations(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([location, count]) => ({ location, count })))
+  }
+
+  async function fetchClaimsFunnel() {
+    const { data, error } = await supabase.from('claims').select('status')
+    if (error || !data) return
+    const pending = data.filter((c) => c.status === 'pending').length
+    const approved = data.filter((c) => c.status === 'approved').length
+    const rejected = data.filter((c) => c.status === 'rejected').length
+    const decided = approved + rejected
+    const approvalRate = decided > 0 ? Math.round((approved / decided) * 100) : 0
+    setClaimsFunnel({ pending, approved, rejected, approvalRate })
+  }
+
+  async function fetchTrustDistribution() {
+    const { data, error } = await supabase.from('users').select('trust_score').eq('role', 'student')
+    if (error || !data) return
+    const bands = { '90-100': 0, '70-89': 0, 'Below 70': 0 }
+    for (const u of data) {
+      const s = u.trust_score ?? 100
+      if (s >= 90) bands['90-100']++
+      else if (s >= 70) bands['70-89']++
+      else bands['Below 70']++
+    }
+    setTrustDistribution(Object.entries(bands).map(([band, value]) => ({ band, value })))
+    setAvgTrustScore(data.length > 0 ? Math.round(data.reduce((sum, u) => sum + (u.trust_score ?? 100), 0) / data.length) : null)
+  }
+
+  async function fetchReportTypeAndResolution() {
+    const { data, error } = await supabase.from('reports').select('type, status, resolved_via')
+    if (error || !data) return
+    const lost = data.filter((r) => r.type === 'lost').length
+    const walkin = data.filter((r) => r.type === 'found_walkin').length
+    setReportTypeData([
+      { name: 'Reported lost by students', value: lost },
+      { name: 'ISSC walk-in drop-offs', value: walkin },
+    ])
+
+    const counts = {}
+    for (const r of data) {
+      if (r.status === 'resolved' && r.resolved_via) counts[r.resolved_via] = (counts[r.resolved_via] ?? 0) + 1
+    }
+    setResolvedViaData(Object.entries(counts).map(([key, value]) => ({ name: RESOLVED_VIA_LABELS[key] ?? key, value })))
+  }
+
+  async function fetchTipsStats() {
+    const { data, error } = await supabase.from('tips').select('credited_for_recovery')
+    if (error || !data) return
+    const total = data.length
+    const credited = data.filter((t) => t.credited_for_recovery).length
+    const rate = total > 0 ? Math.round((credited / total) * 100) : 0
+    setTipsStats({ total, credited, rate })
+  }
+
+  async function fetchTrustEventReasons() {
+    const { data, error } = await supabase.from('trust_score_events').select('reason')
+    if (error || !data) return
+    const counts = {}
+    for (const e of data) counts[e.reason] = (counts[e.reason] ?? 0) + 1
+    setTrustEventReasons(
+      Object.entries(TRUST_REASON_LABELS).map(([key, name]) => ({ name, value: counts[key] ?? 0 }))
+    )
+  }
+
+  async function fetchAccountsBreakdown() {
+    const { data, error } = await supabase.from('users').select('program, year_level, status').eq('role', 'student')
+    if (error || !data) return
+
+    setAccountStatus({
+      active: data.filter((u) => u.status === 'active').length,
+      deactivated: data.filter((u) => u.status === 'deactivated').length,
+    })
+
+    const progCounts = {}
+    for (const u of data) {
+      const p = u.program?.trim() || 'Unspecified'
+      progCounts[p] = (progCounts[p] ?? 0) + 1
+    }
+    setAccountsByProgram(
+      Object.entries(progCounts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, value]) => ({ name, value }))
+    )
+
+    const yearCounts = {}
+    for (const u of data) {
+      const y = u.year_level?.trim() || 'Unspecified'
+      yearCounts[y] = (yearCounts[y] ?? 0) + 1
+    }
+    setAccountsByYear(
+      Object.entries(yearCounts)
+        .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+        .map(([name, value]) => ({ name, value }))
+    )
   }
 
   function exportReport() {
@@ -412,6 +539,136 @@ export default function AnalyticsPage() {
         <StatCard label="Resolved" value={stats.resolved} sub={`${resolutionRate}% resolution rate`} color="text-status-open-text" />
         <StatCard label="Open" value={stats.open} color="text-brand-600" />
         <StatCard label="Avg Resolution" value={stats.avgResolutionDays !== null ? `${stats.avgResolutionDays}d` : '—'} sub="days to resolve" />
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <StatCard label="Claim Approval Rate" value={`${claimsFunnel.approvalRate}%`} sub={`${claimsFunnel.approved} approved · ${claimsFunnel.rejected} rejected`} />
+        <StatCard label="Avg Trust Score" value={avgTrustScore ?? '—'} sub={`${accountStatus.active} active students`} />
+        <StatCard label="Tip Conversion" value={`${tipsStats.rate}%`} sub={`${tipsStats.credited} of ${tipsStats.total} tips credited`} />
+        <StatCard label="Deactivated Accounts" value={accountStatus.deactivated} sub="graduated/inactive" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Claims by status</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart
+              data={[
+                { status: 'Pending', count: claimsFunnel.pending },
+                { status: 'Approved', count: claimsFunnel.approved },
+                { status: 'Rejected', count: claimsFunnel.rejected },
+              ]}
+              margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="status" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#0d8f82" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Student trust score distribution</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={trustDistribution} cx="50%" cy="50%" outerRadius={75} dataKey="value" nameKey="band" label={({ band, percent }) => `${band} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                {trustDistribution.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Trust score activity by reason</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={trustEventReasons} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#06433C" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">How items actually get resolved</h3>
+          {resolvedViaData.length === 0 ? (
+            <p className="text-xs text-text-muted">No resolved items yet.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={resolvedViaData} cx="50%" cy="50%" outerRadius={75} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                  {resolvedViaData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Lost reports vs. ISSC walk-in drop-offs</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={reportTypeData} cx="50%" cy="50%" outerRadius={75} dataKey="value" nameKey="name" label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                {reportTypeData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Students by year level</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={accountsByYear} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#0a6b61" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 mb-4">
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Students by program/course</h3>
+          {accountsByProgram.length === 0 ? (
+            <p className="text-xs text-text-muted">No account data yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {accountsByProgram.map((p, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-medium text-text-primary truncate">{p.name}</p>
+                      <p className="text-xs text-text-muted shrink-0 ml-2">{p.value}</p>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-brand-600" style={{ width: `${(p.value / (accountsByProgram[0]?.value ?? 1)) * 100}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
