@@ -226,6 +226,8 @@ export default function AnalyticsPage() {
     const maxCategory = categoryData[0]?.value ?? 1
     const maxLocation = topLocations[0]?.count ?? 1
     const maxTrend = Math.max(...trendData.map((t) => t.count), 1)
+    const maxProgram = accountsByProgram[0]?.value ?? 1
+    const maxReason = Math.max(...trustEventReasons.map((r) => r.value), 1)
 
     const statusRows = [
       { status: 'Open', count: stats.open, color: '#2563eb' },
@@ -233,6 +235,15 @@ export default function AnalyticsPage() {
       { status: 'Approved', count: stats.approved, color: '#16a34a' },
       { status: 'Resolved', count: stats.resolved, color: '#06433C' },
     ]
+
+    const claimsRows = [
+      { status: 'Pending', count: claimsFunnel.pending, color: '#d97706' },
+      { status: 'Approved', count: claimsFunnel.approved, color: '#16a34a' },
+      { status: 'Rejected', count: claimsFunnel.rejected, color: '#dc2626' },
+    ]
+
+    const resolutionMethodRows = resolvedViaData
+    const totalResolvedViaKnown = Math.max(resolvedViaData.reduce((sum, r) => sum + r.value, 0), 1)
 
     const printWindow = window.open('', '_blank')
     const html = `
@@ -403,6 +414,81 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
+              <!-- System health -->
+              <div>
+                <div class="section-title">System Health</div>
+                <div class="stats-grid">
+                  <div class="stat-card">
+                    <div class="stat-label">Claim Approval Rate</div>
+                    <div class="stat-value">${claimsFunnel.approvalRate}%</div>
+                    <div class="stat-sub">${claimsFunnel.approved} approved · ${claimsFunnel.rejected} rejected</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-label">Avg. Trust Score</div>
+                    <div class="stat-value">${avgTrustScore ?? '—'}</div>
+                    <div class="stat-sub">${accountStatus.active} active students</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-label">Tip Conversion</div>
+                    <div class="stat-value">${tipsStats.rate}%</div>
+                    <div class="stat-sub">${tipsStats.credited} of ${tipsStats.total} tips credited</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-label">Deactivated Accounts</div>
+                    <div class="stat-value">${accountStatus.deactivated}</div>
+                    <div class="stat-sub">graduated/inactive</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Claims + Trust + Resolution method -->
+              <div class="three-col">
+                <div>
+                  <div class="section-title">Claims by Status</div>
+                  <div class="bar-chart">
+                    ${claimsRows.map((c) => `
+                      <div class="bar-row">
+                        <div class="bar-label">${c.status}</div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width:${Math.round((c.count / Math.max(claimsFunnel.pending, claimsFunnel.approved, claimsFunnel.rejected, 1)) * 100)}%;background:${c.color};"></div>
+                        </div>
+                        <div class="bar-count">${c.count}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+                <div>
+                  <div class="section-title">Trust Activity by Reason</div>
+                  <div class="bar-chart">
+                    ${trustEventReasons.map((r) => `
+                      <div class="bar-row">
+                        <div class="bar-label">${r.name}</div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width:${Math.round((r.value / maxReason) * 100)}%;background:#06433C;"></div>
+                        </div>
+                        <div class="bar-count">${r.value}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+                <div>
+                  <div class="section-title">How Items Get Resolved</div>
+                  <div class="bar-chart">
+                    ${resolutionMethodRows.length === 0
+                      ? '<p style="font-size:9px;color:#9ca3af;">No resolved items yet.</p>'
+                      : resolutionMethodRows.map((r) => `
+                        <div class="bar-row">
+                          <div class="bar-label">${r.name}</div>
+                          <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.round((r.value / totalResolvedViaKnown) * 100)}%;background:#0d8f82;"></div>
+                          </div>
+                          <div class="bar-count">${r.value}</div>
+                        </div>
+                      `).join('')}
+                  </div>
+                </div>
+              </div>
+
               <!-- Trend + Category + Locations -->
               <div class="three-col">
                 <div>
@@ -447,6 +533,42 @@ export default function AnalyticsPage() {
                             <div class="bar-fill" style="width:${Math.round((l.count / maxLocation) * 100)}%;background:#0d8f82;"></div>
                           </div>
                           <div class="bar-count">${l.count}</div>
+                        </div>
+                      `).join('')}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Student accounts -->
+              <div class="three-col" style="grid-template-columns: 2fr 1fr;">
+                <div>
+                  <div class="section-title">Students by Program/Course</div>
+                  <div class="bar-chart">
+                    ${accountsByProgram.length === 0
+                      ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
+                      : accountsByProgram.map((p) => `
+                        <div class="bar-row">
+                          <div class="bar-label" style="width:140px;">${p.name}</div>
+                          <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#06433C;"></div>
+                          </div>
+                          <div class="bar-count">${p.value}</div>
+                        </div>
+                      `).join('')}
+                  </div>
+                </div>
+                <div>
+                  <div class="section-title">Students by Year Level</div>
+                  <div class="bar-chart">
+                    ${accountsByYear.length === 0
+                      ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
+                      : accountsByYear.map((y) => `
+                        <div class="bar-row">
+                          <div class="bar-label" style="width:50px;">${y.name}</div>
+                          <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.round((y.value / Math.max(...accountsByYear.map((x) => x.value), 1)) * 100)}%;background:#0a6b61;"></div>
+                          </div>
+                          <div class="bar-count">${y.value}</div>
                         </div>
                       `).join('')}
                   </div>
