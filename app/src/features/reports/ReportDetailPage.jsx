@@ -116,6 +116,8 @@ function TipCard({
   isReply,
   credited,
   onConvert,
+  onCredit,
+  crediting,
   isHighlighted,
 }) {
   const name = tip.users
@@ -182,6 +184,17 @@ function TipCard({
                 )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
+                {onCredit && !credited && (
+                  <button
+                    type="button"
+                    onClick={onCredit}
+                    disabled={crediting}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-status-open-text/40 bg-surface-page text-[10px] font-semibold text-status-open-text hover:bg-status-open-bg transition-colors disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={10} />
+                    {crediting ? "Marking..." : "This helped"}
+                  </button>
+                )}
                 {onConvert && !credited && !tip.converted_to_claim_id && (
                   <button
                     type="button"
@@ -261,6 +274,7 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actioning, setActioning] = useState(false);
+  const [creditingTipId, setCreditingTipId] = useState(null);
   const [lightboxUrl, setLightboxUrl] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -669,7 +683,7 @@ export default function ReportDetailPage() {
     const { data: tipsData } = await supabase
       .from("tips")
       .select(
-        "id, text, created_at, user_id, parent_tip_id, credited, converted_to_claim_id, users(first_name, last_name, trust_score)",
+        "id, text, created_at, user_id, parent_tip_id, credited_for_recovery, converted_to_claim_id, users(first_name, last_name, trust_score)",
       )
       .eq("report_id", id)
       .order("created_at", { ascending: true });
@@ -804,6 +818,34 @@ export default function ReportDetailPage() {
 
   function handleConvertTip(tip) {
     navigate(`/reports/${id}/claim?fromTip=${tip.id}`);
+  }
+
+  // Lets the reporter mark whichever tip actually helped them recover the
+  // item. Awards the tipster +2 trust score (tip_credited) and flips
+  // credited_for_recovery so it shows up in Analytics' tip conversion rate.
+  // Independent of handleMarkResolved - crediting a tip doesn't resolve the
+  // report by itself, since the reporter may still need to go through
+  // handoff/drop-off separately.
+  async function handleCreditTip(tip) {
+    setCreditingTipId(tip.id);
+    try {
+      await fetch(`${EDGE_URL}/tips/${tip.id}/credit`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": ANON_KEY,
+        },
+        body: JSON.stringify({
+          userId: tip.user_id,
+          reportId: id,
+          resolveReport: false,
+        }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
+    setCreditingTipId(null);
+    fetchAll(true);
   }
 
   async function handleTipSubmit(e) {
@@ -1549,7 +1591,7 @@ export default function ReportDetailPage() {
                       isOwn={parent.user_id === session?.user.id}
                       isReply={false}
                       isHighlighted={highlightedTipId === parent.id}
-                      credited={parent.credited}
+                      credited={parent.credited_for_recovery}
                       onConvert={
                         parent.user_id === session?.user.id &&
                         isOpen &&
@@ -1559,6 +1601,12 @@ export default function ReportDetailPage() {
                           ? () => handleConvertTip(parent)
                           : null
                       }
+                      onCredit={
+                        isOwner && parent.user_id !== session?.user.id
+                          ? () => handleCreditTip(parent)
+                          : null
+                      }
+                      crediting={creditingTipId === parent.id}
                       onReply={
                         parent.user_id !== session?.user.id
                           ? () => {
@@ -1575,7 +1623,7 @@ export default function ReportDetailPage() {
                         isOwn={reply.user_id === session?.user.id}
                         isReply={true}
                         isHighlighted={highlightedTipId === reply.id}
-                        credited={reply.credited}
+                        credited={reply.credited_for_recovery}
                         onConvert={
                           reply.user_id === session?.user.id &&
                           isOpen &&
@@ -1585,6 +1633,12 @@ export default function ReportDetailPage() {
                             ? () => handleConvertTip(reply)
                             : null
                         }
+                        onCredit={
+                          isOwner && reply.user_id !== session?.user.id
+                            ? () => handleCreditTip(reply)
+                            : null
+                        }
+                        crediting={creditingTipId === reply.id}
                         onReply={
                           reply.user_id !== session?.user.id
                             ? () => {
