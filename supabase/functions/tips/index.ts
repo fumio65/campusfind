@@ -86,7 +86,15 @@ Deno.serve(async (req) => {
         })
       }
 
-      await supabaseAdmin.from('tips').update({ credited: true }).eq('id', id)
+      // FIX: the tips table has no "credited" column - it's
+      // "credited_for_recovery" - so this update was silently failing (error
+      // not checked) and credited_for_recovery was never actually set.
+      const { error: creditError } = await supabaseAdmin
+        .from('tips')
+        .update({ credited_for_recovery: true })
+        .eq('id', id)
+      if (creditError) console.error('Failed to mark tip as credited:', creditError.message)
+
       await adjustTrustScore(userId, 2, 'tip_credited')
       await notifyUser({
         userId,
@@ -100,7 +108,7 @@ Deno.serve(async (req) => {
       if (resolveReport === true || resolveReport === 'true') {
         await supabaseAdmin
           .from('reports')
-          .update({ status: 'resolved', resolved_via: 'tip_credited' })
+          .update({ status: 'resolved', resolved_via: 'tip_credited', resolved_at: new Date().toISOString() })
           .eq('id', reportId)
       }
 

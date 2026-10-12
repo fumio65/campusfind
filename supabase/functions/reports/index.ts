@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
 
       await supabaseAdmin
         .from('reports')
-        .update({ status: 'resolved', resolved_via: resolvedVia ?? 'handoff' })
+        .update({ status: 'resolved', resolved_via: resolvedVia ?? 'handoff', resolved_at: new Date().toISOString() })
         .eq('id', id)
 
       const approvedClaim = (report.claims as any[])?.find((c: any) => c.status === 'approved')
