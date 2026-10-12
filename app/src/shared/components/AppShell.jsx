@@ -6,7 +6,9 @@ import { useAuth } from '../lib/AuthContext'
 import { registerPushToken } from '../lib/pushToken'
 import { useUnreadCount, refreshNotifications } from '../lib/repositories/notifications'
 import { onSyncTrigger } from '../lib/appLifecycle'
+import { trustReasonText } from '../lib/trustScoreReasons'
 import SyncStatusBadge from './SyncStatusBadge'
+import TrustScoreDialog from './TrustScoreDialog'
 
 export default function AppShell() {
   const { session } = useAuth()
@@ -17,6 +19,7 @@ export default function AppShell() {
   const unreadCount = useUnreadCount(session.user.id)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const deferredPromptRef = useRef(null)
+  const [trustToast, setTrustToast] = useState({ visible: false, delta: 0, newScore: 100, reason: '' })
 
   const fetchUnread = useCallback(() => refreshNotifications(session.user.id), [session.user.id])
 
@@ -47,6 +50,28 @@ export default function AppShell() {
           filter: `user_id=eq.${session.user.id}`,
         },
         () => fetchUnread()
+      )
+      .on(
+        // Fires app-wide, regardless of which page the user is on, for any
+        // trust score change: claim rejections/handoff rewards, tip credits,
+        // walk-in/ISSC drop-off credits, no-shows. adjustTrustScore() writes
+        // this row *after* the user's trust_score column is already updated,
+        // so newScore here is authoritative, not a diffed estimate.
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'trust_score_events',
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          setTrustToast({
+            visible: true,
+            delta: payload.new.delta,
+            newScore: payload.new.score_after,
+            reason: trustReasonText(payload.new.reason),
+          })
+        }
       )
       .subscribe()
 
@@ -106,6 +131,14 @@ export default function AppShell() {
       </main>
 
       <SyncStatusBadge />
+
+      <TrustScoreDialog
+        delta={trustToast.delta}
+        newScore={trustToast.newScore}
+        reason={trustToast.reason}
+        visible={trustToast.visible}
+        onDismiss={() => setTrustToast((t) => ({ ...t, visible: false }))}
+      />
 
       {/* Install prompt banner */}
       {showInstallPrompt && (

@@ -49,7 +49,6 @@ import {
 import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import ShareSheet from "./ShareSheet";
-import TrustScoreDialog from "../../shared/components/TrustScoreDialog";
 import ValidationDialog from "../../shared/components/ValidationDialog";
 
 // FIX: claim actions and resolve were hitting dead Express server
@@ -263,11 +262,6 @@ export default function ReportDetailPage() {
   const [error, setError] = useState(null);
   const [actioning, setActioning] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
-  const [trustToast, setTrustToast] = useState({
-    visible: false,
-    delta: 0,
-    newScore: 100,
-  });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -281,7 +275,6 @@ export default function ReportDetailPage() {
   const resolveFileRef = useRef(null);
 
   const claimantIdRef = useRef(null);
-  const prevScoreRef = useRef(null);
   const tipSyncSubsRef = useRef([]);
 
   useEffect(() => {
@@ -302,22 +295,6 @@ export default function ReportDetailPage() {
     const tipId = params.get("tip_id");
     if (tipId) setHighlightedTipId(tipId);
   }, []);
-
-  async function showTrustToast(expectedDelta, reason = "") {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    const { data } = await supabase
-      .from("users")
-      .select("trust_score")
-      .eq("id", session.user.id)
-      .single();
-    const newScore = data?.trust_score ?? 100;
-    const actualDelta =
-      prevScoreRef.current !== null
-        ? newScore - prevScoreRef.current
-        : expectedDelta;
-    prevScoreRef.current = newScore;
-    setTrustToast({ visible: true, delta: actualDelta, newScore, reason });
-  }
 
   useEffect(() => {
     // Show whatever's already cached immediately (same cache-first pattern
@@ -376,49 +353,8 @@ export default function ReportDetailPage() {
           table: "reports",
           filter: `id=eq.${id}`,
         },
-        async (payload) => {
-          const newStatus = payload.new?.status;
-          if (
-            newStatus === "resolved" &&
-            claimantIdRef.current === session?.user?.id
-          ) {
-            await showTrustToast(
-              5,
-              "The item was recovered. Thank you for your honesty!",
-            );
-          }
+        () => {
           setTimeout(() => fetchAll(true), 500);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "user_notifications",
-          filter: `user_id=eq.${session?.user?.id}`,
-        },
-        async (payload) => {
-          if (payload.new?.type === "tip_credited") {
-            await new Promise((r) => setTimeout(r, 500));
-            const { data } = await supabase
-              .from("users")
-              .select("trust_score")
-              .eq("id", session.user.id)
-              .single();
-            const newScore = data?.trust_score ?? 100;
-            const actualDelta =
-              prevScoreRef.current !== null
-                ? newScore - prevScoreRef.current
-                : 2;
-            prevScoreRef.current = newScore;
-            setTrustToast({
-              visible: true,
-              delta: actualDelta,
-              newScore,
-              reason: "Your tip was credited for helping recover this item.",
-            });
-          }
         },
       )
       .on(
@@ -436,21 +372,8 @@ export default function ReportDetailPage() {
           table: "claims",
           filter: `report_id=eq.${id}`,
         },
-        async (payload) => {
-          const newStatus = payload.new?.status;
-          const claimantId = payload.new?.claimant_id;
+        () => {
           fetchAll(true);
-          if (
-            claimantId === session?.user?.id ||
-            claimantIdRef.current === session?.user?.id
-          ) {
-            if (newStatus === "rejected") {
-              await showTrustToast(
-                -5,
-                "Your claim was declined by the reporter.",
-              );
-            }
-          }
         },
       )
       .on(
@@ -523,14 +446,6 @@ export default function ReportDetailPage() {
     if (!silent) setClaimReady(false);
     if (!silent) setReporterReady(false);
 
-    if (session?.user?.id && prevScoreRef.current === null) {
-      const { data: userData } = await supabase
-        .from("users")
-        .select("trust_score")
-        .eq("id", session.user.id)
-        .single();
-      prevScoreRef.current = userData?.trust_score ?? 100;
-    }
 
     const { data, error } = await supabase
       .from("reports")
@@ -1023,14 +938,6 @@ export default function ReportDetailPage() {
           </button>
         </div>
       )}
-
-      <TrustScoreDialog
-        delta={trustToast.delta}
-        newScore={trustToast.newScore}
-        reason={trustToast.reason}
-        visible={trustToast.visible}
-        onDismiss={() => setTrustToast((t) => ({ ...t, visible: false }))}
-      />
 
       {/* Share sheet */}
       <AnimatePresence>

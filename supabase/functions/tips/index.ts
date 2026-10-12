@@ -18,8 +18,18 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
     .eq('id', userId)
     .single()
   if (!user) return
+  // users.trust_score is mutated solely by the trg_apply_trust_score_event
+  // trigger on trust_score_events (it clamps to [0, 200] itself) - this is
+  // only computed to record an accurate score_after on the event row, not
+  // applied directly, or the delta would double-apply.
   const newScore = Math.max(0, Math.min(200, (user.trust_score ?? 100) + delta))
-  await supabaseAdmin.from('users').update({ trust_score: newScore }).eq('id', userId)
+  const { error } = await supabaseAdmin.from('trust_score_events').insert({
+    user_id: userId,
+    delta,
+    reason,
+    score_after: newScore,
+  })
+  if (error) console.error('Failed to log trust_score_events:', JSON.stringify(error))
 }
 
 async function notifyUser({ userId, type, title, body, reportId = null, claimId = null, tipId = null }: {
@@ -77,7 +87,7 @@ Deno.serve(async (req) => {
       }
 
       await supabaseAdmin.from('tips').update({ credited: true }).eq('id', id)
-      await adjustTrustScore(userId, 2, 'tip credited with helping recover an item')
+      await adjustTrustScore(userId, 2, 'tip_credited')
       await notifyUser({
         userId,
         type: 'tip_credited',

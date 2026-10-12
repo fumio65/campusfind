@@ -19,14 +19,18 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
     .eq('id', userId)
     .single()
   if (!user) return
+  // users.trust_score is mutated solely by the trg_apply_trust_score_event
+  // trigger on trust_score_events (it clamps to [0, 200] itself) - this is
+  // only computed to record an accurate score_after on the event row, not
+  // applied directly, or the delta would double-apply.
   const newScore = Math.max(0, Math.min(200, (user.trust_score ?? 100) + delta))
-  await supabaseAdmin.from('users').update({ trust_score: newScore }).eq('id', userId)
-  await supabaseAdmin.from('trust_score_events').insert({
+  const { error } = await supabaseAdmin.from('trust_score_events').insert({
     user_id: userId,
     delta,
     reason,
     score_after: newScore,
   })
+  if (error) console.error('Failed to log trust_score_events:', JSON.stringify(error))
 }
 
 async function notifyUser({ userId, type, title, body, reportId = null, claimId = null }: {
@@ -153,7 +157,7 @@ Deno.serve(async (req) => {
       const approvedClaim = (report.claims as any[])?.find((c: any) => c.status === 'approved')
       if (approvedClaim) {
         await supabaseAdmin.from('claims').update({ status: 'resolved' }).eq('id', approvedClaim.id)
-        await adjustTrustScore(approvedClaim.claimant_id, 5, 'claim_approved_handoff')
+        await adjustTrustScore(approvedClaim.claimant_id, 5, 'claim_approved_handoff_completed')
         await notifyUser({
           userId: approvedClaim.claimant_id,
           type: 'claim_resolved',
@@ -226,7 +230,7 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (finder) {
-        await adjustTrustScore(finder.id, 5, 'issc_dropoff')
+        await adjustTrustScore(finder.id, 5, 'issc_dropoff_returned')
         await notifyUser({
           userId: finder.id,
           type: 'walkin_registered',
@@ -264,7 +268,7 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (finder) {
-        await adjustTrustScore(finder.id, 5, 'issc_dropoff')
+        await adjustTrustScore(finder.id, 5, 'issc_dropoff_returned')
         await notifyUser({
           userId: finder.id,
           type: 'walkin_registered',

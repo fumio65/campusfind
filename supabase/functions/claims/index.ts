@@ -19,14 +19,18 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
     .eq('id', userId)
     .single()
   if (!user) return
+  // users.trust_score is mutated solely by the trg_apply_trust_score_event
+  // trigger on trust_score_events (it clamps to [0, 200] itself) - this is
+  // only computed to record an accurate score_after on the event row, not
+  // applied directly, or the delta would double-apply.
   const newScore = Math.max(0, Math.min(200, (user.trust_score ?? 100) + delta))
-  await supabaseAdmin.from('users').update({ trust_score: newScore }).eq('id', userId)
-  await supabaseAdmin.from('trust_score_events').insert({
+  const { error } = await supabaseAdmin.from('trust_score_events').insert({
     user_id: userId,
     delta,
     reason,
     score_after: newScore,
   })
+  if (error) console.error('Failed to log trust_score_events:', JSON.stringify(error))
 }
 
 async function checkRepeatedRejections(userId: string): Promise<boolean> {
@@ -157,7 +161,7 @@ Deno.serve(async (req) => {
 
         await adjustTrustScore(claimantId, -5, 'claim_rejected')
         const repeated = await checkRepeatedRejections(claimantId)
-        if (repeated) await adjustTrustScore(claimantId, -5, 'multiple_rejections')
+        if (repeated) await adjustTrustScore(claimantId, -5, 'repeat_rejections_30d')
         await notifyUser({
           userId: claimantId,
           type: 'claim_rejected',
