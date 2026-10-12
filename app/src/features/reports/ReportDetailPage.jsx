@@ -806,6 +806,25 @@ export default function ReportDetailPage() {
       : "Failed to delete report. Please try again.";
   }
 
+  // Clears this report (and its cached tips/photos) from the local
+  // offline-first cache. Used both after a real server delete succeeds,
+  // and on its own for a report that turns out to be "ghost" data - cached
+  // locally with _syncStatus marked synced, but never actually present on
+  // the server (a background-sync bug: the queued create silently reported
+  // success without the row landing remotely). Deleting ghost data has
+  // nothing to clean up server-side, so this is the whole fix for it.
+  async function purgeLocalReportCache(reportId) {
+    const [localTips, localPhotos] = await Promise.all([
+      db.tips.where("report_id").equals(reportId).toArray(),
+      db.report_photos.where("report_id").equals(reportId).toArray(),
+    ]);
+    await Promise.all([
+      db.reports.delete(reportId),
+      ...localTips.map((t) => db.tips.delete(t.id)),
+      ...localPhotos.map((p) => db.report_photos.delete(p.id)),
+    ]);
+  }
+
   async function handleDelete() {
     setDeleting(true);
     try {
@@ -883,13 +902,34 @@ export default function ReportDetailPage() {
       if (error) throw error;
       if (!deletedReports?.length) {
         // RLS silently filtered the row instead of erroring (0 rows
-        // affected, no error) - most likely because the report is no
-        // longer "open" or isn't owned by this user.
+        // affected, no error). Two different causes look identical here, so
+        // tell them apart with a plain existence check (the reports SELECT
+        // policy has no status/ownership restriction, so this check isn't
+        // itself subject to the same filtering):
+        const { data: stillExists } = await supabase
+          .from("reports")
+          .select("id")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (!stillExists) {
+          // Doesn't exist server-side at all - this was "ghost" local-only
+          // data (a report the background sync never actually persisted,
+          // despite the local cache marking it synced). Nothing to delete
+          // remotely; just clear it out of the local cache.
+          await purgeLocalReportCache(id);
+          navigate("/");
+          return;
+        }
+
+        // It genuinely exists but couldn't be deleted - the real business
+        // rule (not open / not owned by this user) applies.
         throw new Error(
           "This report can no longer be deleted (it may already have a claim or no longer be open).",
         );
       }
 
+      await purgeLocalReportCache(id);
       navigate("/");
     } catch (err) {
       console.error("Delete error:", err);
