@@ -27,16 +27,24 @@ export async function refreshDropOffStatus(claimId) {
   if (!isOnline() || !claimId) return
   const { data } = await supabase
     .from('dropoff_requests')
-    .select('id, claim_id, status')
+    .select('id, claim_id, status, updated_at')
     .eq('claim_id', claimId)
     .maybeSingle()
   if (data) await db.dropoff_requests.put(data)
 }
 
+// Returns both the status and the time it last changed (updated_at) - the
+// dropoff edge function bumps updated_at on every status transition
+// (pending -> received -> resolved), so this is the real "when did this
+// status become true" timestamp. Previously only `status` was read out of
+// the row, so the banner showing it had nothing but the original chat
+// message's created_at to display - the banner text updated live as status
+// changed, but its "x ago" timestamp stayed frozen to the moment drop-off
+// was first chosen, not when it was actually received/resolved.
 export function useDropOffStatus(claimId) {
   const row = useLiveQuery(async () => {
     if (!claimId) return null
     return (await db.dropoff_requests.where('claim_id').equals(claimId).first()) ?? null
   }, [claimId])
-  return row?.status ?? null
+  return { status: row?.status ?? null, updatedAt: row?.updated_at ?? null }
 }

@@ -84,7 +84,7 @@ export default function MessageThreadPage() {
     : null
   const hasOpenRequest = openRequest?.body === DROPOFF_REQUESTED_BODY
   const requestedByMe = hasOpenRequest && openRequest.sender_id === session.user.id
-  const dropOffStatus = useDropOffStatus(claim?.id) // null | 'pending' | 'received' | 'resolved'
+  const { status: dropOffStatus, updatedAt: dropOffUpdatedAt } = useDropOffStatus(claim?.id) // status: null | 'pending' | 'received' | 'resolved'
   const [text, setText]                   = useState('')
   const [sending, setSending]             = useState(false)
   const [sendError, setSendError]         = useState('')
@@ -379,7 +379,12 @@ export default function MessageThreadPage() {
                     {message}
                   </p>
                   <p className="text-[10px] text-status-claimed-text/50 mt-1">
-                    {timeAgo(msg.created_at)}
+                    {/* dropOffUpdatedAt reflects when the status shown above
+                        actually last changed (received/resolved); msg.created_at
+                        is only the time drop-off was first chosen, which doesn't
+                        move as the status progresses - use it solely as the
+                        fallback for the initial "pending" state. */}
+                    {timeAgo(dropOffUpdatedAt ?? msg.created_at)}
                   </p>
                 </div>
               </div>
