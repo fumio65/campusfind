@@ -117,7 +117,6 @@ function TipCard({
   credited,
   onConvert,
   onCredit,
-  crediting,
   isHighlighted,
 }) {
   const name = tip.users
@@ -188,11 +187,10 @@ function TipCard({
                   <button
                     type="button"
                     onClick={onCredit}
-                    disabled={crediting}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-status-open-text/40 bg-surface-page text-[10px] font-semibold text-status-open-text hover:bg-status-open-bg transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-status-open-text/40 bg-surface-page text-[10px] font-semibold text-status-open-text hover:bg-status-open-bg transition-colors"
                   >
                     <CheckCircle2 size={10} />
-                    {crediting ? "Marking..." : "This helped"}
+                    This helped
                   </button>
                 )}
                 {onConvert && !credited && !tip.converted_to_claim_id && (
@@ -274,7 +272,6 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actioning, setActioning] = useState(false);
-  const [creditingTipId, setCreditingTipId] = useState(null);
   const [lightboxUrl, setLightboxUrl] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -286,6 +283,7 @@ export default function ReportDetailPage() {
   const [resolvePhoto, setResolvePhoto] = useState(null);
   const [resolvePhotoPreview, setResolvePhotoPreview] = useState(null);
   const [resolving, setResolving] = useState(false);
+  const [resolveTip, setResolveTip] = useState(null); // tip being credited, if opened from "This helped"
   const resolveFileRef = useRef(null);
 
   const claimantIdRef = useRef(null);
@@ -723,6 +721,17 @@ export default function ReportDetailPage() {
   }
 
   function handleResolveClick() {
+    setResolveTip(null);
+    setResolvePhoto(null);
+    setResolvePhotoPreview(null);
+    setShowResolveDialog(true);
+  }
+
+  // Opened from a tip's "This helped" button: same photo-proof dialog as the
+  // claim-approved handoff flow, but on confirm this also credits the tip
+  // (+2 trust, credited_for_recovery) since it's the tip that led to recovery.
+  function handleCreditAndResolveClick(tip) {
+    setResolveTip(tip);
     setResolvePhoto(null);
     setResolvePhotoPreview(null);
     setShowResolveDialog(true);
@@ -744,6 +753,25 @@ export default function ReportDetailPage() {
       const path = `resolved/${id}/${Date.now()}.${ext}`;
       await supabase.storage.from("report-photos").upload(path, resolvePhoto);
 
+      if (resolveTip) {
+        // Credit first (trust score + credited_for_recovery), then resolve
+        // the report via the normal handoff path - resolved_via_type has no
+        // "tip" value, so this is recorded as a handoff like any other
+        // photo-verified resolution.
+        await fetch(`${EDGE_URL}/tips/${resolveTip.id}/credit`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": ANON_KEY,
+          },
+          body: JSON.stringify({
+            userId: resolveTip.user_id,
+            reportId: id,
+            resolveReport: false,
+          }),
+        });
+      }
+
       await fetch(`${EDGE_URL}/reports/${id}/resolve`, {
         method: "PATCH",
         headers: {
@@ -759,6 +787,7 @@ export default function ReportDetailPage() {
       setShowResolveDialog(false);
       setResolvePhoto(null);
       setResolvePhotoPreview(null);
+      setResolveTip(null);
       fetchAll(true);
     } catch (err) {
       console.error(err);
@@ -818,45 +847,6 @@ export default function ReportDetailPage() {
 
   function handleConvertTip(tip) {
     navigate(`/reports/${id}/claim?fromTip=${tip.id}`);
-  }
-
-  // Lets the reporter mark whichever tip actually helped them recover the
-  // item. Awards the tipster +2 trust score (tip_credited) and flips
-  // credited_for_recovery so it shows up in Analytics' tip conversion rate.
-  //
-  // If the tip is what led to full recovery, the reporter can resolve the
-  // report in the same action - the backend sets status: 'resolved',
-  // resolved_via: 'tip_credited', resolved_at in that case (no photo proof
-  // needed, unlike the separate handoff Mark as Resolved flow, since the
-  // recovery happened off-app, e.g. the reporter met the tipster directly).
-  // If the tip only pointed them in the right direction and recovery still
-  // needs to go through handoff/drop-off, they credit without resolving and
-  // use Mark as Resolved later.
-  async function handleCreditTip(tip) {
-    const alsoResolve = window.confirm(
-      "Did this tip lead you to fully recover the item?\n\n" +
-        "OK = Yes, credit the tip and mark this report resolved.\n" +
-        "Cancel = Not yet, just credit the tip for now.",
-    );
-    setCreditingTipId(tip.id);
-    try {
-      await fetch(`${EDGE_URL}/tips/${tip.id}/credit`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": ANON_KEY,
-        },
-        body: JSON.stringify({
-          userId: tip.user_id,
-          reportId: id,
-          resolveReport: alsoResolve,
-        }),
-      });
-    } catch (err) {
-      console.error(err);
-    }
-    setCreditingTipId(null);
-    fetchAll(true);
   }
 
   async function handleTipSubmit(e) {
@@ -1017,8 +1007,9 @@ export default function ReportDetailPage() {
               Mark as resolved
             </h3>
             <p className="text-xs text-text-secondary mb-4">
-              Please take a photo of the recovered item as proof before marking
-              this report as resolved.
+              {resolveTip
+                ? "Please take a photo of the recovered item as proof. This will also credit the tip with +2 trust score."
+                : "Please take a photo of the recovered item as proof before marking this report as resolved."}
             </p>
 
             <input
@@ -1065,6 +1056,7 @@ export default function ReportDetailPage() {
                   setShowResolveDialog(false);
                   setResolvePhoto(null);
                   setResolvePhotoPreview(null);
+                  setResolveTip(null);
                 }}
                 className="flex-1 h-11 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors"
               >
@@ -1613,11 +1605,10 @@ export default function ReportDetailPage() {
                           : null
                       }
                       onCredit={
-                        isOwner && parent.user_id !== session?.user.id
-                          ? () => handleCreditTip(parent)
+                        isOwner && isOpen && parent.user_id !== session?.user.id
+                          ? () => handleCreditAndResolveClick(parent)
                           : null
                       }
-                      crediting={creditingTipId === parent.id}
                       onReply={
                         parent.user_id !== session?.user.id
                           ? () => {
@@ -1645,11 +1636,10 @@ export default function ReportDetailPage() {
                             : null
                         }
                         onCredit={
-                          isOwner && reply.user_id !== session?.user.id
-                            ? () => handleCreditTip(reply)
+                          isOwner && isOpen && reply.user_id !== session?.user.id
+                            ? () => handleCreditAndResolveClick(reply)
                             : null
                         }
-                        crediting={creditingTipId === reply.id}
                         onReply={
                           reply.user_id !== session?.user.id
                             ? () => {
