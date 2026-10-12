@@ -65,6 +65,16 @@ export default function AccountsPage() {
     setConfirmOpen(false)
   }
 
+  function handleOpenAdd() {
+    setForm({ studentId: '', enrollmentNumber: '', lastName: '', firstName: '' })
+    setFormError(null)
+    setShowAdd(true)
+  }
+
+  function handleCloseAdd() {
+    setShowAdd(false)
+  }
+
   async function handleConfirmToggle() {
     if (!confirmToggle) return
     const { account, newStatus } = confirmToggle
@@ -123,7 +133,6 @@ export default function AccountsPage() {
         lastName: form.lastName,
         firstName: form.firstName,
       })
-      setForm({ studentId: '', enrollmentNumber: '', lastName: '', firstName: '' })
       setShowAdd(false)
       setSuccessMsg(`Account ${form.studentId} created.`)
       setOffset(0)
@@ -141,7 +150,7 @@ export default function AccountsPage() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-2xl font-bold text-text-primary">Accounts</h2>
           <button
-            onClick={() => setShowAdd((v) => !v)}
+            onClick={handleOpenAdd}
             className="px-3.5 py-2 text-sm font-medium rounded-md bg-brand-600 text-white flex items-center gap-1.5 hover:bg-brand-700 transition-colors"
           >
             <Plus size={14} aria-hidden="true" /> Add account
@@ -229,64 +238,65 @@ export default function AccountsPage() {
         )}
       </Dialog>
 
-      {showAdd && (
-        <div className="bg-surface-card border border-border rounded-xl p-5 mb-4 max-w-lg">
-          <div className="text-sm font-semibold text-text-primary mb-3">Add a single account</div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-text-secondary block mb-1">Student ID</label>
-              <input
-                placeholder="YY-NNNNN"
-                value={form.studentId}
-                onChange={(e) => setForm({ ...form, studentId: e.target.value })}
-                className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-              {form.studentId && !studentIdValid && (
-                <p className="text-[11px] text-status-rejected-text mt-1">Format must be YY-NNNNN</p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary block mb-1">Enrollment number</label>
-              <input
-                placeholder="6-10 digits"
-                value={form.enrollmentNumber}
-                onChange={(e) => setForm({ ...form, enrollmentNumber: e.target.value })}
-                className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-              {form.enrollmentNumber && !enrollmentValid && (
-                <p className="text-[11px] text-status-rejected-text mt-1">Must be 6-10 digits</p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary block mb-1">Last name</label>
-              <input
-                value={form.lastName}
-                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary block mb-1">First name</label>
-              <input
-                value={form.firstName}
-                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-            </div>
+      <Dialog
+        open={showAdd}
+        onClose={handleCloseAdd}
+        tone="info"
+        title="Add a single account"
+        primaryAction={{
+          label: submitting ? 'Creating...' : 'Create account',
+          onClick: handleCreate,
+          disabled: !canSubmit || submitting,
+        }}
+        secondaryAction={{ label: 'Cancel', onClick: handleCloseAdd }}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">Student ID</label>
+            <input
+              placeholder="YY-NNNNN"
+              value={form.studentId}
+              onChange={(e) => setForm({ ...form, studentId: e.target.value })}
+              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+            {form.studentId && !studentIdValid && (
+              <p className="text-[11px] text-status-rejected-text mt-1">Format must be YY-NNNNN</p>
+            )}
           </div>
-          {formError && <p className="text-xs text-status-rejected-text mt-2.5">{formError}</p>}
-          <button
-            onClick={handleCreate}
-            disabled={!canSubmit || submitting}
-            className="mt-3.5 px-4 py-2 text-sm font-medium rounded-md bg-brand-600 text-white disabled:bg-surface-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? 'Creating...' : 'Create account'}
-          </button>
-          <p className="text-xs text-text-muted mt-2">
-            For late enrollees or one-off corrections. For onboarding a full term, use bulk import.
-          </p>
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">Enrollment number</label>
+            <input
+              placeholder="6-10 digits"
+              value={form.enrollmentNumber}
+              onChange={(e) => setForm({ ...form, enrollmentNumber: e.target.value })}
+              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+            {form.enrollmentNumber && !enrollmentValid && (
+              <p className="text-[11px] text-status-rejected-text mt-1">Must be 6-10 digits</p>
+            )}
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">Last name</label>
+            <input
+              value={form.lastName}
+              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">First name</label>
+            <input
+              value={form.firstName}
+              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+          </div>
         </div>
-      )}
+        {formError && <p className="text-xs text-status-rejected-text mt-2.5">{formError}</p>}
+        <p className="text-xs text-text-muted mt-3">
+          For late enrollees or one-off corrections. For onboarding a full term, use bulk import.
+        </p>
+      </Dialog>
 
       {loading ? (
         <div className="text-sm text-text-muted py-8 text-center">Loading...</div>

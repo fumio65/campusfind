@@ -1,4 +1,4 @@
-﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { requireAdmin } from '../_shared/requireAdmin.ts'
 
 const corsHeaders = {
@@ -98,8 +98,13 @@ Deno.serve(async (req) => {
       })
 
       if (authError) {
-        return new Response(JSON.stringify({ error: authError.message }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        // Auth enforces unique emails, which are derived 1:1 from studentId -
+        // a collision here means this student ID is already registered.
+        const friendly = /already.*registered|already.*exists/i.test(authError.message)
+          ? 'This student ID is already registered.'
+          : authError.message
+        return new Response(JSON.stringify({ error: friendly }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
@@ -119,9 +124,24 @@ Deno.serve(async (req) => {
         .single()
 
       if (error) {
-        await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        const { error: rollbackError } = await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+        if (rollbackError) {
+          console.error(
+            `Failed to roll back orphaned auth user ${authUser.user.id} after users insert error:`,
+            rollbackError.message
+          )
+        }
+
+        // error.code === '23505' is Postgres' unique_violation - translate the
+        // two columns we actually enforce uniqueness on into plain language
+        // instead of surfacing the raw constraint-name error to the admin.
+        let friendly = 'Could not create account.'
+        if (error.code === '23505') {
+          if (error.message.includes('student_id')) friendly = 'This student ID is already registered.'
+          else if (error.message.includes('enrollment_number')) friendly = 'This enrollment number is already in use.'
+        }
+        return new Response(JSON.stringify({ error: friendly }), {
+          status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
@@ -221,4 +241,3 @@ Deno.serve(async (req) => {
     })
   }
 })
-
