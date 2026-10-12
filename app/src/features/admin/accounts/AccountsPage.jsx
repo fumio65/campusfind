@@ -15,7 +15,14 @@ export default function AccountsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [form, setForm] = useState({ studentId: '', enrollmentNumber: '', lastName: '', firstName: '' })
+  const [form, setForm] = useState({
+    studentId: '',
+    enrollmentNumber: '',
+    lastName: '',
+    firstName: '',
+    program: '',
+    yearLevel: '',
+  })
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState(null)
   const [successMsg, setSuccessMsg] = useState(null)
@@ -66,7 +73,7 @@ export default function AccountsPage() {
   }
 
   function handleOpenAdd() {
-    setForm({ studentId: '', enrollmentNumber: '', lastName: '', firstName: '' })
+    setForm({ studentId: '', enrollmentNumber: '', lastName: '', firstName: '', program: '', yearLevel: '' })
     setFormError(null)
     setShowAdd(true)
   }
@@ -132,6 +139,8 @@ export default function AccountsPage() {
         enrollmentNumber: form.enrollmentNumber,
         lastName: form.lastName,
         firstName: form.firstName,
+        program: form.program,
+        yearLevel: form.yearLevel,
       })
       setShowAdd(false)
       setSuccessMsg(`Account ${form.studentId} created.`)
@@ -288,6 +297,24 @@ export default function AccountsPage() {
             <input
               value={form.firstName}
               onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">Program/Course</label>
+            <input
+              placeholder="e.g. BS Information Technology"
+              value={form.program}
+              onChange={(e) => setForm({ ...form, program: e.target.value })}
+              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">Year level</label>
+            <input
+              placeholder="1-4"
+              value={form.yearLevel}
+              onChange={(e) => setForm({ ...form, yearLevel: e.target.value })}
               className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>

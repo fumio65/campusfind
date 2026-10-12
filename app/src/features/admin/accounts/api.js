@@ -9,11 +9,11 @@ export async function fetchAccounts({ limit = 50, offset = 0, search = '' } = {}
   return body
 }
 
-export async function createSingleAccount({ studentId, enrollmentNumber, lastName, firstName }) {
+export async function createSingleAccount({ studentId, enrollmentNumber, lastName, firstName, program, yearLevel }) {
   const res = await adminFetch('/accounts/single', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ studentId, enrollmentNumber, lastName, firstName }),
+    body: JSON.stringify({ studentId, enrollmentNumber, lastName, firstName, program, yearLevel }),
   })
   const body = await res.json()
   if (!res.ok) throw new Error(body.error ?? 'Could not create account.')

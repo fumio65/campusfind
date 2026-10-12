@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
 
     // POST /accounts/single
     if (req.method === 'POST' && id === 'single') {
-      const { studentId, enrollmentNumber, lastName, firstName } = await req.json()
+      const { studentId, enrollmentNumber, lastName, firstName, program, yearLevel } = await req.json()
       if (!studentId || !enrollmentNumber || !lastName || !firstName) {
         return new Response(JSON.stringify({ error: 'studentId, enrollmentNumber, lastName, and firstName are all required.' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -116,6 +116,8 @@ Deno.serve(async (req) => {
           enrollment_number: enrollmentNumber,
           last_name: lastName,
           first_name: firstName,
+          program: program?.trim() ? program.trim() : null,
+          year_level: yearLevel?.trim() ? yearLevel.trim() : null,
           role: 'student',
           status: 'active',
           force_password_change: true,
