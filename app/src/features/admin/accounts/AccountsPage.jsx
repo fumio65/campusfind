@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { Plus, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
-import { fetchAccounts, createSingleAccount, toggleAccountStatus, resetAccountPassword } from './api'
+import { fetchAccounts, fetchPrograms, createSingleAccount, toggleAccountStatus, resetAccountPassword } from './api'
 import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
 
@@ -20,9 +20,12 @@ export default function AccountsPage() {
     enrollmentNumber: '',
     lastName: '',
     firstName: '',
-    program: '',
+    departmentCode: '',
+    programCode: '',
     yearLevel: '',
   })
+  const [departments, setDepartments] = useState([])
+  const [departmentsError, setDepartmentsError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState(null)
   const [successMsg, setSuccessMsg] = useState(null)
@@ -46,6 +49,15 @@ export default function AccountsPage() {
   useEffect(() => {
     load(offset, debouncedSearch)
   }, [offset, debouncedSearch])
+
+  // Loaded once, up front - the Add Account dialog's Department/Program
+  // dropdowns need this before the dialog ever opens, and it's a small,
+  // rarely-changing reference list (not worth refetching per dialog open).
+  useEffect(() => {
+    fetchPrograms()
+      .then(setDepartments)
+      .catch((err) => setDepartmentsError(err.message))
+  }, [])
 
   async function load(currentOffset, currentSearch) {
     setLoading(true)
@@ -73,7 +85,15 @@ export default function AccountsPage() {
   }
 
   function handleOpenAdd() {
-    setForm({ studentId: '', enrollmentNumber: '', lastName: '', firstName: '', program: '', yearLevel: '' })
+    setForm({
+      studentId: '',
+      enrollmentNumber: '',
+      lastName: '',
+      firstName: '',
+      departmentCode: '',
+      programCode: '',
+      yearLevel: '',
+    })
     setFormError(null)
     setShowAdd(true)
   }
@@ -139,7 +159,7 @@ export default function AccountsPage() {
         enrollmentNumber: form.enrollmentNumber,
         lastName: form.lastName,
         firstName: form.firstName,
-        program: form.program,
+        programCode: form.programCode,
         yearLevel: form.yearLevel,
       })
       setShowAdd(false)
@@ -301,13 +321,46 @@ export default function AccountsPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-text-secondary block mb-1">Program/Course</label>
-            <input
-              placeholder="e.g. BS Information Technology"
-              value={form.program}
-              onChange={(e) => setForm({ ...form, program: e.target.value })}
+            <label className="text-xs text-text-secondary block mb-1">Department</label>
+            <select
+              value={form.departmentCode}
+              onChange={(e) =>
+                setForm({ ...form, departmentCode: e.target.value, programCode: '' })
+              }
               className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
+            >
+              <option value="">Select department…</option>
+              {departments.map((dept) => (
+                <option key={dept.code} value={dept.code}>
+                  {dept.code} — {dept.name}
+                </option>
+              ))}
+            </select>
+            {departmentsError && (
+              <p className="text-[11px] text-status-rejected-text mt-1">
+                Couldn't load departments: {departmentsError}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">Program/Course</label>
+            <select
+              value={form.programCode}
+              onChange={(e) => setForm({ ...form, programCode: e.target.value })}
+              disabled={!form.departmentCode}
+              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
+            >
+              <option value="">
+                {form.departmentCode ? 'Select program…' : 'Select a department first'}
+              </option>
+              {(departments.find((d) => d.code === form.departmentCode)?.programs ?? []).map(
+                (program) => (
+                  <option key={program.code} value={program.code}>
+                    {program.code} — {program.name}
+                  </option>
+                )
+              )}
+            </select>
           </div>
           <div>
             <label className="text-xs text-text-secondary block mb-1">Year level</label>
@@ -360,7 +413,7 @@ export default function AccountsPage() {
                     <td className="py-2 px-3 font-medium">{a.student_id}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.enrollment_number}</td>
                     <td className="py-2 px-3">{a.name}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.program ?? '—'}</td>
+                    <td className="py-2 px-3 text-text-secondary">{a.program ?? a.program_code ?? '—'}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.year_level ?? '—'}</td>
                     <td className="py-2 px-3">{a.trust_score}</td>
                     <td className="py-2 px-3"><StatusPill status={a.status} /></td>

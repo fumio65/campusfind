@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
   let query = supabaseAdmin
     .from('users')
     .select(
-      'id, student_id, enrollment_number, first_name, last_name, middle_name, program, year_level, role, status, trust_score, created_at',
+      'id, student_id, enrollment_number, first_name, last_name, middle_name, program, program_code, department_code, year_level, role, status, trust_score, created_at, programs:program_code ( program_name, department_name )',
       { count: 'exact' }
     )
     .order('created_at', { ascending: false })
@@ -36,7 +36,10 @@ router.get('/', async (req, res) => {
       first_name: u.first_name,
       last_name: u.last_name,
       middle_name: u.middle_name,
-      program: u.program,
+      program: u.programs?.program_name ?? u.program,
+      program_code: u.program_code,
+      department_code: u.department_code,
+      department_name: u.programs?.department_name ?? null,
       year_level: u.year_level,
       role: u.role,
       status: u.status,
@@ -51,12 +54,24 @@ router.get('/', async (req, res) => {
 
 // POST /accounts/single
 router.post('/single', async (req, res) => {
-  const { studentId, enrollmentNumber, lastName, firstName } = req.body
+  const { studentId, enrollmentNumber, lastName, firstName, programCode, yearLevel } = req.body
 
   if (!studentId || !enrollmentNumber || !lastName || !firstName) {
     return res.status(400).json({
       error: 'studentId, enrollmentNumber, lastName, and firstName are all required.',
     })
+  }
+
+  let departmentCode = null
+  if (programCode) {
+    const { data: program, error: programError } = await supabaseAdmin
+      .from('programs')
+      .select('department_code')
+      .eq('program_code', programCode)
+      .maybeSingle()
+    if (programError) return res.status(500).json({ error: programError.message })
+    if (!program) return res.status(400).json({ error: 'programCode does not match a known program.' })
+    departmentCode = program.department_code
   }
 
   const email = `${studentId.replace('-', '')}@nwssu.local`
@@ -78,6 +93,9 @@ router.post('/single', async (req, res) => {
       enrollment_number: enrollmentNumber,
       last_name: lastName,
       first_name: firstName,
+      program_code: programCode || null,
+      department_code: departmentCode,
+      year_level: yearLevel || null,
       role: 'student',
       status: 'active',
       force_password_change: true,
