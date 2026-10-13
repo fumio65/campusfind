@@ -321,7 +321,7 @@ export default function AccountsPage() {
               className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
-          <div>
+          <div className="col-span-2">
             <label className="text-xs text-text-secondary block mb-1">Department</label>
             <Dropdown
               size="sm"
@@ -336,7 +336,7 @@ export default function AccountsPage() {
               </p>
             )}
           </div>
-          <div>
+          <div className="col-span-2">
             <label className="text-xs text-text-secondary block mb-1">Program/Course</label>
             <Dropdown
               size="sm"

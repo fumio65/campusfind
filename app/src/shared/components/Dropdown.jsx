@@ -88,13 +88,13 @@ export default function Dropdown({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`w-full flex items-center justify-between gap-2 ${fieldClasses} rounded-xl border bg-surface-card text-left transition-colors ${
+        className={`w-full flex items-center justify-between gap-2 ${fieldClasses} min-h-[2.75rem] rounded-xl border bg-surface-card text-left transition-colors ${
           open ? 'border-brand-400 ring-2 ring-brand-400' : 'border-border-strong'
         } ${!selected ? 'text-text-muted' : 'text-text-primary'} ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-brand-400/60'
         }`}
       >
-        <span className="truncate">{displayLabel}</span>
+        <span className="leading-snug py-2">{displayLabel}</span>
         <ChevronDown
           size={16}
           aria-hidden="true"
@@ -140,7 +140,7 @@ export default function Dropdown({
                       : 'text-text-secondary hover:bg-surface-muted'
                   }`}
                 >
-                  <span className="truncate">{opt.label}</span>
+                  <span className="leading-snug">{opt.label}</span>
                   {opt.value === value && <Check size={15} className="text-brand-600 shrink-0" aria-hidden="true" />}
                 </button>
               ))
