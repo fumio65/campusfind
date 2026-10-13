@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/lib/AuthContext'
 import { motion } from 'framer-motion'
 import { UserPlus, UserMinus, Copy, AlertTriangle, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react'
@@ -35,6 +36,8 @@ export default function BulkImportPage() {
   const [pendingFile, setPendingFile] = useState(null)
   const uploadAbortRef = useRef(null)
   const { session } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const hasBatch = !!batch
   const counts = rows.reduce((acc, row) => ({ ...acc, [row.action]: (acc[row.action] ?? 0) + 1 }), {})
@@ -103,6 +106,20 @@ export default function BulkImportPage() {
       cancelled = true
     }
   }, [])
+
+  // Hand-off from the "Bulk import" quick-start dialog on the Accounts page:
+  // it only captures the file, then routes here with it in router state so
+  // the actual mapping/review/confirm work happens on this full page. Only
+  // auto-starts once there's nothing already in progress, and clears the
+  // state immediately after so a refresh or back-navigation doesn't re-fire it.
+  useEffect(() => {
+    if (loadingBatch || resumingUpload || hasBatch || mappingHeaders) return
+    const autoFile = location.state?.autoFile
+    if (!autoFile) return
+    navigate(location.pathname, { replace: true, state: {} })
+    handleFileSelected(autoFile)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingBatch, resumingUpload, hasBatch, mappingHeaders, location.state])
 
   async function performUpload(file, mapping) {
     setUploading(true)
@@ -249,15 +266,29 @@ export default function BulkImportPage() {
         onClose={() => setConfirmResult(null)}
         tone="success"
         title="Import confirmed"
+        maxWidth="max-w-md"
       >
         {confirmResult && (
           <>
-            <span className="font-medium text-text-primary">{confirmResult.created}</span> account
-            {confirmResult.created === 1 ? '' : 's'} created,{' '}
-            <span className="font-medium text-text-primary">{confirmResult.updated}</span> updated,{' '}
-            <span className="font-medium text-text-primary">{confirmResult.deactivated}</span> deactivated, and{' '}
-            <span className="font-medium text-text-primary">{confirmResult.skipped}</span> skipped as duplicates.
-            These changes are already live in Accounts.
+            <div className="grid grid-cols-2 gap-2.5 mb-4">
+              <div className="rounded-lg border border-border bg-surface-muted/60 px-3 py-2.5">
+                <div className="text-2xl font-bold text-status-open-text leading-none">{confirmResult.created}</div>
+                <div className="text-xs text-text-secondary mt-1">Created</div>
+              </div>
+              <div className="rounded-lg border border-border bg-surface-muted/60 px-3 py-2.5">
+                <div className="text-2xl font-bold text-status-open-text leading-none">{confirmResult.updated}</div>
+                <div className="text-xs text-text-secondary mt-1">Updated</div>
+              </div>
+              <div className="rounded-lg border border-border bg-surface-muted/60 px-3 py-2.5">
+                <div className="text-2xl font-bold text-status-claimed-text leading-none">{confirmResult.deactivated}</div>
+                <div className="text-xs text-text-secondary mt-1">Deactivated</div>
+              </div>
+              <div className="rounded-lg border border-border bg-surface-muted/60 px-3 py-2.5">
+                <div className="text-2xl font-bold text-text-secondary leading-none">{confirmResult.skipped}</div>
+                <div className="text-xs text-text-secondary mt-1">Skipped (duplicate)</div>
+              </div>
+            </div>
+            <p className="text-xs text-text-muted">These changes are already live in Accounts.</p>
           </>
         )}
       </Dialog>

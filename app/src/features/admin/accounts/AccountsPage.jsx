@@ -1,9 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
-import { Plus, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, ChevronLeft, ChevronRight, Search, X, Upload } from 'lucide-react'
 import { fetchAccounts, fetchPrograms, createSingleAccount, toggleAccountStatus, resetAccountPassword } from './api'
 import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
 import Dropdown from '../../../shared/components/Dropdown'
+import CsvDropzone from '../bulk-import/CsvDropzone'
+import { downloadBulkImportTemplate } from '../bulk-import/csvTemplate'
 
 // Program/department names are stored in ALL CAPS (the official NWSSU list
 // uses that style) - fine for a database column, not for a UI label.
@@ -50,7 +53,9 @@ function FormSection({ label, children }) {
 }
 
 export default function AccountsPage() {
+  const navigate = useNavigate()
   const [showAdd, setShowAdd] = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
   const [accounts, setAccounts] = useState([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -145,6 +150,15 @@ export default function AccountsPage() {
     setShowAdd(false)
   }
 
+  // Quick-start entry point: this dialog only captures the file. Mapping,
+  // row-by-row review, and confirming are all still handled on the full
+  // Bulk Import page - a review table with per-row fixes doesn't belong in
+  // a modal, so we hand off as soon as there's a file to work with.
+  function handleBulkFileSelected(file) {
+    setShowBulkImport(false)
+    navigate('/admin/bulk-import', { state: { autoFile: file } })
+  }
+
   async function handleConfirmToggle() {
     if (!confirmToggle) return
     const { account, newStatus } = confirmToggle
@@ -221,12 +235,20 @@ export default function AccountsPage() {
       <div className="sticky top-0 z-10 bg-surface-page pb-3 -mx-8 px-8 pt-1">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-2xl font-bold text-text-primary">Accounts</h2>
-          <button
-            onClick={handleOpenAdd}
-            className="px-3.5 py-2 text-sm font-medium rounded-md bg-brand-600 text-white flex items-center gap-1.5 hover:bg-brand-700 transition-colors"
-          >
-            <Plus size={14} aria-hidden="true" /> Add account
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowBulkImport(true)}
+              className="px-3.5 py-2 text-sm font-medium rounded-md border border-border-strong bg-surface-card flex items-center gap-1.5 hover:bg-surface-muted transition-colors"
+            >
+              <Upload size={14} aria-hidden="true" /> Bulk import
+            </button>
+            <button
+              onClick={handleOpenAdd}
+              className="px-3.5 py-2 text-sm font-medium rounded-md bg-brand-600 text-white flex items-center gap-1.5 hover:bg-brand-700 transition-colors"
+            >
+              <Plus size={14} aria-hidden="true" /> Add account
+            </button>
+          </div>
         </div>
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden="true" />
@@ -255,6 +277,33 @@ export default function AccountsPage() {
 
       <Dialog open={!!successMsg} onClose={() => setSuccessMsg(null)} tone="success" title="Success">
         {successMsg}
+      </Dialog>
+
+      <Dialog
+        open={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        tone="info"
+        title="Bulk import accounts"
+        maxWidth="max-w-md"
+      >
+        <p className="text-xs text-text-secondary mb-3">
+          Drop a Registrar CSV to start an import. You'll review and confirm every row on the next
+          screen before anything is created.
+        </p>
+        <button
+          type="button"
+          onClick={downloadBulkImportTemplate}
+          className="text-xs font-medium text-brand-700 hover:underline mb-3"
+        >
+          Download CSV template
+        </button>
+        <CsvDropzone
+          onFileSelected={handleBulkFileSelected}
+          onCancelUpload={() => {}}
+          uploading={false}
+          filename={null}
+          rowCount={0}
+        />
       </Dialog>
 
       <Dialog
