@@ -454,6 +454,7 @@ export default function AccountsPage() {
                   <th className="py-2.5 px-3">Student ID</th>
                   <th className="py-2.5 px-3">Enrollment no.</th>
                   <th className="py-2.5 px-3">Name</th>
+                  <th className="py-2.5 px-3">Department</th>
                   <th className="py-2.5 px-3">Program</th>
                   <th className="py-2.5 px-3">Year</th>
                   <th className="py-2.5 px-3">Trust</th>
@@ -467,6 +468,7 @@ export default function AccountsPage() {
                     <td className="py-2 px-3 font-medium">{a.student_id}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.enrollment_number}</td>
                     <td className="py-2 px-3">{a.name}</td>
+                    <td className="py-2 px-3 text-text-secondary">{a.department_name ? titleCase(a.department_name) : a.department_code ?? '—'}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.program ? titleCase(a.program) : a.program_code ?? '—'}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.year_level ?? '—'}</td>
                     <td className="py-2 px-3">{a.trust_score}</td>
