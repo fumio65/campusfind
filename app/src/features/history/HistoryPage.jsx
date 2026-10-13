@@ -396,11 +396,13 @@ export default function HistoryPage() {
                 {label}
               </p>
               <div className="flex flex-col gap-2">
-                {activeTab === 'My Reports'
-                  ? items.map((item) => <ReportCard key={item.id} report={item} />)
-                  : items.map((item) => (
-                      <ActivityRow key={`${item._type}-${item.id}`} item={item} />
-                    ))}
+                {items.map((item) =>
+                  item._type === 'report' ? (
+                    <ReportCard key={item.id} report={item} />
+                  ) : (
+                    <ActivityRow key={`${item._type}-${item.id}`} item={item} />
+                  )
+                )}
               </div>
             </motion.div>
           ))
