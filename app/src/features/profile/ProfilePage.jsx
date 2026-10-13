@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   User, Star, TrendingUp, TrendingDown, AlertTriangle,
-  LogOut, ChevronRight, Shield, Clock, CheckCircle2
+  LogOut, ChevronRight, Shield, Clock, CheckCircle2, FileText
 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
-import { useNavigate } from 'react-router-dom'
-import { useRecentRejections, refreshHistory } from '../../shared/lib/repositories/history'
+import { useNavigate, Link } from 'react-router-dom'
+import { useHistory, useRecentRejections, refreshHistory } from '../../shared/lib/repositories/history'
 import { onSyncTrigger } from '../../shared/lib/appLifecycle'
+
+const EMPTY_HISTORY_REPORTS = []
 
 const EMPTY_REJECTIONS = []
 
@@ -34,6 +36,9 @@ export default function ProfilePage() {
   // and is offline-cached, so no separate fetch is needed for it here.
   const loading = profile == null
   const rejections = useRecentRejections(session?.user?.id) ?? EMPTY_REJECTIONS
+  // Reuses the same cached history repository History itself reads from
+  // (refreshHistory is already called below) - just needs the count here.
+  const reportCount = (useHistory(session?.user?.id)?.reports ?? EMPTY_HISTORY_REPORTS).length
 
   useEffect(() => {
     if (!session?.user?.id) return
@@ -225,6 +230,31 @@ export default function ProfilePage() {
               ))}
             </div>
           )}
+        </motion.div>
+
+        {/* My Reports shortcut */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+        >
+          <Link
+            to="/history?tab=reports"
+            className="w-full flex items-center justify-between bg-surface-card rounded-2xl border border-border px-4 py-3.5 shadow-sm hover:bg-surface-muted transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-status-open-bg flex items-center justify-center shrink-0">
+                <FileText size={15} className="text-status-open-text" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-text-primary">My Reports</p>
+                <p className="text-[11px] text-text-muted">
+                  {reportCount} report{reportCount === 1 ? '' : 's'} filed
+                </p>
+              </div>
+            </div>
+            <ChevronRight size={16} className="text-text-muted shrink-0" />
+          </Link>
         </motion.div>
 
         {/* Account */}

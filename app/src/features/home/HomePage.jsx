@@ -34,7 +34,7 @@ const STATUS_STYLES = {
 // as if the report they'd been looking at had vanished.
 let savedHomeScrollTop = 0;
 
-function ReportCard({ report }) {
+export function ReportCard({ report }) {
   const thumbnail = report.thumbnail;
   return (
     <motion.div {...staggerItem}>

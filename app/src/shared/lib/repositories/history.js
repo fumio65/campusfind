@@ -2,14 +2,19 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { supabase } from '../supabase'
 import { db } from '../db'
 import { isOnline } from '../network'
+import { thumbnailUrl } from './reports'
 
 export async function refreshHistory(userId) {
   if (!isOnline() || !userId) return
 
   const [{ data: r }, { data: c }, { data: t }, { data: te }] = await Promise.all([
+    // Same field list as refreshReports (Home) below, since both write
+    // into the same local db.reports cache - a narrower select here would
+    // silently blank out category/description/type on records Home's own
+    // refresh had already populated, the next time this one runs after it.
     supabase
       .from('reports')
-      .select('id, title, status, location, created_at, reporter_id')
+      .select('id, title, description, location, category, status, created_at, type, reporter_id')
       .eq('reporter_id', userId)
       .order('created_at', { ascending: false }),
     supabase
@@ -29,7 +34,20 @@ export async function refreshHistory(userId) {
       .order('created_at', { ascending: false }),
   ])
 
-  if (r) await db.reports.bulkPut(r)
+  if (r) {
+    await db.reports.bulkPut(r)
+    // My Reports (History) reuses Home's ReportCard, which needs a
+    // thumbnail - fetch this user's own report photos too.
+    const reportIds = r.map((row) => row.id)
+    if (reportIds.length) {
+      const { data: photos } = await supabase
+        .from('report_photos')
+        .select('id, report_id, storage_path, thumbnail_path, position')
+        .in('report_id', reportIds)
+        .order('position', { ascending: true })
+      if (photos?.length) await db.report_photos.bulkPut(photos)
+    }
+  }
   // Strip the joined report title before caching - it's resolved back at
   // read time from the shared `reports` cache (see useHistory below), which
   // stays correct even if the report is later renamed.
@@ -63,12 +81,13 @@ export function useHistory(userId) {
   return useLiveQuery(async () => {
     if (!userId) return { reports: [], claims: [], tips: [], trustEvents: [] }
 
-    const [reports, claims, tips, trustEvents, allReports] = await Promise.all([
+    const [reports, claims, tips, trustEvents, allReports, photos] = await Promise.all([
       db.reports.where('reporter_id').equals(userId).toArray(),
       db.claims.where('claimant_id').equals(userId).toArray(),
       db.tips.where('user_id').equals(userId).toArray(),
       db.trust_score_events.where('user_id').equals(userId).toArray(),
       db.reports.toArray(),
+      db.report_photos.toArray(),
     ])
 
     const titleByReportId = Object.fromEntries(allReports.map((r) => [r.id, r.title]))
@@ -76,8 +95,19 @@ export function useHistory(userId) {
       titleByReportId[row.report_id] ? { ...row, reports: { title: titleByReportId[row.report_id] } } : row
     const byNewest = (a, b) => new Date(b.created_at) - new Date(a.created_at)
 
+    // Same "first photo by report" pattern as useReports (Home) - reuses
+    // the same ReportCard, so it needs the same thumbnail shape.
+    const firstPhotoByReport = {}
+    for (const photo of [...photos].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))) {
+      if (!(photo.report_id in firstPhotoByReport)) firstPhotoByReport[photo.report_id] = photo
+    }
+    const withThumbnail = (report) => {
+      const photo = firstPhotoByReport[report.id]
+      return { ...report, thumbnail: thumbnailUrl(photo?.thumbnail_path ?? photo?.storage_path) }
+    }
+
     return {
-      reports: [...reports].sort(byNewest),
+      reports: [...reports].map(withThumbnail).sort(byNewest),
       claims: claims.map(withTitle).sort(byNewest),
       tips: tips.map(withTitle).sort(byNewest),
       trustEvents: [...trustEvents].sort(byNewest),

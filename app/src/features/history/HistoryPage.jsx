@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, MessageSquare, Lightbulb, Star,
@@ -10,8 +10,17 @@ import { useHistory, refreshHistory } from '../../shared/lib/repositories/histor
 import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
 import SyncStateChip from '../../shared/components/SyncStateChip'
+import { ReportCard } from '../home/HomePage'
 
 const TABS = ['All', 'My Reports', 'My Claims', 'My Tips']
+
+// Deep-link support (e.g. from Profile's "My Reports" shortcut):
+// /history?tab=reports lands pre-filtered instead of on "All".
+const TAB_FROM_PARAM = {
+  reports: 'My Reports',
+  claims: 'My Claims',
+  tips: 'My Tips',
+}
 const EMPTY_HISTORY = []
 
 const STATUS_STYLES = {
@@ -209,7 +218,10 @@ function TrustHistoryDialog({ events, currentScore, onClose }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function HistoryPage() {
   const { session, profile } = useAuth()
-  const [activeTab, setActiveTab]               = useState('All')
+  const [searchParams] = useSearchParams()
+  const [activeTab, setActiveTab]               = useState(
+    () => TAB_FROM_PARAM[searchParams.get('tab')] ?? 'All'
+  )
   const [showTrustHistory, setShowTrustHistory] = useState(false)
 
   // Reads reactively from the local cache (works offline); refreshHistory
@@ -384,9 +396,11 @@ export default function HistoryPage() {
                 {label}
               </p>
               <div className="flex flex-col gap-2">
-                {items.map((item) => (
-                  <ActivityRow key={`${item._type}-${item.id}`} item={item} />
-                ))}
+                {activeTab === 'My Reports'
+                  ? items.map((item) => <ReportCard key={item.id} report={item} />)
+                  : items.map((item) => (
+                      <ActivityRow key={`${item._type}-${item.id}`} item={item} />
+                    ))}
               </div>
             </motion.div>
           ))

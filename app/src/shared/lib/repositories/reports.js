@@ -6,7 +6,7 @@ import { ensureCachedInOrder } from '../imageCache'
 
 const VISIBLE_STATUSES = ['open', 'claimed', 'approved', 'resolved']
 
-function thumbnailUrl(storagePath) {
+export function thumbnailUrl(storagePath) {
   if (!storagePath) return null
   const { data } = supabase.storage.from('report-photos').getPublicUrl(storagePath)
   return data?.publicUrl ?? null
