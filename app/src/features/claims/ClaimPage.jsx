@@ -239,6 +239,14 @@ export default function ClaimPage() {
             placeholder="Describe where you found it, when, and where it is now…"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onFocus={(e) => {
+              // On-screen keyboard covers this field otherwise, since it
+              // sits near the bottom of the form right above Submit - give
+              // the keyboard's open animation a moment, then scroll it
+              // (and the submit button past it) into view.
+              const el = e.currentTarget
+              setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+            }}
             rows={4}
             maxLength={400}
             className="w-full px-4 py-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted resize-none"
