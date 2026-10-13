@@ -68,7 +68,13 @@ export default function Dropdown({
   const filtered = useMemo(() => {
     if (!searchable || !query.trim()) return options
     const needle = query.trim().toLowerCase()
-    return options.filter((o) => o.label.toLowerCase().includes(needle))
+    // Matches against `searchText` when the option provides one (e.g. the
+    // program's full name) in addition to its visible `label` (e.g. its
+    // short code) - so typing "computer" still finds "BSCS" even though the
+    // menu itself only ever shows the code.
+    return options.filter(
+      (o) => o.label.toLowerCase().includes(needle) || (o.searchText ?? '').toLowerCase().includes(needle)
+    )
   }, [options, query, searchable])
 
   function selectOption(opt) {

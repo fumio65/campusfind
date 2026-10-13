@@ -382,7 +382,7 @@ export default function AccountsPage() {
                   placeholder="Select department…"
                   value={form.departmentCode}
                   onChange={(code) => setForm({ ...form, departmentCode: code, programCode: '' })}
-                  options={departments.map((dept) => ({ value: dept.code, label: dept.name }))}
+                  options={departments.map((dept) => ({ value: dept.code, label: dept.code }))}
                 />
                 {departmentsError && (
                   <p className="text-[11px] text-status-rejected-text mt-1">
@@ -400,7 +400,7 @@ export default function AccountsPage() {
                   value={form.programCode}
                   onChange={(code) => setForm({ ...form, programCode: code })}
                   options={(departments.find((d) => d.code === form.departmentCode)?.programs ?? []).map(
-                    (program) => ({ value: program.code, label: titleCase(program.name) })
+                    (program) => ({ value: program.code, label: program.code, searchText: titleCase(program.name) })
                   )}
                 />
               </div>
@@ -468,8 +468,8 @@ export default function AccountsPage() {
                     <td className="py-2 px-3 font-medium">{a.student_id}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.enrollment_number}</td>
                     <td className="py-2 px-3">{a.name}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.department_name ? titleCase(a.department_name) : a.department_code ?? '—'}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.program ? titleCase(a.program) : a.program_code ?? '—'}</td>
+                    <td className="py-2 px-3 text-text-secondary">{a.department_code ?? '—'}</td>
+                    <td className="py-2 px-3 text-text-secondary">{a.program_code ?? '—'}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.year_level ?? '—'}</td>
                     <td className="py-2 px-3">{a.trust_score}</td>
                     <td className="py-2 px-3"><StatusPill status={a.status} /></td>
