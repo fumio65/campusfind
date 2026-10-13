@@ -592,6 +592,21 @@ export default function AnalyticsPage() {
           .recommend-list li { counter-increment: rec; }
           .recommend-list li::before { content: counter(rec) '.'; position: absolute; left: 0; top: 0; color: #06433C; font-weight: 700; font-size: 10.5px; }
           .conclusion-box { background: #f0fdf4; border: 1px solid #d1fae5; border-radius: 8px; padding: 14px 16px; font-size: 10.5px; color: #065f46; line-height: 1.6; }
+
+          /* Print pagination - without these, a section whose content lands
+             right at a physical page edge gets sliced in half: a stat-card
+             row split across two sheets, a table row cut in two, or a
+             section title stranded at the bottom of one page with its
+             content starting on the next. These keep each logical chunk
+             together, letting it move to the next sheet as a whole instead
+             of being cut mid-element. (No visual effect on screen.) */
+          .body > div { break-inside: avoid-page; page-break-inside: avoid; }
+          .stats-grid, .status-grid, .three-col { break-inside: avoid-page; page-break-inside: avoid; }
+          .stat-card, .status-card { break-inside: avoid-page; page-break-inside: avoid; }
+          .header, .page-header, .footer { break-inside: avoid-page; page-break-inside: avoid; }
+          .section-title { break-after: avoid-page; page-break-after: avoid; }
+          tr { break-inside: avoid-page; page-break-inside: avoid; }
+          thead { display: table-header-group; }
         </style>
       </head>
       <body>
