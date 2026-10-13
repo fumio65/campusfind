@@ -339,7 +339,7 @@ export default function ReportsPage() {
   const [reports, setReports]         = useState([])
   const [total, setTotal]             = useState(0)
   const [offset, setOffset]           = useState(0)
-  const [activeTab, setActiveTab]     = useState('all')
+  const [activeTab, setActiveTab]     = useState('open')
   const [search, setSearch]           = useState('')
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
