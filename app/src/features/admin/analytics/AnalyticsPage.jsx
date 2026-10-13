@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../shared/lib/supabase'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
 } from 'recharts'
 import { FileText } from 'lucide-react'
 
@@ -55,6 +55,27 @@ function titleCase(str) {
     if (SMALL_WORDS.has(lower) && !isFirst) return lower
     return word[0].toUpperCase() + word.slice(1).toLowerCase()
   })
+}
+
+function BarList({ data, barColor = '#06433C' }) {
+  const maxValue = Math.max(...data.map((d) => d.value), 1)
+  return (
+    <div className="flex flex-col gap-2.5">
+      {data.map((d, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className="text-xs font-medium text-text-primary">{d.name}</p>
+              <p className="text-xs text-text-muted shrink-0">{d.value}</p>
+            </div>
+            <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${(d.value / maxValue) * 100}%`, background: barColor }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function StatCard({ label, value, sub, color }) {
@@ -828,14 +849,15 @@ export default function AnalyticsPage() {
 
         <div className="bg-surface-card border border-border rounded-xl p-4">
           <h3 className="text-sm font-semibold text-text-primary mb-4">Student trust score distribution</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={trustDistribution} cx="50%" cy="50%" outerRadius={75} dataKey="value" nameKey="band" label={({ band, percent }) => `${band} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <Pie data={trustDistribution} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="band" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                 {trustDistribution.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={(value, name, entry) => [value, entry.payload.band]} />
+              <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8, lineHeight: '18px' }} formatter={(value, entry) => entry?.payload?.band ?? value} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -844,15 +866,11 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-surface-card border border-border rounded-xl p-4">
           <h3 className="text-sm font-semibold text-text-primary mb-4">Trust score activity by reason</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={trustEventReasons} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} />
-              <Tooltip />
-              <Bar dataKey="value" fill="#06433C" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {trustEventReasons.every((r) => r.value === 0) ? (
+            <p className="text-xs text-text-muted">No trust score activity yet.</p>
+          ) : (
+            <BarList data={trustEventReasons} barColor="#06433C" />
+          )}
         </div>
 
         <div className="bg-surface-card border border-border rounded-xl p-4">
@@ -860,14 +878,15 @@ export default function AnalyticsPage() {
           {resolvedViaData.length === 0 ? (
             <p className="text-xs text-text-muted">No resolved items yet.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={resolvedViaData} cx="50%" cy="50%" outerRadius={75} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                <Pie data={resolvedViaData} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="name" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                   {resolvedViaData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
+                <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8, lineHeight: '18px' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -877,14 +896,15 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-surface-card border border-border rounded-xl p-4">
           <h3 className="text-sm font-semibold text-text-primary mb-4">Lost reports vs. ISSC walk-in drop-offs</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={reportTypeData} cx="50%" cy="50%" outerRadius={75} dataKey="value" nameKey="name" label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <Pie data={reportTypeData} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="name" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                 {reportTypeData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
+              <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8, lineHeight: '18px' }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -909,15 +929,7 @@ export default function AnalyticsPage() {
           {accountsByDepartment.length === 0 ? (
             <p className="text-xs text-text-muted">No account data yet.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(accountsByDepartment.length * 32, 160)}>
-              <BarChart data={accountsByDepartment} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={170} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#06433C" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <BarList data={accountsByDepartment} barColor="#06433C" />
           )}
         </div>
 
@@ -1032,14 +1044,15 @@ export default function AnalyticsPage() {
 
         <div className="bg-surface-card border border-border rounded-xl p-4">
           <h3 className="text-sm font-semibold text-text-primary mb-4">Reports by category</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={categoryData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <Pie data={categoryData} cx="50%" cy="44%" outerRadius={75} dataKey="value" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                 {categoryData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name] ?? COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
+              <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8, lineHeight: '18px' }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
