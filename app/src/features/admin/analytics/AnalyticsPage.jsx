@@ -22,18 +22,18 @@ const RESOLVED_VIA_LABELS = {
   tip_credited: 'Tip led to recovery',
 }
 
-const COLORS = ['#06433C', '#0a6b61', '#0d8f82', '#10b3a3', '#13d7c4', '#7ae8e0', '#b8f4f0', '#e0faf8']
+const COLORS = ['#06433C', '#2563eb', '#d97706', '#7c3aed', '#dc2626', '#0d8f82', '#db2777', '#475569']
 
 const CATEGORY_COLORS = {
   'Electronics': '#06433C',
-  'IDs & Cards': '#0a6b61',
-  'Bags': '#0d8f82',
-  'Clothing': '#10b3a3',
-  'Books & Notes': '#13d7c4',
-  'Keys': '#7ae8e0',
-  'Wallet': '#b8f4f0',
-  'Jewelry': '#e0faf8',
-  'Documents': '#064e3b',
+  'IDs & Cards': '#2563eb',
+  'Bags': '#d97706',
+  'Clothing': '#7c3aed',
+  'Books & Notes': '#0d8f82',
+  'Keys': '#ea580c',
+  'Wallet': '#db2777',
+  'Jewelry': '#4f46e5',
+  'Documents': '#1e293b',
   'Other': '#6b7280',
 }
 
