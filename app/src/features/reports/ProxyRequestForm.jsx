@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../../shared/lib/supabase";
 import { useOnlineStatus } from "../../shared/lib/network";
+import { scrollFieldIntoView } from "../../shared/lib/scrollFieldIntoView";
 
 export default function ProxyRequestForm({
   reportId,
@@ -200,6 +201,7 @@ export default function ProxyRequestForm({
               placeholder="e.g. 18-00045"
               value={proxyStudentId}
               onChange={(e) => handleStudentIdChange(e.target.value)}
+              onFocus={scrollFieldIntoView}
               maxLength={8}
               disabled={!isOnline}
               className={`w-full h-10 px-3 text-sm rounded-xl border bg-surface-page focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50 ${

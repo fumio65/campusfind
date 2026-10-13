@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Camera, ImagePlus, X, MapPin, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../shared/lib/AuthContext'
+import { scrollFieldIntoView } from '../../shared/lib/scrollFieldIntoView'
 import { createReport } from '../../shared/lib/operations/reports'
 import ValidationDialog from '../../shared/components/ValidationDialog'
 import ConfirmDialog from '../../shared/components/ConfirmDialog'
@@ -138,6 +139,7 @@ export default function NewReportPage() {
             placeholder="e.g. Black Samsung phone"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            onFocus={scrollFieldIntoView}
             maxLength={80}
             className="w-full h-11 px-4 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
           />
@@ -166,6 +168,7 @@ export default function NewReportPage() {
               placeholder="e.g. Library 2nd floor or Near the cafeteria"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
+              onFocus={scrollFieldIntoView}
               className="w-full h-11 pl-10 pr-4 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted"
             />
           </div>
@@ -180,6 +183,7 @@ export default function NewReportPage() {
             placeholder="Color, brand, distinguishing features, when you last had it…"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onFocus={scrollFieldIntoView}
             rows={3}
             maxLength={500}
             className="w-full px-4 py-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-text-muted resize-none"

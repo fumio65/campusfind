@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, X, Camera, ImagePlus } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
+import { scrollFieldIntoView } from '../../shared/lib/scrollFieldIntoView'
 import { db } from '../../shared/lib/db'
 import { cacheReport, cacheReportPhotos } from '../../shared/lib/repositories/reportDetail'
 import { updateReport } from '../../shared/lib/operations/reports'
@@ -203,6 +204,7 @@ export default function EditReportPage() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            onFocus={scrollFieldIntoView}
             placeholder="e.g. Blue umbrella"
             className="w-full h-11 px-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
           />
@@ -216,6 +218,7 @@ export default function EditReportPage() {
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onFocus={scrollFieldIntoView}
             placeholder="Color, brand, size, or any identifying details…"
             rows={3}
             className="w-full px-3 py-2.5 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
@@ -234,6 +237,7 @@ export default function EditReportPage() {
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
+            onFocus={scrollFieldIntoView}
             placeholder="e.g. CICT Building, Room 201"
             className="w-full h-11 px-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
           />
