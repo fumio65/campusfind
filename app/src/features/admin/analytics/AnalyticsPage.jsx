@@ -61,6 +61,7 @@ export default function AnalyticsPage() {
   const [trustEventReasons, setTrustEventReasons] = useState([])
   const [accountStatus, setAccountStatus] = useState({ active: 0, deactivated: 0 })
   const [accountsByProgram, setAccountsByProgram] = useState([])
+  const [accountsByDepartment, setAccountsByDepartment] = useState([])
   const [accountsByYear, setAccountsByYear] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -193,7 +194,14 @@ export default function AnalyticsPage() {
   }
 
   async function fetchAccountsBreakdown() {
-    const { data, error } = await supabase.from('users').select('program, year_level, status').eq('role', 'student')
+    // program/department come from the structured programs table now
+    // (program_code/department_code, joined here for their short codes) -
+    // the old free-text `program` column is only a pre-migration fallback
+    // for any account that somehow still has no program_code set.
+    const { data, error } = await supabase
+      .from('users')
+      .select('program, program_code, department_code, year_level, status, programs:program_code ( program_name, department_name )')
+      .eq('role', 'student')
     if (error || !data) return
 
     setAccountStatus({
@@ -203,11 +211,20 @@ export default function AnalyticsPage() {
 
     const progCounts = {}
     for (const u of data) {
-      const p = u.program?.trim() || 'Unspecified'
+      const p = u.program_code || u.program?.trim() || 'Unspecified'
       progCounts[p] = (progCounts[p] ?? 0) + 1
     }
     setAccountsByProgram(
-      Object.entries(progCounts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, value]) => ({ name, value }))
+      Object.entries(progCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, value]) => ({ name, value }))
+    )
+
+    const deptCounts = {}
+    for (const u of data) {
+      const d = u.department_code || 'Unspecified'
+      deptCounts[d] = (deptCounts[d] ?? 0) + 1
+    }
+    setAccountsByDepartment(
+      Object.entries(deptCounts).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }))
     )
 
     const yearCounts = {}
@@ -228,6 +245,7 @@ export default function AnalyticsPage() {
     const maxLocation = topLocations[0]?.count ?? 1
     const maxTrend = Math.max(...trendData.map((t) => t.count), 1)
     const maxProgram = accountsByProgram[0]?.value ?? 1
+    const maxDepartment = accountsByDepartment[0]?.value ?? 1
     const maxReason = Math.max(...trustEventReasons.map((r) => r.value), 1)
 
     const statusRows = [
@@ -541,7 +559,23 @@ export default function AnalyticsPage() {
               </div>
 
               <!-- Student accounts -->
-              <div class="three-col" style="grid-template-columns: 2fr 1fr;">
+              <div class="three-col" style="grid-template-columns: 1fr 2fr 1fr;">
+                <div>
+                  <div class="section-title">Students by Department</div>
+                  <div class="bar-chart">
+                    ${accountsByDepartment.length === 0
+                      ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
+                      : accountsByDepartment.map((d) => `
+                        <div class="bar-row">
+                          <div class="bar-label" style="width:40px;">${d.name}</div>
+                          <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.round((d.value / maxDepartment) * 100)}%;background:#06433C;"></div>
+                          </div>
+                          <div class="bar-count">${d.value}</div>
+                        </div>
+                      `).join('')}
+                  </div>
+                </div>
                 <div>
                   <div class="section-title">Students by Program/Course</div>
                   <div class="bar-chart">
@@ -549,9 +583,9 @@ export default function AnalyticsPage() {
                       ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
                       : accountsByProgram.map((p) => `
                         <div class="bar-row">
-                          <div class="bar-label" style="width:140px;">${p.name}</div>
+                          <div class="bar-label" style="width:70px;">${p.name}</div>
                           <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#06433C;"></div>
+                            <div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#0d8f82;"></div>
                           </div>
                           <div class="bar-count">${p.value}</div>
                         </div>
@@ -769,7 +803,24 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 mb-4">
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Students by department</h3>
+          {accountsByDepartment.length === 0 ? (
+            <p className="text-xs text-text-muted">No account data yet.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(accountsByDepartment.length * 32, 160)}>
+              <BarChart data={accountsByDepartment} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
+                <Tooltip />
+                <Bar dataKey="value" fill="#06433C" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
         <div className="bg-surface-card border border-border rounded-xl p-4">
           <h3 className="text-sm font-semibold text-text-primary mb-4">Students by program/course</h3>
           {accountsByProgram.length === 0 ? (
