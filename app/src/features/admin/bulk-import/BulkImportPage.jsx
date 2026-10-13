@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../shared/lib/AuthContext'
 import { motion } from 'framer-motion'
-import { UserPlus, UserMinus, Copy, AlertTriangle, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react'
+import { UserPlus, UserMinus, Copy, AlertTriangle, CheckCircle2, ChevronDown, RefreshCw, Search, X } from 'lucide-react'
 import { uploadBulkImportCsv, fetchBulkImportBatch, confirmBulkImport, cancelBulkImport, PENDING_BATCH_KEY, UPLOAD_IN_PROGRESS_KEY } from './api'
 import MetricTile from './MetricTile'
 import EditPanel from './EditPanel'
@@ -34,6 +34,7 @@ export default function BulkImportPage() {
   const [justFixedRowId, setJustFixedRowId] = useState(null)
   const [mappingHeaders, setMappingHeaders] = useState(null)
   const [pendingFile, setPendingFile] = useState(null)
+  const [rowSearch, setRowSearch] = useState('')
   const uploadAbortRef = useRef(null)
   const { session } = useAuth()
   const location = useLocation()
@@ -42,8 +43,23 @@ export default function BulkImportPage() {
   const hasBatch = !!batch
   const counts = rows.reduce((acc, row) => ({ ...acc, [row.action]: (acc[row.action] ?? 0) + 1 }), {})
   const hasError = rows.some((row) => row.action === 'error')
-  const errorRows = rows.filter((row) => row.action === 'error')
-  const successRows = rows.filter((row) => row.action !== 'error')
+
+  // Checking on one person shouldn't require scrolling a few hundred rows -
+  // matches student ID (either direction, since it's a short code) and
+  // name in both "First Last" and "Last, First" order, so the search box
+  // behaves the same way regardless of which part of the name is typed.
+  const searchQuery = rowSearch.trim().toLowerCase()
+  const matchesSearch = (row) => {
+    if (!searchQuery) return true
+    if ((row.student_id ?? '').toLowerCase().includes(searchQuery)) return true
+    const firstLast = `${row.first_name ?? ''} ${row.last_name ?? ''}`.toLowerCase()
+    const lastFirst = `${row.last_name ?? ''} ${row.first_name ?? ''}`.toLowerCase()
+    return firstLast.includes(searchQuery) || lastFirst.includes(searchQuery)
+  }
+
+  const errorRows = rows.filter((row) => row.action === 'error' && matchesSearch(row))
+  const successRows = rows.filter((row) => row.action !== 'error' && matchesSearch(row))
+  const noSearchMatches = searchQuery && errorRows.length === 0 && successRows.length === 0 && rows.length > 0
 
   useEffect(() => {
     let cancelled = false
@@ -228,6 +244,7 @@ export default function BulkImportPage() {
     setEditingRowId(null)
     setMappingHeaders(null)
     setPendingFile(null)
+    setRowSearch('')
   }
 
   if (loadingBatch) {
@@ -332,6 +349,35 @@ export default function BulkImportPage() {
               Nothing will be created, deactivated, or skipped until every error below is resolved. Imports are all-or-nothing.
             </p>
           )}
+
+          <div className="relative mb-4">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Search by name or student ID to check one person…"
+              value={rowSearch}
+              onChange={(e) => setRowSearch(e.target.value)}
+              className="w-full h-9 pl-9 pr-9 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+            {rowSearch && (
+              <button
+                onClick={() => setRowSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {noSearchMatches && (
+            <div className="bg-surface-card border border-border rounded-xl py-10 text-center mb-4">
+              <p className="text-sm font-medium text-text-primary mb-1">No rows match "{rowSearch}"</p>
+              <p className="text-xs text-text-muted">Try the student ID or part of the name.</p>
+            </div>
+          )}
+
+          {!noSearchMatches && (
           <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
             {errorRows.length > 0 && (
               <div className="border-b border-status-rejected-text/15">
@@ -439,6 +485,7 @@ export default function BulkImportPage() {
               </div>
             )}
           </div>
+          )}
 
           <div className="sticky bottom-0 -mx-8 px-8 py-3 mt-4 bg-surface-page/95 backdrop-blur-sm border-t border-border flex items-center justify-between gap-3">
             <p className="text-xs text-text-muted">
