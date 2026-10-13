@@ -28,6 +28,27 @@ function titleCase(str) {
 
 const PAGE_SIZE = 50
 
+const YEAR_LEVELS = [
+  { value: '1', label: '1st Year' },
+  { value: '2', label: '2nd Year' },
+  { value: '3', label: '3rd Year' },
+  { value: '4', label: '4th Year' },
+]
+
+// Small labeled group for the Add Account dialog - a plain uppercase
+// caption + divider above a cluster of related fields, so "Student ID /
+// Enrollment number", "Last / First name", and "Department / Program /
+// Year level" read as three distinct steps instead of one flat grid of
+// seven unrelated-looking inputs.
+function FormSection({ label, children }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">{label}</p>
+      {children}
+    </div>
+  )
+}
+
 export default function AccountsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [accounts, setAccounts] = useState([])
@@ -294,6 +315,7 @@ export default function AccountsPage() {
         onClose={handleCloseAdd}
         tone="info"
         title="Add a single account"
+        maxWidth="max-w-xl"
         primaryAction={{
           label: submitting ? 'Creating...' : 'Create account',
           onClick: handleCreate,
@@ -301,88 +323,110 @@ export default function AccountsPage() {
         }}
         secondaryAction={{ label: 'Cancel', onClick: handleCloseAdd }}
       >
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-text-secondary block mb-1">Student ID</label>
-            <input
-              placeholder="YY-NNNNN"
-              value={form.studentId}
-              onChange={(e) => setForm({ ...form, studentId: e.target.value })}
-              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-            {form.studentId && !studentIdValid && (
-              <p className="text-[11px] text-status-rejected-text mt-1">Format must be YY-NNNNN</p>
-            )}
-          </div>
-          <div>
-            <label className="text-xs text-text-secondary block mb-1">Enrollment number</label>
-            <input
-              placeholder="6-10 digits"
-              value={form.enrollmentNumber}
-              onChange={(e) => setForm({ ...form, enrollmentNumber: e.target.value })}
-              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-            {form.enrollmentNumber && !enrollmentValid && (
-              <p className="text-[11px] text-status-rejected-text mt-1">Must be 6-10 digits</p>
-            )}
-          </div>
-          <div>
-            <label className="text-xs text-text-secondary block mb-1">Last name</label>
-            <input
-              value={form.lastName}
-              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-text-secondary block mb-1">First name</label>
-            <input
-              value={form.firstName}
-              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="text-xs text-text-secondary block mb-1">Department</label>
-            <Dropdown
-              size="sm"
-              placeholder="Select department…"
-              value={form.departmentCode}
-              onChange={(code) => setForm({ ...form, departmentCode: code, programCode: '' })}
-              options={departments.map((dept) => ({ value: dept.code, label: dept.name }))}
-            />
-            {departmentsError && (
-              <p className="text-[11px] text-status-rejected-text mt-1">
-                Couldn't load departments: {departmentsError}
-              </p>
-            )}
-          </div>
-          <div className="col-span-2">
-            <label className="text-xs text-text-secondary block mb-1">Program/Course</label>
-            <Dropdown
-              size="sm"
-              searchable
-              disabled={!form.departmentCode}
-              placeholder="Select program…"
-              disabledPlaceholder="Select a department first"
-              value={form.programCode}
-              onChange={(code) => setForm({ ...form, programCode: code })}
-              options={(departments.find((d) => d.code === form.departmentCode)?.programs ?? []).map(
-                (program) => ({ value: program.code, label: titleCase(program.name) })
-              )}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-text-secondary block mb-1">Year level</label>
-            <input
-              placeholder="1-4"
-              value={form.yearLevel}
-              onChange={(e) => setForm({ ...form, yearLevel: e.target.value })}
-              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
+        <div className="space-y-5">
+          <FormSection label="Student information">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">Student ID</label>
+                <input
+                  placeholder="YY-NNNNN"
+                  value={form.studentId}
+                  onChange={(e) => setForm({ ...form, studentId: e.target.value })}
+                  className="w-full h-10 px-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+                {form.studentId && !studentIdValid && (
+                  <p className="text-[11px] text-status-rejected-text mt-1">Format must be YY-NNNNN</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">Enrollment number</label>
+                <input
+                  placeholder="6-10 digits"
+                  value={form.enrollmentNumber}
+                  onChange={(e) => setForm({ ...form, enrollmentNumber: e.target.value })}
+                  className="w-full h-10 px-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+                {form.enrollmentNumber && !enrollmentValid && (
+                  <p className="text-[11px] text-status-rejected-text mt-1">Must be 6-10 digits</p>
+                )}
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection label="Name">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">Last name</label>
+                <input
+                  value={form.lastName}
+                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                  className="w-full h-10 px-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">First name</label>
+                <input
+                  value={form.firstName}
+                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                  className="w-full h-10 px-3 text-sm rounded-xl border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection label="Academic information">
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">Department</label>
+                <Dropdown
+                  placeholder="Select department…"
+                  value={form.departmentCode}
+                  onChange={(code) => setForm({ ...form, departmentCode: code, programCode: '' })}
+                  options={departments.map((dept) => ({ value: dept.code, label: dept.name }))}
+                />
+                {departmentsError && (
+                  <p className="text-[11px] text-status-rejected-text mt-1">
+                    Couldn't load departments: {departmentsError}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">Program/Course</label>
+                <Dropdown
+                  searchable
+                  disabled={!form.departmentCode}
+                  placeholder="Select program…"
+                  disabledPlaceholder="Select a department first"
+                  value={form.programCode}
+                  onChange={(code) => setForm({ ...form, programCode: code })}
+                  options={(departments.find((d) => d.code === form.departmentCode)?.programs ?? []).map(
+                    (program) => ({ value: program.code, label: titleCase(program.name) })
+                  )}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-secondary block mb-1">Year level</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {YEAR_LEVELS.map((yl) => (
+                    <button
+                      key={yl.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, yearLevel: yl.value })}
+                      className={`h-10 rounded-xl border text-sm font-medium transition-colors ${
+                        form.yearLevel === yl.value
+                          ? 'border-brand-400 bg-brand-50 text-brand-700 ring-2 ring-brand-400'
+                          : 'border-border-strong text-text-secondary hover:bg-surface-muted'
+                      }`}
+                    >
+                      {yl.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </FormSection>
         </div>
-        {formError && <p className="text-xs text-status-rejected-text mt-2.5">{formError}</p>}
+        {formError && <p className="text-xs text-status-rejected-text mt-4">{formError}</p>}
         <p className="text-xs text-text-muted mt-3">
           For late enrollees or one-off corrections. For onboarding a full term, use bulk import.
         </p>

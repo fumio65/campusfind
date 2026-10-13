@@ -7,7 +7,7 @@ const TONE_CONFIG = {
   info: { icon: Info, iconClass: 'bg-status-claimed-bg text-status-claimed-text' },
 }
 
-export default function Dialog({ open, onClose, tone = 'info', title, children, primaryAction, secondaryAction }) {
+export default function Dialog({ open, onClose, tone = 'info', title, children, primaryAction, secondaryAction, maxWidth = 'max-w-lg' }) {
   const { icon: Icon, iconClass } = TONE_CONFIG[tone]
 
   return (
@@ -25,7 +25,7 @@ export default function Dialog({ open, onClose, tone = 'info', title, children, 
             role="dialog"
             aria-modal="true"
             aria-labelledby="dialog-title"
-            className="bg-surface-card rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
+            className={`bg-surface-card rounded-xl shadow-xl w-full ${maxWidth} p-6 max-h-[90vh] overflow-y-auto`}
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
