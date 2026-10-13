@@ -5,6 +5,27 @@ import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
 import Dropdown from '../../../shared/components/Dropdown'
 
+// Program/department names are stored in ALL CAPS (the official NWSSU list
+// uses that style) - fine for a database column, not for a UI label.
+// Title-cases each word but keeps short embedded acronyms (EPM, NRM, CEM,
+// MT...) and small connector words (of/in/and/...) looking natural, e.g.
+// "BACHELOR OF SCIENCE IN ENVIRONMENTAL SCIENCE (EPM)" ->
+// "Bachelor of Science in Environmental Science (EPM)".
+const SMALL_WORDS = new Set(['of', 'in', 'and', 'the', 'for', 'a', 'to'])
+function titleCase(str) {
+  let wordIndex = 0
+  return str.replace(/[A-Za-z]+/g, (word) => {
+    const isFirst = wordIndex === 0
+    wordIndex += 1
+    const lower = word.toLowerCase()
+    if (word.length <= 3 && word === word.toUpperCase() && !isFirst && !SMALL_WORDS.has(lower)) {
+      return word // short embedded acronym, e.g. (EPM) - leave as-is
+    }
+    if (SMALL_WORDS.has(lower) && !isFirst) return lower
+    return word[0].toUpperCase() + word.slice(1).toLowerCase()
+  })
+}
+
 const PAGE_SIZE = 50
 
 export default function AccountsPage() {
@@ -328,7 +349,7 @@ export default function AccountsPage() {
               placeholder="Select department…"
               value={form.departmentCode}
               onChange={(code) => setForm({ ...form, departmentCode: code, programCode: '' })}
-              options={departments.map((dept) => ({ value: dept.code, label: `${dept.code} — ${dept.name}` }))}
+              options={departments.map((dept) => ({ value: dept.code, label: dept.name }))}
             />
             {departmentsError && (
               <p className="text-[11px] text-status-rejected-text mt-1">
@@ -347,7 +368,7 @@ export default function AccountsPage() {
               value={form.programCode}
               onChange={(code) => setForm({ ...form, programCode: code })}
               options={(departments.find((d) => d.code === form.departmentCode)?.programs ?? []).map(
-                (program) => ({ value: program.code, label: `${program.code} — ${program.name}` })
+                (program) => ({ value: program.code, label: titleCase(program.name) })
               )}
             />
           </div>
@@ -402,7 +423,7 @@ export default function AccountsPage() {
                     <td className="py-2 px-3 font-medium">{a.student_id}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.enrollment_number}</td>
                     <td className="py-2 px-3">{a.name}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.program ?? a.program_code ?? '—'}</td>
+                    <td className="py-2 px-3 text-text-secondary">{a.program ? titleCase(a.program) : a.program_code ?? '—'}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.year_level ?? '—'}</td>
                     <td className="py-2 px-3">{a.trust_score}</td>
                     <td className="py-2 px-3"><StatusPill status={a.status} /></td>
