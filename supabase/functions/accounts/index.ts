@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       let query = supabaseAdmin
         .from('users')
         .select(
-          'id, student_id, enrollment_number, first_name, last_name, middle_name, program, year_level, role, status, trust_score, created_at',
+          'id, student_id, enrollment_number, first_name, last_name, middle_name, program, program_code, department_code, year_level, role, status, trust_score, created_at, programs:program_code ( program_name, department_name )',
           { count: 'exact' }
         )
         .order('created_at', { ascending: false })
@@ -64,7 +64,10 @@ Deno.serve(async (req) => {
           first_name: u.first_name,
           last_name: u.last_name,
           middle_name: u.middle_name,
-          program: u.program,
+          program: u.programs?.program_name ?? u.program,
+          program_code: u.program_code,
+          department_code: u.department_code,
+          department_name: u.programs?.department_name ?? null,
           year_level: u.year_level,
           role: u.role,
           status: u.status,
@@ -81,11 +84,31 @@ Deno.serve(async (req) => {
 
     // POST /accounts/single
     if (req.method === 'POST' && id === 'single') {
-      const { studentId, enrollmentNumber, lastName, firstName, program, yearLevel } = await req.json()
+      const { studentId, enrollmentNumber, lastName, firstName, programCode, yearLevel } = await req.json()
       if (!studentId || !enrollmentNumber || !lastName || !firstName) {
         return new Response(JSON.stringify({ error: 'studentId, enrollmentNumber, lastName, and firstName are all required.' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
+      }
+
+      let departmentCode: string | null = null
+      if (programCode) {
+        const { data: program, error: programError } = await supabaseAdmin
+          .from('programs')
+          .select('department_code')
+          .eq('program_code', programCode)
+          .maybeSingle()
+        if (programError) {
+          return new Response(JSON.stringify({ error: programError.message }), {
+            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
+        }
+        if (!program) {
+          return new Response(JSON.stringify({ error: 'programCode does not match a known program.' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
+        }
+        departmentCode = program.department_code
       }
 
       const email = `${studentId.replace('-', '')}@nwssu.local`
@@ -116,8 +139,9 @@ Deno.serve(async (req) => {
           enrollment_number: enrollmentNumber,
           last_name: lastName,
           first_name: firstName,
-          program: program?.trim() ? program.trim() : null,
-          year_level: yearLevel?.trim() ? yearLevel.trim() : null,
+          program_code: programCode || null,
+          department_code: departmentCode,
+          year_level: yearLevel?.trim ? (yearLevel.trim() || null) : (yearLevel || null),
           role: 'student',
           status: 'active',
           force_password_change: true,
