@@ -106,7 +106,14 @@ export default function HomePage() {
   const [locationFilter, setLocationFilter] = useState("");
   const [debouncedLocation, setDebouncedLocation] = useState("");
   const [availableLocations, setAvailableLocations] = useState([]);
-  const [selectedStatus, setSelectedStatus] = useState(null);
+  // Defaults to "Open" - that's what a student lands on Home to check
+  // (did my lost item turn up / is there anything new to claim), not the
+  // full history including already-resolved reports. Toggling the Open
+  // pill off (or picking another status) drops back to all statuses, same
+  // as before; this only changes what's shown before anyone touches the
+  // filter.
+  const DEFAULT_STATUS = "open";
+  const [selectedStatus, setSelectedStatus] = useState(DEFAULT_STATUS);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 600);
@@ -266,11 +273,13 @@ export default function HomePage() {
   function clearFilters() {
     setSelectedCategory(null);
     setLocationFilter("");
-    setSelectedStatus(null);
+    setSelectedStatus(DEFAULT_STATUS);
   }
 
   const activeFilterCount =
-    (selectedCategory ? 1 : 0) + (debouncedLocation.trim() ? 1 : 0) + (selectedStatus ? 1 : 0);
+    (selectedCategory ? 1 : 0) +
+    (debouncedLocation.trim() ? 1 : 0) +
+    (selectedStatus !== DEFAULT_STATUS ? 1 : 0);
   const hasActiveQuery = debouncedSearch || activeFilterCount > 0;
 
   const firstName = profile?.first_name ?? "there";
