@@ -37,6 +37,26 @@ const CATEGORY_COLORS = {
   'Other': '#6b7280',
 }
 
+// Title-cases each word but keeps short embedded acronyms (EPM, NRM, CEM,
+// MT...) and small connector words (of/in/and/...) looking natural, e.g.
+// "BACHELOR OF SCIENCE IN ENVIRONMENTAL SCIENCE (EPM)" ->
+// "Bachelor of Science in Environmental Science (EPM)".
+const SMALL_WORDS = new Set(['of', 'in', 'and', 'the', 'for', 'a', 'to'])
+function titleCase(str) {
+  if (!str) return str
+  let wordIndex = 0
+  return str.replace(/[A-Za-z]+/g, (word) => {
+    const isFirst = wordIndex === 0
+    wordIndex += 1
+    const lower = word.toLowerCase()
+    if (word.length <= 3 && word === word.toUpperCase() && !isFirst && !SMALL_WORDS.has(lower)) {
+      return word
+    }
+    if (SMALL_WORDS.has(lower) && !isFirst) return lower
+    return word[0].toUpperCase() + word.slice(1).toLowerCase()
+  })
+}
+
 function StatCard({ label, value, sub, color }) {
   return (
     <div className="bg-surface-card border border-border rounded-xl p-4">
@@ -214,7 +234,7 @@ export default function AnalyticsPage() {
 
     const progCounts = {}
     for (const u of data) {
-      const p = u.program_code || u.program?.trim() || 'Unspecified'
+      const p = titleCase(u.programs?.program_name) || u.program?.trim() || 'Unspecified'
       progCounts[p] = (progCounts[p] ?? 0) + 1
     }
     setAccountsByProgram(
@@ -223,7 +243,7 @@ export default function AnalyticsPage() {
 
     const deptCounts = {}
     for (const u of data) {
-      const d = u.department_code || 'Unspecified'
+      const d = u.programs?.department_name || 'Unspecified'
       deptCounts[d] = (deptCounts[d] ?? 0) + 1
     }
     setAccountsByDepartment(
@@ -250,16 +270,16 @@ export default function AnalyticsPage() {
   async function fetchLostByDepartmentAndProgram() {
     const { data, error } = await supabase
       .from('reports')
-      .select('type, reporter:users!reports_reporter_id_fkey(department_code, program_code)')
+      .select('type, reporter:users!reports_reporter_id_fkey(department_code, program_code, programs:program_code(department_name, program_name))')
       .eq('type', 'lost')
     if (error || !data) return
 
     const deptCounts = {}
     const progCounts = {}
     for (const r of data) {
-      const dept = r.reporter?.department_code || 'Unspecified'
+      const dept = r.reporter?.programs?.department_name || 'Unspecified'
       deptCounts[dept] = (deptCounts[dept] ?? 0) + 1
-      const prog = r.reporter?.program_code || 'Unspecified'
+      const prog = titleCase(r.reporter?.programs?.program_name) || 'Unspecified'
       progCounts[prog] = (progCounts[prog] ?? 0) + 1
     }
     setLostByDepartment(Object.entries(deptCounts).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })))
@@ -594,7 +614,7 @@ export default function AnalyticsPage() {
               </div>
 
               <!-- Student accounts -->
-              <div class="three-col" style="grid-template-columns: 1fr 2fr 1fr;">
+              <div class="three-col" style="grid-template-columns: 2fr 2fr 1fr;">
                 <div>
                   <div class="section-title">Students by Department</div>
                   <div class="bar-chart">
@@ -602,7 +622,7 @@ export default function AnalyticsPage() {
                       ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
                       : accountsByDepartment.map((d) => `
                         <div class="bar-row">
-                          <div class="bar-label" style="width:40px;">${d.name}</div>
+                          <div class="bar-label" style="width:120px;">${d.name}</div>
                           <div class="bar-track">
                             <div class="bar-fill" style="width:${Math.round((d.value / maxDepartment) * 100)}%;background:#06433C;"></div>
                           </div>
@@ -618,7 +638,7 @@ export default function AnalyticsPage() {
                       ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
                       : accountsByProgram.map((p) => `
                         <div class="bar-row">
-                          <div class="bar-label" style="width:70px;">${p.name}</div>
+                          <div class="bar-label" style="width:140px;">${p.name}</div>
                           <div class="bar-track">
                             <div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#0d8f82;"></div>
                           </div>
@@ -646,7 +666,7 @@ export default function AnalyticsPage() {
               </div>
 
               <!-- Which departments lose items most -->
-              <div class="three-col" style="grid-template-columns: 2fr 1fr;">
+              <div class="three-col" style="grid-template-columns: 1.3fr 1fr;">
                 <div>
                   <div class="section-title">Which Departments Lose Items Most (per student)</div>
                   <table>
@@ -679,7 +699,7 @@ export default function AnalyticsPage() {
                       ? '<p style="font-size:9px;color:#9ca3af;">No lost reports yet.</p>'
                       : lostByProgram.map((p) => `
                         <div class="bar-row">
-                          <div class="bar-label" style="width:70px;">${p.name}</div>
+                          <div class="bar-label" style="width:140px;">${p.name}</div>
                           <div class="bar-track">
                             <div class="bar-fill" style="width:${Math.round((p.value / maxLostProgram) * 100)}%;background:#dc2626;"></div>
                           </div>
@@ -893,7 +913,7 @@ export default function AnalyticsPage() {
               <BarChart data={accountsByDepartment} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={170} />
                 <Tooltip />
                 <Bar dataKey="value" fill="#06433C" radius={[0, 4, 4, 0]} />
               </BarChart>
@@ -911,7 +931,7 @@ export default function AnalyticsPage() {
                 <div key={i} className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium text-text-primary truncate">{p.name}</p>
+                      <p className="text-xs font-medium text-text-primary pr-2">{p.name}</p>
                       <p className="text-xs text-text-muted shrink-0 ml-2">{p.value}</p>
                     </div>
                     <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden">
@@ -944,7 +964,7 @@ export default function AnalyticsPage() {
                   <div key={i} className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <p className="text-xs font-medium text-text-primary truncate">
+                        <p className="text-xs font-medium text-text-primary">
                           {d.name}
                           {d.students > 0 && (
                             <span className="text-text-muted font-normal ml-1.5">
@@ -982,7 +1002,7 @@ export default function AnalyticsPage() {
                 <div key={i} className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium text-text-primary truncate">{p.name}</p>
+                      <p className="text-xs font-medium text-text-primary pr-2">{p.name}</p>
                       <p className="text-xs text-text-muted shrink-0 ml-2">{p.value}</p>
                     </div>
                     <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden">
