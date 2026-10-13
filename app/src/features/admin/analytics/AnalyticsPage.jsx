@@ -323,6 +323,8 @@ export default function AnalyticsPage() {
       .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1))
     const maxLostProgram = lostByProgram[0]?.value ?? 1
     const maxReason = Math.max(...trustEventReasons.map((r) => r.value), 1)
+    const maxTrustBand = Math.max(...trustDistribution.map((t) => t.value), 1)
+    const totalReportType = Math.max(reportTypeData.reduce((sum, r) => sum + r.value, 0), 1)
 
     const statusRows = [
       { status: 'Open', count: stats.open, color: '#2563eb' },
@@ -584,6 +586,42 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
+              <!-- Trust distribution + Lost vs walk-in -->
+              <div class="three-col" style="grid-template-columns: 1fr 1fr;">
+                <div>
+                  <div class="section-title">Student Trust Score Distribution</div>
+                  <div class="bar-chart">
+                    ${trustDistribution.length === 0
+                      ? '<p style="font-size:9px;color:#9ca3af;">No trust score data yet.</p>'
+                      : trustDistribution.map((t) => `
+                        <div class="bar-row">
+                          <div class="bar-label">${t.band}</div>
+                          <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.round((t.value / maxTrustBand) * 100)}%;background:#0a6b61;"></div>
+                          </div>
+                          <div class="bar-count">${t.value}</div>
+                        </div>
+                      `).join('')}
+                  </div>
+                </div>
+                <div>
+                  <div class="section-title">Lost Reports vs. ISSC Walk-in Drop-offs</div>
+                  <div class="bar-chart">
+                    ${reportTypeData.length === 0
+                      ? '<p style="font-size:9px;color:#9ca3af;">No data yet.</p>'
+                      : reportTypeData.map((r, i) => `
+                        <div class="bar-row">
+                          <div class="bar-label">${r.name}</div>
+                          <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.round((r.value / totalReportType) * 100)}%;background:${i === 0 ? '#06433C' : '#2563eb'};"></div>
+                          </div>
+                          <div class="bar-count">${r.value}</div>
+                        </div>
+                      `).join('')}
+                  </div>
+                </div>
+              </div>
+
               <!-- Trend + Category + Locations -->
               <div class="three-col">
                 <div>
@@ -605,11 +643,11 @@ export default function AnalyticsPage() {
                   <div class="bar-chart">
                     ${categoryData.length === 0
                       ? '<p style="font-size:9px;color:#9ca3af;">No data yet.</p>'
-                      : categoryData.slice(0, 7).map((c) => `
+                      : categoryData.slice(0, 7).map((c, i) => `
                         <div class="bar-row">
                           <div class="bar-label">${c.name}</div>
                           <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((c.value / maxCategory) * 100)}%;background:#06433C;"></div>
+                            <div class="bar-fill" style="width:${Math.round((c.value / maxCategory) * 100)}%;background:${CATEGORY_COLORS[c.name] ?? COLORS[i % COLORS.length]};"></div>
                           </div>
                           <div class="bar-count">${c.value}</div>
                         </div>
