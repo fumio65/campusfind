@@ -9,6 +9,7 @@ import {
   TrendingUp,
   MapPin,
   ArrowUpRight,
+  PackageCheck,
 } from "lucide-react";
 import {
   LineChart,
@@ -334,76 +335,99 @@ export default function OverviewPage() {
 
             {/* RIGHT RAIL — ISSC drop-offs only */}
             <div>
-              {dropOffReports.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-surface-card border border-border rounded-xl overflow-hidden"
-                >
-                  {/* card header */}
-                  <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border">
-                    <div className="flex items-center gap-2">
-                      <MapPin
-                        size={13}
-                        className="text-brand-600 shrink-0"
-                        aria-hidden="true"
-                      />
-                      <span className="text-sm font-semibold text-text-primary">
-                        ISSC drop-offs
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-status-open-bg text-status-open-text">
-                      {dropOffReports.length} pending
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+                className="bg-surface-card border border-border rounded-xl overflow-hidden"
+              >
+                {/* card header */}
+                <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <MapPin
+                      size={13}
+                      className="text-brand-600 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span className="text-sm font-semibold text-text-primary">
+                      ISSC drop-offs
                     </span>
                   </div>
+                  <span
+                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                      dropOffReports.length > 0
+                        ? "bg-status-open-bg text-status-open-text"
+                        : "bg-surface-muted text-text-secondary"
+                    }`}
+                  >
+                    {dropOffReports.length > 0
+                      ? `${dropOffReports.length} pending`
+                      : "All caught up"}
+                  </span>
+                </div>
 
-                  {/* drop-off rows — scrollable when many items */}
-                  <div className="overflow-y-auto max-h-[232px]">
-                    {dropOffReports.map((r) => (
-                      <div
-                        key={r.id}
-                        className="px-3.5 py-3 border-b border-border last:border-0"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <p className="text-xs font-semibold text-text-primary leading-snug">
-                            {r.reports?.title ?? "Item"}
-                          </p>
-                          <Link
-                            to="/admin/dropoff"
-                            className="shrink-0 px-2.5 py-1 rounded-lg bg-brand-600 text-white text-[11px] font-semibold hover:bg-brand-700 transition-colors"
-                          >
-                            View
-                          </Link>
-                        </div>
-                        <p className="text-[11px] text-text-muted leading-snug">
-                          Finder:{" "}
-                          <span className="text-text-secondary font-medium">
-                            {r.claimant?.first_name
-                              ? `${r.claimant.first_name} ${r.claimant.last_name}`
-                              : "—"}
-                          </span>
-                          {r.claimant?.student_id && <> ({r.claimant.student_id})</>}
-                        </p>
-                        <p className="text-[11px] text-text-muted leading-snug">
-                          Owner:{" "}
-                          <span className="text-text-secondary font-medium">
-                            {r.reporter?.first_name
-                              ? `${r.reporter.first_name} ${r.reporter.last_name}`
-                              : "—"}
-                          </span>
-                        </p>
-                      </div>
-                    ))}
+                {dropOffReports.length === 0 ? (
+                  /* empty state */
+                  <div className="flex flex-col items-center justify-center py-10 text-center px-4">
+                    <div className="w-10 h-10 rounded-full bg-surface-muted flex items-center justify-center mb-2.5">
+                      <PackageCheck size={18} className="text-text-muted" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs font-semibold text-text-primary mb-0.5">
+                      No drop-offs pending
+                    </p>
+                    <p className="text-[11px] text-text-muted leading-snug max-w-[220px]">
+                      New ISSC drop-off requests from claimants will show up here.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    {/* drop-off rows — scrollable when many items */}
+                    <div className="overflow-y-auto max-h-[232px]">
+                      {dropOffReports.map((r) => (
+                        <div
+                          key={r.id}
+                          className="px-3.5 py-3 border-b border-border last:border-0"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <p className="text-xs font-semibold text-text-primary leading-snug">
+                              {r.reports?.title ?? "Item"}
+                            </p>
+                            <Link
+                              to="/admin/dropoff"
+                              className="shrink-0 px-2.5 py-1 rounded-lg bg-brand-600 text-white text-[11px] font-semibold hover:bg-brand-700 transition-colors"
+                            >
+                              View
+                            </Link>
+                          </div>
+                          <p className="text-[11px] text-text-muted leading-snug">
+                            Finder:{" "}
+                            <span className="text-text-secondary font-medium">
+                              {r.claimant?.first_name
+                                ? `${r.claimant.first_name} ${r.claimant.last_name}`
+                                : "—"}
+                            </span>
+                            {r.claimant?.student_id && <> ({r.claimant.student_id})</>}
+                          </p>
+                          <p className="text-[11px] text-text-muted leading-snug">
+                            Owner:{" "}
+                            <span className="text-text-secondary font-medium">
+                              {r.reporter?.first_name
+                                ? `${r.reporter.first_name} ${r.reporter.last_name}`
+                                : "—"}
+                            </span>
+                          </p>
+                        </div>
+                      ))}
+                    </div>
 
-                  {/* footer hint */}
-                  <p className="text-[11px] text-text-muted px-3.5 py-2 border-t border-border">
-                    Verify the finder's ID at the ISSC office before marking as
-                    resolved.
-                  </p>
-                </motion.div>
-              )}
+                    {/* footer hint */}
+                    <p className="text-[11px] text-text-muted px-3.5 py-2 border-t border-border">
+                      Verify the finder's ID at the ISSC office before marking as
+                      resolved.
+                    </p>
+                  </>
+                )}
+              </motion.div>
             </div>
             {/* end right rail */}
 
