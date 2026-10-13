@@ -27,7 +27,20 @@ export default function DataRow({ row, canEdit, isEditing, onStartEdit, justFixe
       (row.previous_first_name ?? null) !== (row.first_name ?? null) ||
       (row.previous_middle_name ?? null) !== (row.middle_name ?? null))
 
+  const programUnmatched = !!row.program && row.program_matched === false
+
   const changeNotes = []
+  if (programUnmatched) {
+    changeNotes.push(
+      <span
+        key="program-unmatched"
+        className="inline-flex items-center gap-1 text-amber-700"
+        title="This program/course text didn't match any entry in the programs list, so no department/program code was saved. Fix the spelling in the source CSV or correct it here."
+      >
+        Unrecognized program: "{row.program}"
+      </span>
+    )
+  }
   if (yearLevelChanged) {
     changeNotes.push(<Diff key="year" from={row.previous_year_level} to={row.year_level} />)
   }

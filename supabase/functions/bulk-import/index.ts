@@ -38,6 +38,42 @@ function validateHeaders(headerRow: string[]): string | null {
   return missing.length === 0 ? null : `Missing required column(s): ${missing.join(', ')}`
 }
 
+type ProgramRecord = { program_code: string; department_code: string; program_name: string }
+
+// Builds a lookup from every way a CSV might spell an official program, so
+// free-text "Program/Course" values from the Registrar's CSV resolve to the
+// same program_code/department_code the Accounts page and Analytics rely on,
+// instead of only ever landing in the legacy free-text `program` column.
+function buildProgramsIndex(programs: ProgramRecord[]): Map<string, ProgramRecord> {
+  const index = new Map<string, ProgramRecord>()
+  for (const p of programs) {
+    index.set(`CODE:${p.program_code.toUpperCase()}`, p)
+    index.set(`NAME:${p.program_name.toUpperCase()}`, p)
+    // Common shorthand seen in real CSVs/seed data: "BS <Name>" in place of
+    // the full "BACHELOR OF SCIENCE IN <Name>" - same convention the
+    // one-time users.program backfill (0011_departments_and_programs.sql)
+    // matched on.
+    const shorthand = p.program_name.toUpperCase().replace('BACHELOR OF SCIENCE IN ', 'BS ')
+    if (shorthand !== p.program_name.toUpperCase()) {
+      index.set(`NAME:${shorthand}`, p)
+    }
+  }
+  return index
+}
+
+function resolveProgram(
+  programText: string | null,
+  programsIndex: Map<string, ProgramRecord>
+): { program_code: string | null; department_code: string | null; program_matched: boolean } {
+  if (!programText) return { program_code: null, department_code: null, program_matched: true }
+  const key = programText.trim().toUpperCase()
+  const match = programsIndex.get(`CODE:${key}`) ?? programsIndex.get(`NAME:${key}`)
+  if (match) {
+    return { program_code: match.program_code, department_code: match.department_code, program_matched: true }
+  }
+  return { program_code: null, department_code: null, program_matched: false }
+}
+
 // Classifies a single CSV row against the format rules above. Does NOT check
 // duplicates against the database -- that requires the full row set and a
 // DB round-trip, done separately in classifyRows() / the route handler.
@@ -76,7 +112,8 @@ function classifyRow(row: Record<string, unknown>): { action: string; error_mess
 function classifyRows(
   rawRows: Record<string, unknown>[],
   existingUsersMap: Map<string, any>,
-  existingEnrollmentNumbers: Set<string>
+  existingEnrollmentNumbers: Set<string>,
+  programsIndex: Map<string, ProgramRecord>
 ) {
   const seenStudentIds = new Set<string>()
   const seenEnrollmentNumbers = new Set<string>()
@@ -103,6 +140,7 @@ function classifyRows(
     const firstName = String(row['First Name'] ?? '').trim() || null
     const middleName = String(row['Middle Name'] ?? '').trim() || null
     const program = String(row['Program/Course'] ?? '').trim() || null
+    const { program_code: programCode, department_code: departmentCode, program_matched: programMatched } = resolveProgram(program, programsIndex)
     const yearLevel = String(row['Year Level'] ?? '').trim() || null
     const classified = classifyRow(row)
     const existingUser = existingUsersMap.get(studentId)
@@ -138,6 +176,8 @@ function classifyRows(
               existingUser.first_name !== firstName ||
               (existingUser.middle_name ?? null) !== middleName ||
               (existingUser.program ?? null) !== program ||
+              (existingUser.program_code ?? null) !== programCode ||
+              (existingUser.department_code ?? null) !== departmentCode ||
               (existingUser.year_level ?? null) !== yearLevel
 
             if (hasChanges) {
@@ -168,6 +208,9 @@ function classifyRows(
       first_name: firstName,
       middle_name: middleName,
       program,
+      program_code: programCode,
+      department_code: departmentCode,
+      program_matched: programMatched,
       year_level: yearLevel,
       csv_status: String(row['Status'] ?? '').trim() || null,
       action,
@@ -179,6 +222,8 @@ function classifyRows(
       previous_first_name: existingUser?.first_name ?? null,
       previous_middle_name: existingUser?.middle_name ?? null,
       previous_program: existingUser?.program ?? null,
+      previous_program_code: existingUser?.program_code ?? null,
+      previous_department_code: existingUser?.department_code ?? null,
       previous_year_level: existingUser?.year_level ?? null,
     }
   })
@@ -282,16 +327,25 @@ Deno.serve(async (req) => {
 
       const { data: existingUsers, error: fetchError } = await supabaseAdmin
         .from('users')
-        .select('student_id, enrollment_number, last_name, first_name, middle_name, program, year_level')
+        .select('student_id, enrollment_number, last_name, first_name, middle_name, program, program_code, department_code, year_level')
 
       if (fetchError) {
         return json({ error: `Could not check existing accounts: ${fetchError.message}` }, 500)
       }
 
+      const { data: programs, error: programsError } = await supabaseAdmin
+        .from('programs')
+        .select('program_code, department_code, program_name')
+
+      if (programsError) {
+        return json({ error: `Could not load the programs list: ${programsError.message}` }, 500)
+      }
+
+      const programsIndex = buildProgramsIndex(programs ?? [])
       const existingUsersMap = new Map((existingUsers ?? []).map((u: any) => [u.student_id, u]))
       const existingEnrollmentNumbers = new Set((existingUsers ?? []).map((u: any) => u.enrollment_number))
 
-      const classifiedRows = classifyRows(rawRows, existingUsersMap, existingEnrollmentNumbers)
+      const classifiedRows = classifyRows(rawRows, existingUsersMap, existingEnrollmentNumbers, programsIndex)
 
       const { data: batch, error: batchError } = await supabaseAdmin
         .from('bulk_import_batches')
@@ -365,11 +419,26 @@ Deno.serve(async (req) => {
         'Status': merged.csv_status,
       })
 
-      const updates = {
+      const updates: Record<string, unknown> = {
         ...edits,
         action: reclassified.action,
         error_message: reclassified.error_message,
         edited: true,
+      }
+
+      // The program text was corrected in the review table - re-resolve it
+      // against the programs table so program_code/department_code (what
+      // Accounts/Analytics actually read) stay in sync with the fixed value,
+      // instead of only updating the legacy free-text column.
+      if ('program' in edits) {
+        const { data: programs, error: programsError } = await supabaseAdmin
+          .from('programs')
+          .select('program_code, department_code, program_name')
+        if (programsError) return json({ error: `Could not load the programs list: ${programsError.message}` }, 500)
+        const resolved = resolveProgram(merged.program ?? null, buildProgramsIndex(programs ?? []))
+        updates.program_code = resolved.program_code
+        updates.department_code = resolved.department_code
+        updates.program_matched = resolved.program_matched
       }
 
       const { data, error } = await supabaseAdmin
@@ -471,6 +540,8 @@ Deno.serve(async (req) => {
               first_name: row.first_name,
               middle_name: row.middle_name,
               program: row.program,
+              program_code: row.program_code,
+              department_code: row.department_code,
               year_level: row.year_level,
               role: 'student',
               status: 'active',
@@ -492,6 +563,8 @@ Deno.serve(async (req) => {
               first_name: row.first_name,
               middle_name: row.middle_name,
               program: row.program,
+              program_code: row.program_code,
+              department_code: row.department_code,
               year_level: row.year_level,
               status: 'active',
             })

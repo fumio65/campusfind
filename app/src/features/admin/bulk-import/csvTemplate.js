@@ -14,9 +14,9 @@ export const TEMPLATE_HEADERS = [
 ]
 
 export const TEMPLATE_EXAMPLE_ROWS = [
-  ['24-00301', '2024110055', 'Dela Cruz', 'Juan', 'Santos', 'BS Information Technology', '1', 'New'],
-  ['22-00150', '2022100789', 'Reyes', 'Maria', '', 'BS Computer Science', '3', 'Continuing'],
-  ['18-00045', '2018100456', 'Santos', 'Pedro', 'Garcia', 'BS Civil Engineering', '4', 'Continuing'],
+  ['24-00301', '2024110055', 'Dela Cruz', 'Juan', 'Santos', 'BSINFOT', '1', 'New'],
+  ['22-00150', '2022100789', 'Reyes', 'Maria', '', 'BSCS', '3', 'Continuing'],
+  ['18-00045', '2018100456', 'Santos', 'Pedro', 'Garcia', 'BSCE CEM', '4', 'Continuing'],
 ]
 
 function escapeCsvField(value) {
