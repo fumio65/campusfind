@@ -3,6 +3,7 @@ import { Plus, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { fetchAccounts, fetchPrograms, createSingleAccount, toggleAccountStatus, resetAccountPassword } from './api'
 import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
+import Dropdown from '../../../shared/components/Dropdown'
 
 const PAGE_SIZE = 50
 
@@ -322,20 +323,13 @@ export default function AccountsPage() {
           </div>
           <div>
             <label className="text-xs text-text-secondary block mb-1">Department</label>
-            <select
+            <Dropdown
+              size="sm"
+              placeholder="Select department…"
               value={form.departmentCode}
-              onChange={(e) =>
-                setForm({ ...form, departmentCode: e.target.value, programCode: '' })
-              }
-              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400"
-            >
-              <option value="">Select department…</option>
-              {departments.map((dept) => (
-                <option key={dept.code} value={dept.code}>
-                  {dept.code} — {dept.name}
-                </option>
-              ))}
-            </select>
+              onChange={(code) => setForm({ ...form, departmentCode: code, programCode: '' })}
+              options={departments.map((dept) => ({ value: dept.code, label: `${dept.code} — ${dept.name}` }))}
+            />
             {departmentsError && (
               <p className="text-[11px] text-status-rejected-text mt-1">
                 Couldn't load departments: {departmentsError}
@@ -344,23 +338,18 @@ export default function AccountsPage() {
           </div>
           <div>
             <label className="text-xs text-text-secondary block mb-1">Program/Course</label>
-            <select
-              value={form.programCode}
-              onChange={(e) => setForm({ ...form, programCode: e.target.value })}
+            <Dropdown
+              size="sm"
+              searchable
               disabled={!form.departmentCode}
-              className="w-full h-9 px-3 text-sm rounded-md border border-border-strong bg-surface-card focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
-            >
-              <option value="">
-                {form.departmentCode ? 'Select program…' : 'Select a department first'}
-              </option>
-              {(departments.find((d) => d.code === form.departmentCode)?.programs ?? []).map(
-                (program) => (
-                  <option key={program.code} value={program.code}>
-                    {program.code} — {program.name}
-                  </option>
-                )
+              placeholder="Select program…"
+              disabledPlaceholder="Select a department first"
+              value={form.programCode}
+              onChange={(code) => setForm({ ...form, programCode: code })}
+              options={(departments.find((d) => d.code === form.departmentCode)?.programs ?? []).map(
+                (program) => ({ value: program.code, label: `${program.code} — ${program.name}` })
               )}
-            </select>
+            />
           </div>
           <div>
             <label className="text-xs text-text-secondary block mb-1">Year level</label>
