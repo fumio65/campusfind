@@ -342,6 +342,135 @@ export default function AnalyticsPage() {
     const resolutionMethodRows = resolvedViaData
     const totalResolvedViaKnown = Math.max(resolvedViaData.reduce((sum, r) => sum + r.value, 0), 1)
 
+    // ---------------------------------------------------------------------
+    // Narrative text: every sentence below is derived from the same data
+    // already computed above, so the report reads as an analysis instead
+    // of a wall of charts - and stays accurate as the underlying data
+    // changes, with no manual rewriting per report.
+    // ---------------------------------------------------------------------
+    const periodLabel = trendData.length > 0
+      ? (trendData.length === 1 ? trendData[0].month : `${trendData[0].month} - ${trendData[trendData.length - 1].month}`)
+      : 'the recorded period'
+
+    const lostRatesKnown = lostRateByDepartment.filter((d) => d.rate !== null)
+    const topLostDept = lostRatesKnown[0] ?? null
+    const secondLostDept = lostRatesKnown[1] ?? null
+    const topLostProgram = lostByProgram[0] ?? null
+    const categoryTotal = Math.max(categoryData.reduce((sum, c) => sum + c.value, 0), 1)
+    const topCategory = categoryData[0] ?? null
+    const topLocation = topLocations[0] ?? null
+    const topResolutionMethod = [...resolvedViaData].sort((a, b) => b.value - a.value)[0] ?? null
+    const resolutionMethodShare = topResolutionMethod ? Math.round((topResolutionMethod.value / totalResolvedViaKnown) * 100) : null
+    const topTrustBand = [...trustDistribution].sort((a, b) => b.value - a.value)[0] ?? null
+    const topTrustReason = [...trustEventReasons].sort((a, b) => b.value - a.value)[0] ?? null
+    const walkInEntry = reportTypeData.find((r) => /walk/i.test(r.name)) ?? null
+    const walkInShare = walkInEntry ? Math.round((walkInEntry.value / totalReportType) * 100) : null
+    const claimsReviewed = claimsFunnel.approved + claimsFunnel.rejected
+    const rejectionShare = claimsReviewed > 0 ? Math.round((claimsFunnel.rejected / claimsReviewed) * 100) : null
+    const topDeptAccounts = accountsByDepartment[0] ?? null
+    const topProgramAccounts = accountsByProgram[0] ?? null
+    const topYearAccounts = [...accountsByYear].sort((a, b) => b.value - a.value)[0] ?? null
+
+    const openingNarrative = `This report summarizes Lost &amp; Found activity handled through the CampusFind system by the ISSC Office over ${periodLabel}. It covers report volume and resolution outcomes, claim integrity, trust-score activity, and which departments and programs are most affected, to support decisions on awareness and prevention efforts.`
+
+    const execSummary = `The system logged ${stats.total} report${stats.total === 1 ? '' : 's'} during this period, of which ${stats.resolved} (${resolutionRate}%) ${stats.resolved === 1 ? 'was' : 'were'} resolved` +
+      (stats.avgResolutionDays !== null ? `, with an average resolution time of ${stats.avgResolutionDays} day${stats.avgResolutionDays === 1 ? '' : 's'}` : '') +
+      `. Claims were approved at a ${claimsFunnel.approvalRate}% rate (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} rejected)` +
+      (topLostDept ? `, and ${topLostDept.name} students filed lost reports at the highest rate of any department, at ${topLostDept.rate.toFixed(2)} reports per student` : '') +
+      `.`
+
+    const keyFindings = []
+    if (topLostDept) {
+      if (secondLostDept && secondLostDept.rate > 0) {
+        keyFindings.push(`${topLostDept.name} has the highest lost-report rate per student (${topLostDept.rate.toFixed(2)}/student) - about ${(topLostDept.rate / secondLostDept.rate).toFixed(1)}x the next-highest department, ${secondLostDept.name} (${secondLostDept.rate.toFixed(2)}/student).`)
+      } else {
+        keyFindings.push(`${topLostDept.name} has the highest lost-report rate per student, at ${topLostDept.rate.toFixed(2)} reports per student.`)
+      }
+    }
+    if (topLostProgram) {
+      keyFindings.push(`${topLostProgram.name} files more lost reports than any other program (${topLostProgram.value} report${topLostProgram.value === 1 ? '' : 's'}).`)
+    }
+    if (topCategory) {
+      keyFindings.push(`${topCategory.name} is the most commonly lost item category, making up ${Math.round((topCategory.value / categoryTotal) * 100)}% of all reports.`)
+    }
+    if (topLocation) {
+      keyFindings.push(`${topLocation.location} is the most frequently reported location for lost items (${topLocation.count} report${topLocation.count === 1 ? '' : 's'}).`)
+    }
+    if (rejectionShare !== null && rejectionShare >= 20) {
+      keyFindings.push(`${rejectionShare}% of reviewed claims were rejected, which may be worth reviewing for recurring causes.`)
+    }
+    if (topResolutionMethod && resolutionMethodShare !== null) {
+      keyFindings.push(`Most resolved items (${resolutionMethodShare}%) were recovered via ${topResolutionMethod.name.toLowerCase()}.`)
+    }
+    if (keyFindings.length === 0) {
+      keyFindings.push('Not enough data has been recorded yet to surface meaningful patterns. Findings will populate here as more reports are filed.')
+    }
+
+    const recommendations = []
+    if (topLostDept && topLostDept.rate > 0) {
+      recommendations.push(`Prioritize a lost-item prevention/awareness campaign for ${topLostDept.name}, given its disproportionately high report rate per student.`)
+    }
+    if (topCategory) {
+      recommendations.push(`Promote reminders about securing ${topCategory.name.toLowerCase()} in high-traffic areas such as ${topLocation ? topLocation.location : 'common campus locations'}.`)
+    }
+    if (rejectionShare !== null && rejectionShare >= 20) {
+      recommendations.push('Review recurring causes of claim rejection with ISSC staff to see if clearer claim guidelines would reduce the rejection rate.')
+    }
+    if (walkInShare !== null && walkInShare >= 40) {
+      recommendations.push('A large share of items arrive via ISSC walk-in drop-off rather than direct student-to-student handoff; continuing to promote the in-app handoff flow may speed up recovery times.')
+    }
+    if (stats.total > 0 && resolutionRate < 50) {
+      recommendations.push(`The overall resolution rate (${resolutionRate}%) has room to improve; closer follow-up on reports still open past the average resolution time may help.`)
+    }
+    if (recommendations.length === 0) {
+      recommendations.push('Continue monitoring monthly trends as more data accumulates; no urgent action items are indicated by the current dataset.')
+    }
+
+    const claimsNote = claimsReviewed > 0
+      ? `${claimsFunnel.approvalRate}% of reviewed claims were approved (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} rejected).`
+      : 'No claims have been reviewed yet.'
+    const trustReasonNote = topTrustReason && topTrustReason.value > 0
+      ? `"${topTrustReason.name}" is the most common trust-score event this period (${topTrustReason.value} occurrence${topTrustReason.value === 1 ? '' : 's'}).`
+      : 'No trust-score activity has been recorded yet.'
+    const resolutionMethodNote = topResolutionMethod && resolutionMethodShare !== null
+      ? `${topResolutionMethod.name} accounts for ${resolutionMethodShare}% of resolved items.`
+      : 'No items have been resolved yet.'
+    const trustDistNote = topTrustBand && topTrustBand.value > 0
+      ? `Most students fall in the "${topTrustBand.band}" trust band.`
+      : 'No trust score data is available yet.'
+    const reportTypeNote = walkInShare !== null
+      ? `ISSC walk-in drop-offs make up ${walkInShare}% of all lost/found activity logged this period.`
+      : 'No reports have been logged yet.'
+    const trendNote = trendData.length >= 2
+      ? (() => {
+          const last = trendData[trendData.length - 1]
+          const prev = trendData[trendData.length - 2]
+          if (prev.count === 0) return `${last.month} saw ${last.count} report${last.count === 1 ? '' : 's'} filed.`
+          const change = Math.round(((last.count - prev.count) / prev.count) * 100)
+          if (change > 0) return `Reports rose ${change}% from ${prev.month} to ${last.month}.`
+          if (change < 0) return `Reports fell ${Math.abs(change)}% from ${prev.month} to ${last.month}.`
+          return `Report volume held steady from ${prev.month} to ${last.month}.`
+        })()
+      : 'Not enough months of data yet to show a trend.'
+    const categoryNote = topCategory
+      ? `${topCategory.name} is the most reported category, ahead of ${categoryData[1] ? categoryData[1].name : 'all others'}.`
+      : 'No category data is available yet.'
+    const locationNote = topLocation
+      ? `${topLocation.location} accounts for the most reports among all logged locations.`
+      : 'No location data is available yet.'
+    const deptAccountsNote = topDeptAccounts
+      ? `${topDeptAccounts.name} has the most registered student accounts (${topDeptAccounts.value}).`
+      : 'No student accounts have department data yet.'
+    const programAccountsNote = topProgramAccounts
+      ? `${topProgramAccounts.name} is the most represented program by registered accounts (${topProgramAccounts.value}).`
+      : 'No student accounts have program data yet.'
+    const yearAccountsNote = topYearAccounts
+      ? `${topYearAccounts.name} students make up the largest share of registered accounts (${topYearAccounts.value}).`
+      : 'No year-level data is available yet.'
+    const lostProgramNote = topLostProgram
+      ? `${topLostProgram.name} leads all programs in lost reports filed, with ${topLostProgram.value}.`
+      : 'No lost reports have been filed yet.'
+
     const printWindow = window.open('', '_blank')
     const html = `
       <!DOCTYPE html>
@@ -424,13 +553,15 @@ export default function AnalyticsPage() {
           /* Three col */
           .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; }
 
-          /* Bar chart */
-          .bar-chart { display: flex; flex-direction: column; gap: 9px; }
-          .bar-row { display: flex; align-items: center; gap: 8px; }
-          .bar-label { font-size: 10.5px; color: #374151; width: 90px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
-          .bar-track { flex: 1; height: 9px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
+          /* Bar chart - label+value stacked above a full-width track, so long
+             department/program names wrap instead of getting cut off */
+          .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+          .bar-row { display: flex; flex-direction: column; gap: 4px; }
+          .bar-row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+          .bar-label { font-size: 10.5px; color: #374151; font-weight: 500; line-height: 1.3; }
+          .bar-track { height: 7px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
           .bar-fill { height: 100%; border-radius: 4px; }
-          .bar-count { font-size: 10.5px; font-weight: 600; color: #06433C; width: 26px; text-align: right; flex-shrink: 0; }
+          .bar-count { font-size: 10.5px; font-weight: 600; color: #06433C; flex-shrink: 0; white-space: nowrap; }
 
           /* Trend chart */
           .trend-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; }
@@ -450,6 +581,17 @@ export default function AnalyticsPage() {
           /* Footer */
           .footer { padding: 12px 28px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: #9ca3af; flex-shrink: 0; margin-top: auto; }
           .footer strong { color: #06433C; }
+
+          /* Narrative text */
+          .narrative { font-size: 11px; color: #374151; line-height: 1.65; }
+          .narrative + .narrative { margin-top: 4px; }
+          .findings-list, .recommend-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+          .findings-list li, .recommend-list li { font-size: 10.5px; color: #374151; line-height: 1.55; padding-left: 20px; position: relative; }
+          .findings-list li::before { content: '•'; position: absolute; left: 2px; top: 0; color: #06433C; font-weight: 700; font-size: 13px; }
+          .recommend-list { counter-reset: rec; }
+          .recommend-list li { counter-increment: rec; }
+          .recommend-list li::before { content: counter(rec) '.'; position: absolute; left: 0; top: 0; color: #06433C; font-weight: 700; font-size: 10.5px; }
+          .conclusion-box { background: #f0fdf4; border: 1px solid #d1fae5; border-radius: 8px; padding: 14px 16px; font-size: 10.5px; color: #065f46; line-height: 1.6; }
         </style>
       </head>
       <body>
@@ -478,6 +620,11 @@ export default function AnalyticsPage() {
             </div>
 
             <div class="body">
+              <div>
+                <div class="narrative">${openingNarrative}</div>
+                <div class="narrative" style="margin-top:8px;">${execSummary}</div>
+              </div>
+
               <div>
                 <div class="section-title">Executive Summary</div>
                 <div class="stats-grid">
@@ -542,6 +689,13 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
               </div>
+
+              <div>
+                <div class="section-title">Key Findings</div>
+                <ul class="findings-list">
+                  ${keyFindings.map((finding) => `<li>${finding}</li>`).join('')}
+                </ul>
+              </div>
             </div>
 
             <div class="footer">
@@ -564,44 +718,47 @@ export default function AnalyticsPage() {
               <div class="three-col">
                 <div>
                   <div class="section-title">Claims by Status</div>
+                  <div class="section-note">${claimsNote}</div>
                   <div class="bar-chart">
                     ${claimsRows.map((c) => `
                       <div class="bar-row">
-                        <div class="bar-label">${c.status}</div>
-                        <div class="bar-track">
-                          <div class="bar-fill" style="width:${Math.round((c.count / Math.max(claimsFunnel.pending, claimsFunnel.approved, claimsFunnel.rejected, 1)) * 100)}%;background:${c.color};"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${c.status}</span>
+                            <span class="bar-count">${c.count}</span>
+                          </div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((c.count / Math.max(claimsFunnel.pending, claimsFunnel.approved, claimsFunnel.rejected, 1)) * 100)}%;background:${c.color};"></div></div>
                         </div>
-                        <div class="bar-count">${c.count}</div>
-                      </div>
                     `).join('')}
                   </div>
                 </div>
                 <div>
                   <div class="section-title">Trust Activity by Reason</div>
+                  <div class="section-note">${trustReasonNote}</div>
                   <div class="bar-chart">
                     ${trustEventReasons.map((r) => `
                       <div class="bar-row">
-                        <div class="bar-label">${r.name}</div>
-                        <div class="bar-track">
-                          <div class="bar-fill" style="width:${Math.round((r.value / maxReason) * 100)}%;background:#06433C;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${r.name}</span>
+                            <span class="bar-count">${r.value}</span>
+                          </div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((r.value / maxReason) * 100)}%;background:#06433C;"></div></div>
                         </div>
-                        <div class="bar-count">${r.value}</div>
-                      </div>
                     `).join('')}
                   </div>
                 </div>
                 <div>
                   <div class="section-title">How Items Get Resolved</div>
+                  <div class="section-note">${resolutionMethodNote}</div>
                   <div class="bar-chart">
                     ${resolutionMethodRows.length === 0
                       ? '<p style="font-size:10px;color:#9ca3af;">No resolved items yet.</p>'
                       : resolutionMethodRows.map((r) => `
                         <div class="bar-row">
-                          <div class="bar-label">${r.name}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((r.value / totalResolvedViaKnown) * 100)}%;background:#0d8f82;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${r.name}</span>
+                            <span class="bar-count">${r.value}</span>
                           </div>
-                          <div class="bar-count">${r.value}</div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((r.value / totalResolvedViaKnown) * 100)}%;background:#0d8f82;"></div></div>
                         </div>
                       `).join('')}
                   </div>
@@ -611,32 +768,34 @@ export default function AnalyticsPage() {
               <div class="three-col" style="grid-template-columns: 1fr 1fr;">
                 <div>
                   <div class="section-title">Student Trust Score Distribution</div>
+                  <div class="section-note">${trustDistNote}</div>
                   <div class="bar-chart">
                     ${trustDistribution.length === 0
                       ? '<p style="font-size:10px;color:#9ca3af;">No trust score data yet.</p>'
                       : trustDistribution.map((t) => `
                         <div class="bar-row">
-                          <div class="bar-label">${t.band}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((t.value / maxTrustBand) * 100)}%;background:#0a6b61;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${t.band}</span>
+                            <span class="bar-count">${t.value}</span>
                           </div>
-                          <div class="bar-count">${t.value}</div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.value / maxTrustBand) * 100)}%;background:#0a6b61;"></div></div>
                         </div>
                       `).join('')}
                   </div>
                 </div>
                 <div>
                   <div class="section-title">Lost Reports vs. ISSC Walk-in Drop-offs</div>
+                  <div class="section-note">${reportTypeNote}</div>
                   <div class="bar-chart">
                     ${reportTypeData.length === 0
                       ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
                       : reportTypeData.map((r, i) => `
                         <div class="bar-row">
-                          <div class="bar-label">${r.name}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((r.value / totalReportType) * 100)}%;background:${i === 0 ? '#06433C' : '#2563eb'};"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${r.name}</span>
+                            <span class="bar-count">${r.value}</span>
                           </div>
-                          <div class="bar-count">${r.value}</div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((r.value / totalReportType) * 100)}%;background:${i === 0 ? '#06433C' : '#2563eb'};"></div></div>
                         </div>
                       `).join('')}
                   </div>
@@ -663,6 +822,7 @@ export default function AnalyticsPage() {
             <div class="body">
               <div>
                 <div class="section-title">Monthly Trend</div>
+                  <div class="section-note">${trendNote}</div>
                 ${trendData.length === 0
                   ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
                   : `<div class="trend-chart">
@@ -679,32 +839,34 @@ export default function AnalyticsPage() {
               <div class="three-col" style="grid-template-columns: 1fr 1fr;">
                 <div>
                   <div class="section-title">By Category</div>
+                  <div class="section-note">${categoryNote}</div>
                   <div class="bar-chart">
                     ${categoryData.length === 0
                       ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
                       : categoryData.slice(0, 7).map((c, i) => `
                         <div class="bar-row">
-                          <div class="bar-label">${c.name}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((c.value / maxCategory) * 100)}%;background:${CATEGORY_COLORS[c.name] ?? COLORS[i % COLORS.length]};"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${c.name}</span>
+                            <span class="bar-count">${c.value}</span>
                           </div>
-                          <div class="bar-count">${c.value}</div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((c.value / maxCategory) * 100)}%;background:${CATEGORY_COLORS[c.name] ?? COLORS[i % COLORS.length]};"></div></div>
                         </div>
                       `).join('')}
                   </div>
                 </div>
                 <div>
                   <div class="section-title">Top Locations</div>
+                  <div class="section-note">${locationNote}</div>
                   <div class="bar-chart">
                     ${topLocations.length === 0
                       ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
                       : topLocations.map((l, i) => `
                         <div class="bar-row">
-                          <div class="bar-label">${i + 1}. ${l.location}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((l.count / maxLocation) * 100)}%;background:#0d8f82;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${i + 1}. ${l.location}</span>
+                            <span class="bar-count">${l.count}</span>
                           </div>
-                          <div class="bar-count">${l.count}</div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((l.count / maxLocation) * 100)}%;background:#0d8f82;"></div></div>
                         </div>
                       `).join('')}
                   </div>
@@ -731,51 +893,54 @@ export default function AnalyticsPage() {
             <div class="body">
               <div>
                 <div class="section-title">Students by Department</div>
+                  <div class="section-note">${deptAccountsNote}</div>
                 <div class="bar-chart">
                   ${accountsByDepartment.length === 0
                     ? '<p style="font-size:10px;color:#9ca3af;">No account data yet.</p>'
                     : accountsByDepartment.map((d) => `
                       <div class="bar-row">
-                        <div class="bar-label" style="width:220px;">${d.name}</div>
-                        <div class="bar-track">
-                          <div class="bar-fill" style="width:${Math.round((d.value / maxDepartment) * 100)}%;background:#06433C;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${d.name}</span>
+                            <span class="bar-count">${d.value}</span>
+                          </div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((d.value / maxDepartment) * 100)}%;background:#06433C;"></div></div>
                         </div>
-                        <div class="bar-count">${d.value}</div>
-                      </div>
                     `).join('')}
                 </div>
               </div>
 
               <div>
                 <div class="section-title">Students by Program/Course</div>
+                  <div class="section-note">${programAccountsNote}</div>
                 <div class="bar-chart">
                   ${accountsByProgram.length === 0
                     ? '<p style="font-size:10px;color:#9ca3af;">No account data yet.</p>'
                     : accountsByProgram.map((p) => `
                       <div class="bar-row">
-                        <div class="bar-label" style="width:260px;">${p.name}</div>
-                        <div class="bar-track">
-                          <div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#0d8f82;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${p.name}</span>
+                            <span class="bar-count">${p.value}</span>
+                          </div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#0d8f82;"></div></div>
                         </div>
-                        <div class="bar-count">${p.value}</div>
-                      </div>
                     `).join('')}
                 </div>
               </div>
 
               <div>
                 <div class="section-title">Students by Year Level</div>
+                  <div class="section-note">${yearAccountsNote}</div>
                 <div class="bar-chart">
                   ${accountsByYear.length === 0
                     ? '<p style="font-size:10px;color:#9ca3af;">No account data yet.</p>'
                     : accountsByYear.map((y) => `
                       <div class="bar-row">
-                        <div class="bar-label" style="width:90px;">${y.name}</div>
-                        <div class="bar-track">
-                          <div class="bar-fill" style="width:${Math.round((y.value / Math.max(...accountsByYear.map((x) => x.value), 1)) * 100)}%;background:#0a6b61;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${y.name}</span>
+                            <span class="bar-count">${y.value}</span>
+                          </div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((y.value / Math.max(...accountsByYear.map((x) => x.value), 1)) * 100)}%;background:#0a6b61;"></div></div>
                         </div>
-                        <div class="bar-count">${y.value}</div>
-                      </div>
                     `).join('')}
                 </div>
               </div>
@@ -827,17 +992,18 @@ export default function AnalyticsPage() {
 
               <div>
                 <div class="section-title">Lost Reports by Program</div>
+                  <div class="section-note">${lostProgramNote}</div>
                 <div class="bar-chart">
                   ${lostByProgram.length === 0
                     ? '<p style="font-size:10px;color:#9ca3af;">No lost reports yet.</p>'
                     : lostByProgram.map((p) => `
                       <div class="bar-row">
-                        <div class="bar-label" style="width:260px;">${p.name}</div>
-                        <div class="bar-track">
-                          <div class="bar-fill" style="width:${Math.round((p.value / maxLostProgram) * 100)}%;background:#dc2626;"></div>
+                          <div class="bar-row-top">
+                            <span class="bar-label">${p.name}</span>
+                            <span class="bar-count">${p.value}</span>
+                          </div>
+                          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.value / maxLostProgram) * 100)}%;background:#dc2626;"></div></div>
                         </div>
-                        <div class="bar-count">${p.value}</div>
-                      </div>
                     `).join('')}
                 </div>
               </div>
@@ -883,6 +1049,22 @@ export default function AnalyticsPage() {
                       `).join('')}
                   </tbody>
                 </table>
+              </div>
+
+              <div>
+                <div class="section-title">Recommendations</div>
+                <ol class="recommend-list">
+                  ${recommendations.map((rec) => `<li>${rec}</li>`).join('')}
+                </ol>
+              </div>
+
+              <div>
+                <div class="section-title">Conclusion</div>
+                <div class="conclusion-box">
+                  This report reflects CampusFind activity for ${periodLabel}. Overall, ${resolutionRate}% of reports were resolved
+                  with a ${claimsFunnel.approvalRate}% claim approval rate. The findings and recommendations above are generated
+                  directly from the current dataset and will update automatically as new reports, claims, and accounts are recorded.
+                </div>
               </div>
             </div>
 
