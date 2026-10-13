@@ -357,22 +357,24 @@ export default function AnalyticsPage() {
 
           /* Screen layout */
           @media screen {
-            body { background: #e5e7eb; min-height: 100vh; display: flex; flex-direction: column; align-items: center; font-family: 'Inter', -apple-system, sans-serif; color: #111827; font-size: 11px; }
+            body { background: #e5e7eb; min-height: 100vh; display: flex; flex-direction: column; align-items: center; font-family: 'Inter', -apple-system, sans-serif; color: #111827; font-size: 12px; }
             .save-hint { width: 100%; position: sticky; top: 0; z-index: 10; background: #f0fdf4; border-bottom: 2px solid #06433C; padding: 10px 24px; display: flex; align-items: center; justify-content: space-between; }
             .save-hint-text { font-size: 12px; color: #065f46; }
             .save-btn { background: #06433C; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
             .save-btn:hover { background: #0a5c53; }
-            .page-wrapper { display: flex; justify-content: center; padding: 28px 24px; }
+            .page-wrapper { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 28px 24px; }
             .page { width: 210mm; min-height: 297mm; background: white; box-shadow: 0 4px 32px rgba(0,0,0,0.18); border-radius: 4px; display: flex; flex-direction: column; }
           }
 
           /* Print layout */
           @media print {
             .save-hint { display: none !important; }
-            body { background: white; font-family: 'Inter', -apple-system, sans-serif; color: #111827; font-size: 11px; }
-            .page-wrapper { padding: 0; }
-            .page { width: 210mm; min-height: 297mm; background: white; display: flex; flex-direction: column; box-shadow: none; border-radius: 0; }
+            body { background: white; font-family: 'Inter', -apple-system, sans-serif; color: #111827; font-size: 12px; }
+            .page-wrapper { padding: 0; gap: 0; }
+            .page { width: 210mm; min-height: 297mm; background: white; display: flex; flex-direction: column; box-shadow: none; border-radius: 0; page-break-after: always; break-after: page; }
+            .page:last-child { page-break-after: auto; break-after: auto; }
             .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .stat-card::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .bar-fill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .trend-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -381,65 +383,72 @@ export default function AnalyticsPage() {
             .footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           }
 
-          /* Header */
-          .header { background: #06433C; color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-          .header-left h1 { font-size: 14px; font-weight: 700; margin-bottom: 1px; }
-          .header-left p { font-size: 9px; opacity: 0.75; }
-          .header-right { text-align: right; font-size: 9px; opacity: 0.8; line-height: 1.5; }
-          .header-badge { display: inline-block; background: rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 8px; font-size: 8px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }
+          /* Cover header (page 1 only) */
+          .header { background: #06433C; color: white; padding: 22px 28px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+          .header-left h1 { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+          .header-left p { font-size: 10.5px; opacity: 0.75; }
+          .header-right { text-align: right; font-size: 10.5px; opacity: 0.85; line-height: 1.6; }
+          .header-badge { display: inline-block; background: rgba(255,255,255,0.15); border-radius: 4px; padding: 3px 9px; font-size: 9px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+
+          /* Slim header (pages 2+) */
+          .page-header { background: #f0fdf4; border-bottom: 2px solid #06433C; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+          .page-header-title { font-size: 13px; font-weight: 700; color: #06433C; }
+          .page-header-sub { font-size: 9.5px; color: #065f46; opacity: 0.8; margin-top: 1px; }
+          .page-header-right { font-size: 9.5px; color: #6b7280; text-align: right; }
 
           /* Body */
-          .body { padding: 14px 24px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+          .body { padding: 22px 28px; flex: 1; display: flex; flex-direction: column; gap: 22px; }
 
           /* Section title */
-          .section-title { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #06433C; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+          .section-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #06433C; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
           .section-title::after { content: ''; flex: 1; height: 1px; background: #d1fae5; }
+          .section-note { font-size: 9.5px; color: #6b7280; margin: -4px 0 10px; }
 
           /* Stats */
-          .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-          .stat-card { border: 1px solid #e5e7eb; border-radius: 7px; padding: 10px 12px; position: relative; overflow: hidden; }
-          .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #06433C; }
-          .stat-label { font-size: 8px; color: #6b7280; font-weight: 500; margin-bottom: 3px; }
-          .stat-value { font-size: 20px; font-weight: 700; color: #06433C; line-height: 1; }
-          .stat-sub { font-size: 8px; color: #9ca3af; margin-top: 2px; }
+          .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+          .stat-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; position: relative; overflow: hidden; }
+          .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: #06433C; }
+          .stat-label { font-size: 9.5px; color: #6b7280; font-weight: 500; margin-bottom: 5px; }
+          .stat-value { font-size: 26px; font-weight: 700; color: #06433C; line-height: 1; }
+          .stat-sub { font-size: 9.5px; color: #9ca3af; margin-top: 4px; }
           .stat-card.highlight::before { background: #10b981; }
           .stat-card.highlight .stat-value { color: #059669; }
 
           /* Status cards */
-          .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-          .status-card { border-radius: 7px; padding: 8px 10px; text-align: center; border: 1px solid #e5e7eb; }
-          .status-value { font-size: 18px; font-weight: 700; margin-bottom: 1px; }
-          .status-label { font-size: 8px; color: #6b7280; font-weight: 500; }
-          .status-pct { font-size: 8px; color: #9ca3af; margin-top: 1px; }
+          .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+          .status-card { border-radius: 8px; padding: 12px 14px; text-align: center; border: 1px solid #e5e7eb; }
+          .status-value { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+          .status-label { font-size: 9.5px; color: #6b7280; font-weight: 500; }
+          .status-pct { font-size: 9px; color: #9ca3af; margin-top: 2px; }
 
           /* Three col */
-          .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+          .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; }
 
           /* Bar chart */
-          .bar-chart { display: flex; flex-direction: column; gap: 5px; }
-          .bar-row { display: flex; align-items: center; gap: 6px; }
-          .bar-label { font-size: 9px; color: #374151; width: 90px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
-          .bar-track { flex: 1; height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
+          .bar-chart { display: flex; flex-direction: column; gap: 9px; }
+          .bar-row { display: flex; align-items: center; gap: 8px; }
+          .bar-label { font-size: 10.5px; color: #374151; width: 90px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+          .bar-track { flex: 1; height: 9px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
           .bar-fill { height: 100%; border-radius: 4px; }
-          .bar-count { font-size: 9px; font-weight: 600; color: #06433C; width: 20px; text-align: right; flex-shrink: 0; }
+          .bar-count { font-size: 10.5px; font-weight: 600; color: #06433C; width: 26px; text-align: right; flex-shrink: 0; }
 
           /* Trend chart */
-          .trend-chart { display: flex; align-items: flex-end; gap: 4px; height: 70px; }
-          .trend-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; height: 100%; justify-content: flex-end; }
+          .trend-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; }
+          .trend-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
           .trend-bar { width: 100%; background: #06433C; border-radius: 3px 3px 0 0; min-height: 3px; }
-          .trend-label { font-size: 7px; color: #9ca3af; text-align: center; white-space: nowrap; }
-          .trend-count { font-size: 7px; color: #06433C; font-weight: 600; }
+          .trend-label { font-size: 9px; color: #9ca3af; text-align: center; white-space: nowrap; }
+          .trend-count { font-size: 9px; color: #06433C; font-weight: 600; }
 
           /* Table */
-          table { width: 100%; border-collapse: collapse; font-size: 9px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
           thead tr { background: #f0fdf4; }
-          th { text-align: left; padding: 5px 8px; font-weight: 600; color: #065f46; font-size: 8px; border-bottom: 1px solid #d1fae5; }
-          td { padding: 4px 8px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+          th { text-align: left; padding: 8px 10px; font-weight: 600; color: #065f46; font-size: 9.5px; border-bottom: 1px solid #d1fae5; }
+          td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; color: #374151; }
           tr:last-child td { border-bottom: none; }
           .td-num { font-weight: 600; color: #06433C; }
 
           /* Footer */
-          .footer { padding: 8px 24px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; font-size: 8px; color: #9ca3af; flex-shrink: 0; margin-top: auto; }
+          .footer { padding: 12px 28px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: #9ca3af; flex-shrink: 0; margin-top: auto; }
           .footer strong { color: #06433C; }
         </style>
       </head>
@@ -447,14 +456,14 @@ export default function AnalyticsPage() {
 
         <!-- Save hint (screen only) -->
         <div class="save-hint">
-          <span class="save-hint-text">📄 Preview — A4 size, fits one page when saved as PDF.</span>
+          <span class="save-hint-text">📄 Preview — 6-page A4 report. Save as PDF to keep the page breaks.</span>
           <button class="save-btn" onclick="window.print()">🖨️ Save as PDF</button>
         </div>
 
         <div class="page-wrapper">
-          <div class="page">
 
-            <!-- Header -->
+          <!-- ============ PAGE 1 — Cover + Overview ============ -->
+          <div class="page">
             <div class="header">
               <div class="header-left">
                 <div class="header-badge">Analytics Report</div>
@@ -464,13 +473,11 @@ export default function AnalyticsPage() {
               <div class="header-right">
                 <div>Generated on</div>
                 <div style="font-weight:600;">${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                <div style="opacity:0.6;">${new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div style="opacity:0.7;">${new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
             </div>
 
             <div class="body">
-
-              <!-- Summary -->
               <div>
                 <div class="section-title">Executive Summary</div>
                 <div class="stats-grid">
@@ -497,7 +504,6 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              <!-- Status -->
               <div>
                 <div class="section-title">Status Breakdown</div>
                 <div class="status-grid">
@@ -511,7 +517,6 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              <!-- System health -->
               <div>
                 <div class="section-title">System Health</div>
                 <div class="stats-grid">
@@ -537,8 +542,25 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Claims + Trust + Resolution method -->
+            <div class="footer">
+              <div><strong>CampusFind</strong> · Lost &amp; Found Management System · NwSSU ISSC Office</div>
+              <div>Page 1 of 6 · Confidential · ${new Date().getFullYear()}</div>
+            </div>
+          </div>
+
+          <!-- ============ PAGE 2 — Claims, Trust & Resolution ============ -->
+          <div class="page">
+            <div class="page-header">
+              <div>
+                <div class="page-header-title">Claims, Trust &amp; Resolution</div>
+                <div class="page-header-sub">How claims and trust activity are trending</div>
+              </div>
+              <div class="page-header-right">CampusFind Analytics Report<br/>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+
+            <div class="body">
               <div class="three-col">
                 <div>
                   <div class="section-title">Claims by Status</div>
@@ -572,7 +594,7 @@ export default function AnalyticsPage() {
                   <div class="section-title">How Items Get Resolved</div>
                   <div class="bar-chart">
                     ${resolutionMethodRows.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No resolved items yet.</p>'
+                      ? '<p style="font-size:10px;color:#9ca3af;">No resolved items yet.</p>'
                       : resolutionMethodRows.map((r) => `
                         <div class="bar-row">
                           <div class="bar-label">${r.name}</div>
@@ -586,13 +608,12 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              <!-- Trust distribution + Lost vs walk-in -->
               <div class="three-col" style="grid-template-columns: 1fr 1fr;">
                 <div>
                   <div class="section-title">Student Trust Score Distribution</div>
                   <div class="bar-chart">
                     ${trustDistribution.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No trust score data yet.</p>'
+                      ? '<p style="font-size:10px;color:#9ca3af;">No trust score data yet.</p>'
                       : trustDistribution.map((t) => `
                         <div class="bar-row">
                           <div class="bar-label">${t.band}</div>
@@ -608,7 +629,7 @@ export default function AnalyticsPage() {
                   <div class="section-title">Lost Reports vs. ISSC Walk-in Drop-offs</div>
                   <div class="bar-chart">
                     ${reportTypeData.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No data yet.</p>'
+                      ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
                       : reportTypeData.map((r, i) => `
                         <div class="bar-row">
                           <div class="bar-label">${r.name}</div>
@@ -621,28 +642,46 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Trend + Category + Locations -->
-              <div class="three-col">
-                <div>
-                  <div class="section-title">Monthly Trend</div>
-                  ${trendData.length === 0
-                    ? '<p style="font-size:9px;color:#9ca3af;">No data yet.</p>'
-                    : `<div class="trend-chart">
-                        ${trendData.map((t) => `
-                          <div class="trend-bar-wrap">
-                            <div class="trend-count">${t.count}</div>
-                            <div class="trend-bar" style="height:${Math.round((t.count / maxTrend) * 55)}px;"></div>
-                            <div class="trend-label">${t.month}</div>
-                          </div>
-                        `).join('')}
-                      </div>`}
-                </div>
+            <div class="footer">
+              <div><strong>CampusFind</strong> · Lost &amp; Found Management System · NwSSU ISSC Office</div>
+              <div>Page 2 of 6 · Confidential · ${new Date().getFullYear()}</div>
+            </div>
+          </div>
+
+          <!-- ============ PAGE 3 — Trends & Categories ============ -->
+          <div class="page">
+            <div class="page-header">
+              <div>
+                <div class="page-header-title">Trends &amp; Categories</div>
+                <div class="page-header-sub">Report volume over time, by category and location</div>
+              </div>
+              <div class="page-header-right">CampusFind Analytics Report<br/>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+
+            <div class="body">
+              <div>
+                <div class="section-title">Monthly Trend</div>
+                ${trendData.length === 0
+                  ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
+                  : `<div class="trend-chart">
+                      ${trendData.map((t) => `
+                        <div class="trend-bar-wrap">
+                          <div class="trend-count">${t.count}</div>
+                          <div class="trend-bar" style="height:${Math.round((t.count / maxTrend) * 90)}px;"></div>
+                          <div class="trend-label">${t.month}</div>
+                        </div>
+                      `).join('')}
+                    </div>`}
+              </div>
+
+              <div class="three-col" style="grid-template-columns: 1fr 1fr;">
                 <div>
                   <div class="section-title">By Category</div>
                   <div class="bar-chart">
                     ${categoryData.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No data yet.</p>'
+                      ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
                       : categoryData.slice(0, 7).map((c, i) => `
                         <div class="bar-row">
                           <div class="bar-label">${c.name}</div>
@@ -658,7 +697,7 @@ export default function AnalyticsPage() {
                   <div class="section-title">Top Locations</div>
                   <div class="bar-chart">
                     ${topLocations.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No data yet.</p>'
+                      ? '<p style="font-size:10px;color:#9ca3af;">No data yet.</p>'
                       : topLocations.map((l, i) => `
                         <div class="bar-row">
                           <div class="bar-label">${i + 1}. ${l.location}</div>
@@ -671,107 +710,157 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Student accounts -->
-              <div class="three-col" style="grid-template-columns: 2fr 2fr 1fr;">
-                <div>
-                  <div class="section-title">Students by Department</div>
-                  <div class="bar-chart">
-                    ${accountsByDepartment.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
-                      : accountsByDepartment.map((d) => `
-                        <div class="bar-row">
-                          <div class="bar-label" style="width:120px;">${d.name}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((d.value / maxDepartment) * 100)}%;background:#06433C;"></div>
-                          </div>
-                          <div class="bar-count">${d.value}</div>
-                        </div>
-                      `).join('')}
-                  </div>
-                </div>
-                <div>
-                  <div class="section-title">Students by Program/Course</div>
-                  <div class="bar-chart">
-                    ${accountsByProgram.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
-                      : accountsByProgram.map((p) => `
-                        <div class="bar-row">
-                          <div class="bar-label" style="width:140px;">${p.name}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#0d8f82;"></div>
-                          </div>
-                          <div class="bar-count">${p.value}</div>
-                        </div>
-                      `).join('')}
-                  </div>
-                </div>
-                <div>
-                  <div class="section-title">Students by Year Level</div>
-                  <div class="bar-chart">
-                    ${accountsByYear.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No account data yet.</p>'
-                      : accountsByYear.map((y) => `
-                        <div class="bar-row">
-                          <div class="bar-label" style="width:50px;">${y.name}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((y.value / Math.max(...accountsByYear.map((x) => x.value), 1)) * 100)}%;background:#0a6b61;"></div>
-                          </div>
-                          <div class="bar-count">${y.value}</div>
-                        </div>
-                      `).join('')}
-                  </div>
-                </div>
-              </div>
+            <div class="footer">
+              <div><strong>CampusFind</strong> · Lost &amp; Found Management System · NwSSU ISSC Office</div>
+              <div>Page 3 of 6 · Confidential · ${new Date().getFullYear()}</div>
+            </div>
+          </div>
 
-              <!-- Which departments lose items most -->
-              <div class="three-col" style="grid-template-columns: 1.3fr 1fr;">
-                <div>
-                  <div class="section-title">Which Departments Lose Items Most (per student)</div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Department</th>
-                        <th>Reports Filed</th>
-                        <th>Students</th>
-                        <th>Reports / Student</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${lostRateByDepartment.length === 0
-                        ? '<tr><td colspan="4" style="color:#9ca3af;text-align:center;padding:10px;">No lost reports yet.</td></tr>'
-                        : lostRateByDepartment.map((d) => `
-                          <tr>
-                            <td>${d.name}</td>
-                            <td class="td-num">${d.value}</td>
-                            <td>${d.students}</td>
-                            <td class="td-num">${d.rate !== null ? d.rate.toFixed(2) : '—'}</td>
-                          </tr>
-                        `).join('')}
-                    </tbody>
-                  </table>
-                </div>
-                <div>
-                  <div class="section-title">Lost Reports by Program</div>
-                  <div class="bar-chart">
-                    ${lostByProgram.length === 0
-                      ? '<p style="font-size:9px;color:#9ca3af;">No lost reports yet.</p>'
-                      : lostByProgram.map((p) => `
-                        <div class="bar-row">
-                          <div class="bar-label" style="width:140px;">${p.name}</div>
-                          <div class="bar-track">
-                            <div class="bar-fill" style="width:${Math.round((p.value / maxLostProgram) * 100)}%;background:#dc2626;"></div>
-                          </div>
-                          <div class="bar-count">${p.value}</div>
-                        </div>
-                      `).join('')}
-                  </div>
-                </div>
-              </div>
-
-              <!-- Monthly log -->
+          <!-- ============ PAGE 4 — Student Accounts ============ -->
+          <div class="page">
+            <div class="page-header">
               <div>
-                <div class="section-title">Monthly Report Log</div>
+                <div class="page-header-title">Student Accounts</div>
+                <div class="page-header-sub">Who's registered, by department, program and year level</div>
+              </div>
+              <div class="page-header-right">CampusFind Analytics Report<br/>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+
+            <div class="body">
+              <div>
+                <div class="section-title">Students by Department</div>
+                <div class="bar-chart">
+                  ${accountsByDepartment.length === 0
+                    ? '<p style="font-size:10px;color:#9ca3af;">No account data yet.</p>'
+                    : accountsByDepartment.map((d) => `
+                      <div class="bar-row">
+                        <div class="bar-label" style="width:220px;">${d.name}</div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width:${Math.round((d.value / maxDepartment) * 100)}%;background:#06433C;"></div>
+                        </div>
+                        <div class="bar-count">${d.value}</div>
+                      </div>
+                    `).join('')}
+                </div>
+              </div>
+
+              <div>
+                <div class="section-title">Students by Program/Course</div>
+                <div class="bar-chart">
+                  ${accountsByProgram.length === 0
+                    ? '<p style="font-size:10px;color:#9ca3af;">No account data yet.</p>'
+                    : accountsByProgram.map((p) => `
+                      <div class="bar-row">
+                        <div class="bar-label" style="width:260px;">${p.name}</div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width:${Math.round((p.value / maxProgram) * 100)}%;background:#0d8f82;"></div>
+                        </div>
+                        <div class="bar-count">${p.value}</div>
+                      </div>
+                    `).join('')}
+                </div>
+              </div>
+
+              <div>
+                <div class="section-title">Students by Year Level</div>
+                <div class="bar-chart">
+                  ${accountsByYear.length === 0
+                    ? '<p style="font-size:10px;color:#9ca3af;">No account data yet.</p>'
+                    : accountsByYear.map((y) => `
+                      <div class="bar-row">
+                        <div class="bar-label" style="width:90px;">${y.name}</div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width:${Math.round((y.value / Math.max(...accountsByYear.map((x) => x.value), 1)) * 100)}%;background:#0a6b61;"></div>
+                        </div>
+                        <div class="bar-count">${y.value}</div>
+                      </div>
+                    `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <div><strong>CampusFind</strong> · Lost &amp; Found Management System · NwSSU ISSC Office</div>
+              <div>Page 4 of 6 · Confidential · ${new Date().getFullYear()}</div>
+            </div>
+          </div>
+
+          <!-- ============ PAGE 5 — Lost Items by Department & Program ============ -->
+          <div class="page">
+            <div class="page-header">
+              <div>
+                <div class="page-header-title">Lost Items by Department &amp; Program</div>
+                <div class="page-header-sub">Which groups file the most lost reports, and how often per student</div>
+              </div>
+              <div class="page-header-right">CampusFind Analytics Report<br/>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+
+            <div class="body">
+              <div>
+                <div class="section-title">Which Departments Lose Items Most (per student)</div>
+                <div class="section-note">Lost reports per student, not just raw count, so a bigger department doesn't look worse by headcount alone.</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Department</th>
+                      <th>Reports Filed</th>
+                      <th>Students</th>
+                      <th>Reports / Student</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${lostRateByDepartment.length === 0
+                      ? '<tr><td colspan="4" style="color:#9ca3af;text-align:center;padding:14px;">No lost reports yet.</td></tr>'
+                      : lostRateByDepartment.map((d) => `
+                        <tr>
+                          <td>${d.name}</td>
+                          <td class="td-num">${d.value}</td>
+                          <td>${d.students}</td>
+                          <td class="td-num">${d.rate !== null ? d.rate.toFixed(2) : '—'}</td>
+                        </tr>
+                      `).join('')}
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <div class="section-title">Lost Reports by Program</div>
+                <div class="bar-chart">
+                  ${lostByProgram.length === 0
+                    ? '<p style="font-size:10px;color:#9ca3af;">No lost reports yet.</p>'
+                    : lostByProgram.map((p) => `
+                      <div class="bar-row">
+                        <div class="bar-label" style="width:260px;">${p.name}</div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width:${Math.round((p.value / maxLostProgram) * 100)}%;background:#dc2626;"></div>
+                        </div>
+                        <div class="bar-count">${p.value}</div>
+                      </div>
+                    `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <div><strong>CampusFind</strong> · Lost &amp; Found Management System · NwSSU ISSC Office</div>
+              <div>Page 5 of 6 · Confidential · ${new Date().getFullYear()}</div>
+            </div>
+          </div>
+
+          <!-- ============ PAGE 6 — Monthly Report Log ============ -->
+          <div class="page">
+            <div class="page-header">
+              <div>
+                <div class="page-header-title">Monthly Report Log</div>
+                <div class="page-header-sub">Full month-by-month breakdown of filed reports</div>
+              </div>
+              <div class="page-header-right">CampusFind Analytics Report<br/>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+
+            <div class="body">
+              <div>
                 <table>
                   <thead>
                     <tr>
@@ -783,7 +872,7 @@ export default function AnalyticsPage() {
                   </thead>
                   <tbody>
                     ${trendData.length === 0
-                      ? '<tr><td colspan="4" style="color:#9ca3af;text-align:center;padding:10px;">No data available.</td></tr>'
+                      ? '<tr><td colspan="4" style="color:#9ca3af;text-align:center;padding:14px;">No data available.</td></tr>'
                       : trendData.map((t, i) => `
                         <tr>
                           <td style="color:#9ca3af;">${i + 1}</td>
@@ -795,21 +884,19 @@ export default function AnalyticsPage() {
                   </tbody>
                 </table>
               </div>
-
             </div>
 
-            <!-- Footer -->
             <div class="footer">
               <div><strong>CampusFind</strong> · Lost &amp; Found Management System · NwSSU ISSC Office</div>
-              <div>Confidential · ${new Date().getFullYear()}</div>
+              <div>Page 6 of 6 · Confidential · ${new Date().getFullYear()}</div>
             </div>
-
           </div>
+
         </div>
 
       </body>
       </html>
-    `
+`
 
     printWindow.document.write(html)
     printWindow.document.close()
