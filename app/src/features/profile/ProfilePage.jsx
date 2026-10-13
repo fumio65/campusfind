@@ -195,10 +195,13 @@ export default function ProfilePage() {
           transition={{ delay: 0.05 }}
           className="bg-surface-card rounded-2xl border border-border p-4 shadow-sm"
         >
-          <h2 className="text-sm font-bold text-text-primary flex items-center gap-1.5 mb-3">
+          <h2 className="text-sm font-bold text-text-primary flex items-center gap-1.5 mb-1">
             <Clock size={15} className="text-brand-600" />
             30-Day Rejection Window
           </h2>
+          <p className="text-[11px] text-text-muted mb-3">
+            Rejections count against you for 30 days, then automatically drop off.
+          </p>
 
           {rejections.length === 0 ? (
             <div className="flex items-center gap-2 bg-status-open-bg rounded-xl px-3 py-2.5">
@@ -208,26 +211,56 @@ export default function ProfilePage() {
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ${
+            <div className="flex flex-col gap-3">
+              {/* Progress toward the 3-rejection penalty */}
+              <div className={`rounded-xl px-3 py-2.5 ${
                 rejections.length >= 3 ? 'bg-status-rejected-bg' : 'bg-status-claimed-bg'
               }`}>
-                <AlertTriangle size={13} className={rejections.length >= 3 ? 'text-status-rejected-text' : 'text-status-claimed-text'} />
-                <p className={`text-xs font-medium ${rejections.length >= 3 ? 'text-status-rejected-text' : 'text-status-claimed-text'}`}>
-                  {rejections.length} rejection{rejections.length === 1 ? '' : 's'} in the last 30 days
-                  {rejections.length >= 3 && ' — penalty applied'}
-                </p>
-              </div>
-              {rejections.map((r) => (
-                <div key={r.id} className="flex items-center justify-between px-1">
-                  <p className="text-xs text-text-secondary truncate flex-1">
-                    {r.reports?.title ?? 'Unknown report'}
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <p className={`text-xs font-semibold flex items-center gap-1.5 ${
+                    rejections.length >= 3 ? 'text-status-rejected-text' : 'text-status-claimed-text'
+                  }`}>
+                    <AlertTriangle size={13} className="shrink-0" />
+                    {Math.min(rejections.length, 3)} of 3 rejections
                   </p>
-                  <p className="text-[10px] text-text-muted ml-2 shrink-0">
-                    {formatDate(r.created_at)} · expires in {timeUntil(new Date(new Date(r.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString())}
-                  </p>
+                  <span className={`text-[10px] font-medium shrink-0 ${
+                    rejections.length >= 3 ? 'text-status-rejected-text' : 'text-status-claimed-text'
+                  }`}>
+                    {rejections.length >= 3
+                      ? '-5 penalty applied'
+                      : `${3 - rejections.length} more triggers a penalty`}
+                  </span>
                 </div>
-              ))}
+                <div className="flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full ${
+                        i < Math.min(rejections.length, 3)
+                          ? rejections.length >= 3 ? 'bg-status-rejected-text' : 'bg-status-claimed-text'
+                          : 'bg-surface-card'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Individual rejections, newest first */}
+              <div className="flex flex-col gap-2">
+                {rejections.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 px-1">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-text-secondary truncate">
+                        {r.reports?.title ?? 'Unknown report'}
+                      </p>
+                      <p className="text-[10px] text-text-muted">{formatDate(r.created_at)}</p>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-medium text-text-secondary bg-surface-muted px-2 py-1 rounded-full whitespace-nowrap">
+                      Expires in {timeUntil(new Date(new Date(r.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString())}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </motion.div>
