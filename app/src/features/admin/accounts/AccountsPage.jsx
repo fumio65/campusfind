@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, ChevronLeft, ChevronRight, Search, X, Upload } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Search, X, Upload, FileSpreadsheet, Download } from 'lucide-react'
 import { fetchAccounts, fetchPrograms, createSingleAccount, toggleAccountStatus, resetAccountPassword } from './api'
 import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
@@ -284,19 +284,33 @@ export default function AccountsPage() {
         onClose={() => setShowBulkImport(false)}
         tone="info"
         title="Bulk import accounts"
-        maxWidth="max-w-md"
+        maxWidth="max-w-lg"
       >
         <p className="text-xs text-text-secondary mb-3">
           Drop a Registrar CSV to start an import. You'll review and confirm every row on the next
           screen before anything is created.
         </p>
-        <button
-          type="button"
-          onClick={downloadBulkImportTemplate}
-          className="text-xs font-medium text-brand-700 hover:underline mb-3"
-        >
-          Download CSV template
-        </button>
+
+        <div className="rounded-lg border border-border bg-surface-muted/60 p-3.5 flex items-center gap-3.5 mb-4">
+          <div className="w-9 h-9 rounded-full bg-status-open-bg text-status-open-text flex items-center justify-center shrink-0">
+            <FileSpreadsheet size={16} aria-hidden="true" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold text-text-primary">Not sure of the format?</div>
+            <p className="text-xs text-text-secondary">
+              Grab a template with the expected columns and a few example rows.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={downloadBulkImportTemplate}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+          >
+            <Download size={13} aria-hidden="true" />
+            Download
+          </button>
+        </div>
+
         <CsvDropzone
           onFileSelected={handleBulkFileSelected}
           onCancelUpload={() => {}}
