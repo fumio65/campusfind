@@ -30,13 +30,6 @@ function getInitials(firstName, lastName) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
 }
 
-function claimantName(claim) {
-  if (claim?.claimant?.first_name) {
-    return `${claim.claimant.first_name} ${claim.claimant.last_name}`;
-  }
-  return claim?.claimant_name ?? "—";
-}
-
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, sub, tone, icon: Icon }) {
@@ -78,16 +71,13 @@ export default function OverviewPage() {
     Promise.all([
       adminFetch(`/overview`).then((r) => r.json()),
       adminFetch(`/analytics`).then((r) => r.json()),
-      fetch(`${SERVER_URL}/reports?status=approved`).then((r) => r.json()),
+      fetch(`${SERVER_URL}/dropoff?status=pending`).then((r) => r.json()),
     ])
-      .then(([overviewBody, analyticsBody, reportsBody]) => {
+      .then(([overviewBody, analyticsBody, dropoffBody]) => {
         if (overviewBody.error) throw new Error(overviewBody.error);
         setData(overviewBody);
         setAnalytics(analyticsBody);
-        const pending = (reportsBody.reports ?? []).filter(
-          (r) => r.active_claim?.drop_off_chosen,
-        );
-        setDropOffReports(pending);
+        setDropOffReports(Array.isArray(dropoffBody) ? dropoffBody : []);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -106,6 +96,11 @@ export default function OverviewPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "users" },
+        () => fetchAll(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dropoff_requests" },
         () => fetchAll(),
       )
       .subscribe();
@@ -372,7 +367,7 @@ export default function OverviewPage() {
                       >
                         <div className="flex items-start justify-between gap-2 mb-1.5">
                           <p className="text-xs font-semibold text-text-primary leading-snug">
-                            {r.title}
+                            {r.reports?.title ?? "Item"}
                           </p>
                           <Link
                             to="/admin/dropoff"
@@ -384,16 +379,18 @@ export default function OverviewPage() {
                         <p className="text-[11px] text-text-muted leading-snug">
                           Finder:{" "}
                           <span className="text-text-secondary font-medium">
-                            {claimantName(r.active_claim)}
+                            {r.claimant?.first_name
+                              ? `${r.claimant.first_name} ${r.claimant.last_name}`
+                              : "—"}
                           </span>
-                          {r.active_claim?.claimant_student_id && (
-                            <> ({r.active_claim.claimant_student_id})</>
-                          )}
+                          {r.claimant?.student_id && <> ({r.claimant.student_id})</>}
                         </p>
                         <p className="text-[11px] text-text-muted leading-snug">
                           Owner:{" "}
                           <span className="text-text-secondary font-medium">
-                            {r.reporter_name}
+                            {r.reporter?.first_name
+                              ? `${r.reporter.first_name} ${r.reporter.last_name}`
+                              : "—"}
                           </span>
                         </p>
                       </div>
