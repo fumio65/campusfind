@@ -63,6 +63,8 @@ export default function AnalyticsPage() {
   const [accountsByProgram, setAccountsByProgram] = useState([])
   const [accountsByDepartment, setAccountsByDepartment] = useState([])
   const [accountsByYear, setAccountsByYear] = useState([])
+  const [lostByDepartment, setLostByDepartment] = useState([])
+  const [lostByProgram, setLostByProgram] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { load() }, [])
@@ -81,6 +83,7 @@ export default function AnalyticsPage() {
         fetchTipsStats(),
         fetchTrustEventReasons(),
         fetchAccountsBreakdown(),
+        fetchLostByDepartmentAndProgram(),
       ])
     } finally {
       setLoading(false)
@@ -239,6 +242,30 @@ export default function AnalyticsPage() {
     )
   }
 
+  // How often each department/program's students actually file a lost
+  // report - distinct from "Students by Department/Program" above (which is
+  // just headcount). This is reports.reporter_id joined to the reporter's
+  // own department_code/program_code, counting only type === 'lost' (a
+  // student report), not ISSC walk-in intake which has no student reporter.
+  async function fetchLostByDepartmentAndProgram() {
+    const { data, error } = await supabase
+      .from('reports')
+      .select('type, reporter:users!reports_reporter_id_fkey(department_code, program_code)')
+      .eq('type', 'lost')
+    if (error || !data) return
+
+    const deptCounts = {}
+    const progCounts = {}
+    for (const r of data) {
+      const dept = r.reporter?.department_code || 'Unspecified'
+      deptCounts[dept] = (deptCounts[dept] ?? 0) + 1
+      const prog = r.reporter?.program_code || 'Unspecified'
+      progCounts[prog] = (progCounts[prog] ?? 0) + 1
+    }
+    setLostByDepartment(Object.entries(deptCounts).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })))
+    setLostByProgram(Object.entries(progCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, value]) => ({ name, value })))
+  }
+
   function exportReport() {
     const resolutionRate = stats.total > 0 ? Math.round((stats.resolved / stats.total) * 100) : 0
     const maxCategory = categoryData[0]?.value ?? 1
@@ -246,6 +273,14 @@ export default function AnalyticsPage() {
     const maxTrend = Math.max(...trendData.map((t) => t.count), 1)
     const maxProgram = accountsByProgram[0]?.value ?? 1
     const maxDepartment = accountsByDepartment[0]?.value ?? 1
+
+    const lostRateByDepartment = lostByDepartment
+      .map((d) => {
+        const students = accountsByDepartment.find((a) => a.name === d.name)?.value ?? 0
+        return { name: d.name, value: d.value, students, rate: students > 0 ? d.value / students : null }
+      })
+      .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1))
+    const maxLostProgram = lostByProgram[0]?.value ?? 1
     const maxReason = Math.max(...trustEventReasons.map((r) => r.value), 1)
 
     const statusRows = [
@@ -610,6 +645,51 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
+              <!-- Which departments lose items most -->
+              <div class="three-col" style="grid-template-columns: 2fr 1fr;">
+                <div>
+                  <div class="section-title">Which Departments Lose Items Most (per student)</div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Department</th>
+                        <th>Reports Filed</th>
+                        <th>Students</th>
+                        <th>Reports / Student</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${lostRateByDepartment.length === 0
+                        ? '<tr><td colspan="4" style="color:#9ca3af;text-align:center;padding:10px;">No lost reports yet.</td></tr>'
+                        : lostRateByDepartment.map((d) => `
+                          <tr>
+                            <td>${d.name}</td>
+                            <td class="td-num">${d.value}</td>
+                            <td>${d.students}</td>
+                            <td class="td-num">${d.rate !== null ? d.rate.toFixed(2) : '—'}</td>
+                          </tr>
+                        `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+                <div>
+                  <div class="section-title">Lost Reports by Program</div>
+                  <div class="bar-chart">
+                    ${lostByProgram.length === 0
+                      ? '<p style="font-size:9px;color:#9ca3af;">No lost reports yet.</p>'
+                      : lostByProgram.map((p) => `
+                        <div class="bar-row">
+                          <div class="bar-label" style="width:70px;">${p.name}</div>
+                          <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.round((p.value / maxLostProgram) * 100)}%;background:#dc2626;"></div>
+                          </div>
+                          <div class="bar-count">${p.value}</div>
+                        </div>
+                      `).join('')}
+                  </div>
+                </div>
+              </div>
+
               <!-- Monthly log -->
               <div>
                 <div class="section-title">Monthly Report Log</div>
@@ -836,6 +916,77 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden">
                       <div className="h-full rounded-full bg-brand-600" style={{ width: `${(p.value / (accountsByProgram[0]?.value ?? 1)) * 100}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-1">Which departments lose items most</h3>
+          <p className="text-xs text-text-muted mb-4">Lost reports per student — not just raw count, so a bigger department doesn't look worse by headcount alone.</p>
+          {lostByDepartment.length === 0 ? (
+            <p className="text-xs text-text-muted">No lost reports yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {lostByDepartment
+                .map((d) => {
+                  const students = accountsByDepartment.find((a) => a.name === d.name)?.value ?? 0
+                  const rate = students > 0 ? d.value / students : null
+                  return { ...d, students, rate }
+                })
+                .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1))
+                .map((d, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs font-medium text-text-primary truncate">
+                          {d.name}
+                          {d.students > 0 && (
+                            <span className="text-text-muted font-normal ml-1.5">
+                              {d.rate.toFixed(2)} reports/student
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-text-muted shrink-0 ml-2">{d.value} reports · {d.students} students</p>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-status-rejected-text"
+                          style={{
+                            width: `${Math.min(((d.rate ?? 0) / Math.max(...lostByDepartment.map((x) => {
+                              const s = accountsByDepartment.find((a) => a.name === x.name)?.value ?? 0
+                              return s > 0 ? x.value / s : 0
+                            }), 0.01)) * 100, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-surface-card border border-border rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-4">Lost reports by program/course</h3>
+          {lostByProgram.length === 0 ? (
+            <p className="text-xs text-text-muted">No lost reports yet.</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {lostByProgram.map((p, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-medium text-text-primary truncate">{p.name}</p>
+                      <p className="text-xs text-text-muted shrink-0 ml-2">{p.value}</p>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-status-rejected-text" style={{ width: `${(p.value / (lostByProgram[0]?.value ?? 1)) * 100}%` }} />
                     </div>
                   </div>
                 </div>
