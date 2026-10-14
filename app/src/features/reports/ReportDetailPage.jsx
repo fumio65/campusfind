@@ -19,6 +19,7 @@ import {
   Share2,
   ImagePlus,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
@@ -27,7 +28,7 @@ import { liveQuery } from "dexie";
 import { db } from "../../shared/lib/db";
 import SyncStateChip from "../../shared/components/SyncStateChip";
 import CachedImage from "../../shared/components/CachedImage";
-import { ensureCachedInOrder } from "../../shared/lib/imageCache";
+import { ensureCachedInOrder, ensureCached, getCachedUrl } from "../../shared/lib/imageCache";
 import {
   cacheReport,
   cacheReportPhotos,
@@ -273,6 +274,42 @@ export default function ReportDetailPage() {
   const [error, setError] = useState(null);
   const [actioning, setActioning] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
+  // Low-res thumbnail shown immediately behind the full-resolution photo in
+  // the lightbox - it's already cached from the gallery strip, so it covers
+  // the wait while the full-res image (often several MB, not yet warmed or
+  // competing with the rest of the page's data load) fetches over the
+  // network. lightboxFullSrc is the resolved blob URL for that full-res
+  // image, set once it's actually ready to show.
+  const [lightboxThumbUrl, setLightboxThumbUrl] = useState(null);
+  const [lightboxFullSrc, setLightboxFullSrc] = useState(null);
+
+  function openLightbox(url, thumbUrl) {
+    setLightboxUrl(url);
+    setLightboxThumbUrl(thumbUrl ?? url);
+  }
+
+  function closeLightbox() {
+    setLightboxUrl(null);
+    setLightboxThumbUrl(null);
+    setLightboxFullSrc(null);
+  }
+
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const cached = getCachedUrl(lightboxUrl);
+    if (cached) {
+      setLightboxFullSrc(cached);
+      return;
+    }
+    setLightboxFullSrc(null);
+    let cancelled = false;
+    ensureCached(lightboxUrl, lightboxUrl).then((url) => {
+      if (!cancelled) setLightboxFullSrc(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lightboxUrl]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -1057,20 +1094,34 @@ export default function ReportDetailPage() {
       {lightboxUrl && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setLightboxUrl(null)}
+          onClick={closeLightbox}
         >
-          <CachedImage
-            src={lightboxUrl}
-            cacheKey={lightboxUrl}
-            alt=""
-            className="max-w-full max-h-full rounded-xl object-contain"
-          />
+          {lightboxThumbUrl && (
+            <CachedImage
+              src={lightboxThumbUrl}
+              cacheKey={lightboxThumbUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full object-contain blur-lg scale-105 opacity-60"
+            />
+          )}
+          {lightboxFullSrc ? (
+            <img
+              src={lightboxFullSrc}
+              alt=""
+              className="relative max-w-full max-h-full rounded-xl object-contain"
+            />
+          ) : (
+            <div
+              className="relative w-10 h-10 border-2 border-white/40 border-t-white rounded-full animate-spin"
+              aria-label="Loading full-resolution photo"
+            />
+          )}
           <button
             className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white"
-            onClick={() => setLightboxUrl(null)}
+            onClick={closeLightbox}
             aria-label="Close"
           >
-            <ArrowLeft size={18} className="rotate-[135deg]" />
+            <X size={20} />
           </button>
         </div>
       )}
@@ -1278,7 +1329,7 @@ export default function ReportDetailPage() {
               return (
                 <button
                   key={i}
-                  onClick={() => setLightboxUrl(url)}
+                  onClick={() => openLightbox(url, thumbUrl)}
                   className="shrink-0"
                 >
                   <CachedImage
@@ -1432,7 +1483,7 @@ export default function ReportDetailPage() {
                 {claim.photoUrls.map((url, i) => (
                   <button
                     key={i}
-                    onClick={() => setLightboxUrl(url)}
+                    onClick={() => openLightbox(url, url)}
                     className="shrink-0"
                   >
                     <CachedImage
