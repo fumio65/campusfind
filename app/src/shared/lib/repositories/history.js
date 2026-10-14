@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { supabase } from '../supabase'
 import { db } from '../db'
 import { isOnline } from '../network'
-import { thumbnailUrl } from './reports'
+import { thumbnailUrl, prefetchThumbnails, prefetchFullPhotos } from './reports'
 
 export async function refreshHistory(userId) {
   if (!isOnline() || !userId) return
@@ -45,7 +45,17 @@ export async function refreshHistory(userId) {
         .select('id, report_id, storage_path, thumbnail_path, position')
         .in('report_id', reportIds)
         .order('position', { ascending: true })
-      if (photos?.length) await db.report_photos.bulkPut(photos)
+      if (photos?.length) {
+        await db.report_photos.bulkPut(photos)
+        // Same thumbnail + full-res cover-photo warm-up as Home's
+        // refreshReports, for the same reason: this is an offline-first
+        // app, so a photo the user has already seen on a My Reports/History
+        // card should feel just as "already loaded" when they tap into it
+        // as it does on Home - not a second, inconsistent cold fetch just
+        // because this list came from a different refresh function.
+        const firstByReport = prefetchThumbnails(reportIds, photos)
+        prefetchFullPhotos(reportIds, firstByReport)
+      }
     }
   }
   // Strip the joined report title before caching - it's resolved back at

@@ -20,7 +20,7 @@ export function thumbnailUrl(storagePath) {
 // orderedReportIds fixes the fetch priority to match the list's own order
 // (newest first) so thumbnails tend to resolve top-to-bottom instead of in
 // whatever order the network happens to return them.
-function prefetchThumbnails(orderedReportIds, photos) {
+export function prefetchThumbnails(orderedReportIds, photos) {
   const firstByReport = new Map()
   for (const photo of [...photos].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))) {
     if (!firstByReport.has(photo.report_id)) firstByReport.set(photo.report_id, photo)
@@ -48,7 +48,7 @@ function prefetchThumbnails(orderedReportIds, photos) {
 // a different (bigger) version of the same photo. Lower concurrency than
 // prefetchThumbnails so thumbnails - what the list itself needs to render -
 // never wait behind this.
-function prefetchFullPhotos(orderedReportIds, firstByReport) {
+export function prefetchFullPhotos(orderedReportIds, firstByReport) {
   const entries = orderedReportIds
     .map((id) => firstByReport.get(id))
     .filter(Boolean)
