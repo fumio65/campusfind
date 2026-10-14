@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { fetchBulkImportBatch } from './api'
 import DataRow from './DataRow'
 
@@ -25,7 +26,13 @@ export default function BatchDetailDialog({ batchId, filename, onClose }) {
     }
   }, [batchId])
 
-  return (
+  // Rendered into a portal at document.body rather than in place - this page
+  // animates its content with a framer-motion transform (see pageTransition
+  // in adminMotion.js), and a transform on any ancestor turns `fixed` into
+  // "fixed relative to that ancestor" instead of the viewport, which is what
+  // was centering this dialog over just the <main> content area instead of
+  // the whole screen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div
         className="bg-surface-card rounded-xl shadow-xl w-full max-w-4xl p-6 max-h-[85vh] flex flex-col"
@@ -79,6 +86,7 @@ export default function BatchDetailDialog({ batchId, filename, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
