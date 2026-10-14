@@ -15,7 +15,20 @@ export async function refreshNotifications(userId) {
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50)
-  if (data?.length) await db.user_notifications.bulkPut(data)
+  if (!data?.length) return
+
+  // A notification whose deleteNotification op is still sitting in the
+  // outbox hasn't actually been removed server-side yet (not synced, or
+  // offline/retrying) - a row still present in sync_queue for it means
+  // that. Without this, a refetch here (triggered by the realtime INSERT
+  // listener or a background sync) would see the server's still-existing
+  // copy and bulkPut it straight back into the local cache, resurrecting a
+  // notification the user just swiped away and deleted.
+  const queuedDeletes = await db.sync_queue.where('opType').equals('deleteNotification').toArray()
+  const pendingDeleteIds = new Set(queuedDeletes.map((row) => row.payload.id))
+  const rows = pendingDeleteIds.size ? data.filter((row) => !pendingDeleteIds.has(row.id)) : data
+
+  if (rows.length) await db.user_notifications.bulkPut(rows)
 }
 
 // Reads reactively from the local cache - reflects whatever
