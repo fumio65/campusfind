@@ -34,6 +34,30 @@ function prefetchThumbnails(orderedReportIds, photos) {
     })
     .filter(Boolean)
   ensureCachedInOrder(entries)
+  return firstByReport
+}
+
+// Warms the full-resolution version of each report's cover photo too - the
+// very same photo the card already shows as a thumbnail. Uploads are now
+// capped to ~1920px (see makeDisplayImage in imageThumbnail.js) instead of
+// an untouched camera original, so this is a cheap enough fetch to do
+// speculatively for the whole visible list. Without this, a user who's
+// already looking at a report's cover photo on the card would still hit a
+// cold fetch the instant they tap into the report and open the lightbox -
+// which reads as "didn't this already load?" even though it's technically
+// a different (bigger) version of the same photo. Lower concurrency than
+// prefetchThumbnails so thumbnails - what the list itself needs to render -
+// never wait behind this.
+function prefetchFullPhotos(orderedReportIds, firstByReport) {
+  const entries = orderedReportIds
+    .map((id) => firstByReport.get(id))
+    .filter(Boolean)
+    .map((photo) => {
+      const url = thumbnailUrl(photo.storage_path)
+      return url ? { src: url, cacheKey: url } : null
+    })
+    .filter(Boolean)
+  ensureCachedInOrder(entries, 2)
 }
 
 // Cache-aside refresh: fetches from Supabase when online and writes into
@@ -91,7 +115,8 @@ export async function refreshReports({ search, category, location, status } = {}
     .order('position', { ascending: true })
   if (photos?.length) {
     await db.report_photos.bulkPut(photos)
-    prefetchThumbnails(reportIds, photos)
+    const firstByReport = prefetchThumbnails(reportIds, photos)
+    prefetchFullPhotos(reportIds, firstByReport)
   }
 }
 
