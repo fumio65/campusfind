@@ -14,6 +14,23 @@ const EMPTY_HISTORY_REPORTS = []
 
 const EMPTY_REJECTIONS = []
 
+// programs.program_name is stored in ALL CAPS in the database (seed data
+// convention) - fine for exact-match lookups, but shouldn't be shown to a
+// student shouting. Minor connector words stay lowercase unless they're the
+// first word, matching normal title-case style ("Bachelor of Science in
+// Information Technology").
+const MINOR_WORDS = new Set(['of', 'in', 'and', 'the', 'for', 'a', 'an'])
+function toTitleCase(text) {
+  return text
+    .toLowerCase()
+    .split(' ')
+    .map((word, i) => {
+      if (i > 0 && MINOR_WORDS.has(word)) return word
+      return word.charAt(0).toUpperCase() + word.slice(1)
+    })
+    .join(' ')
+}
+
 function timeUntil(dateStr) {
   const diff = new Date(dateStr).getTime() - Date.now()
   if (diff <= 0) return 'expired'
@@ -55,7 +72,7 @@ export default function ProfilePage() {
       .eq('program_code', profile.program_code)
       .maybeSingle()
       .then(({ data }) => {
-        if (!cancelled) setProgramName(data?.program_name ?? null)
+        if (!cancelled) setProgramName(data?.program_name ? toTitleCase(data.program_name) : null)
       })
     return () => {
       cancelled = true
