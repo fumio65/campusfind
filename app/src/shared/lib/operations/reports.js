@@ -2,7 +2,7 @@ import { supabase } from '../supabase'
 import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
 import { seedCache } from '../imageCache'
-import { makeThumbnail } from '../imageThumbnail'
+import { makeThumbnail, makeDisplayImage } from '../imageThumbnail'
 
 // Blobs table key for a photo's thumbnail - kept separate from the
 // full-resolution blob (keyed by the photo id alone) so either can be
@@ -173,13 +173,20 @@ export async function updateReport({
   const newPhotos = []
   for (const [i, file] of newPhotoFiles.entries()) {
     const id = crypto.randomUUID()
-    const ext = file.name.split('.').pop()
+    // Downscale the uploaded photo itself (not just its thumbnail) - see
+    // makeDisplayImage's comment for why. Forces a .jpg extension when that
+    // succeeds, since the re-encoded blob is JPEG regardless of the
+    // original format; falls back to the original file/extension untouched
+    // when downscaling isn't needed or fails.
+    const displayBlob = await makeDisplayImage(file)
+    const ext = displayBlob ? 'jpg' : file.name.split('.').pop()
+    const uploadBlob = displayBlob ?? file
     // Matches EditReportPage's existing (prefix-less) path convention for
     // edited-in photos - not changed here since bucket layout/permissions
     // for this path shape haven't been verified.
     const storage_path = `${reportId}/${id}.${ext}`
-    await db.blobs.put({ id, data: file, mimeType: file.type, createdAt: Date.now() })
-    seedCache(publicUrl(storage_path), file)
+    await db.blobs.put({ id, data: uploadBlob, mimeType: displayBlob ? 'image/jpeg' : file.type, createdAt: Date.now() })
+    seedCache(publicUrl(storage_path), uploadBlob)
 
     const thumbBlob = await makeThumbnail(file)
     const thumbnail_path = thumbBlob ? `${reportId}/${id}_thumb.jpg` : null
@@ -225,10 +232,14 @@ export async function createReport({ title, description, location, category, rep
   const photos = []
   for (const [position, file] of photoFiles.entries()) {
     const id = crypto.randomUUID()
-    const ext = file.name.split('.').pop()
+    // See the updateReport loop above for why the uploaded photo itself
+    // (not just its thumbnail) is downscaled first.
+    const displayBlob = await makeDisplayImage(file)
+    const ext = displayBlob ? 'jpg' : file.name.split('.').pop()
+    const uploadBlob = displayBlob ?? file
     const storage_path = `reports/${report.id}/${id}.${ext}`
-    await db.blobs.put({ id, data: file, mimeType: file.type, createdAt: Date.now() })
-    seedCache(publicUrl(storage_path), file)
+    await db.blobs.put({ id, data: uploadBlob, mimeType: displayBlob ? 'image/jpeg' : file.type, createdAt: Date.now() })
+    seedCache(publicUrl(storage_path), uploadBlob)
 
     const thumbBlob = await makeThumbnail(file)
     const thumbnail_path = thumbBlob ? `reports/${report.id}/${id}_thumb.jpg` : null

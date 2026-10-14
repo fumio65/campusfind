@@ -1,6 +1,7 @@
 import { supabase } from '../supabase'
 import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
+import { makeDisplayImage } from '../imageThumbnail'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
@@ -81,9 +82,14 @@ export async function submitClaim({ reportId, claimantId, photoFiles, messageTex
   const photos = []
   for (const [position, file] of photoFiles.entries()) {
     const id = crypto.randomUUID()
-    const ext = file.name.split('.').pop()
+    // Downscale the claim proof photo too, for the same reason as report
+    // photos - the lightbox fetches this full-size, and claim photos have
+    // no separate thumbnail at all, so this is the only version ever
+    // fetched for them.
+    const displayBlob = await makeDisplayImage(file)
+    const ext = displayBlob ? 'jpg' : file.name.split('.').pop()
     const storage_path = `claims/${claim.id}/${id}.${ext}`
-    await db.blobs.put({ id, data: file, mimeType: file.type, createdAt: Date.now() })
+    await db.blobs.put({ id, data: displayBlob ?? file, mimeType: displayBlob ? 'image/jpeg' : file.type, createdAt: Date.now() })
     photos.push({ id, claim_id: claim.id, storage_path, position })
   }
 

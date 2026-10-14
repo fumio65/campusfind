@@ -3,6 +3,7 @@ import { Camera, X, CheckCircle2, Package, AlertCircle } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
 import { useAuth } from '../../../shared/lib/AuthContext'
 import { adminFetch, SERVER_URL } from '../../../shared/lib/apiClient'
+import { makeThumbnail, makeDisplayImage } from '../../../shared/lib/imageThumbnail'
 import CategoryPicker from '../../../shared/components/CategoryPicker'
 
 export default function WalkInIntakePage() {
@@ -110,16 +111,36 @@ export default function WalkInIntakePage() {
 
       if (reportError) throw reportError
 
-      // 2. Upload photos
+      // 2. Upload photos (+ a small thumbnail per photo, same as the
+      // student-facing create/edit flow, so this list row is just as fast
+      // to load as any other report's)
       for (let i = 0; i < photos.length; i++) {
         const { file } = photos[i]
-        const ext = file.name.split('.').pop()
+        // Downscale the uploaded photo itself (not just its thumbnail) -
+        // same reasoning as the student-facing create/edit flow: the
+        // lightbox fetches this full-size, and an untouched camera
+        // original can be several MB.
+        const displayBlob = await makeDisplayImage(file)
+        const ext = displayBlob ? 'jpg' : file.name.split('.').pop()
         const path = `reports/${report.id}/${Date.now()}-${i}.${ext}`
-        const { error: uploadError } = await supabase.storage.from('report-photos').upload(path, file)
+        const { error: uploadError } = await supabase.storage.from('report-photos').upload(path, displayBlob ?? file)
         if (!uploadError) {
+          const thumbBlob = await makeThumbnail(file)
+          let thumbnailPath = thumbBlob ? `reports/${report.id}/${Date.now()}-${i}_thumb.jpg` : null
+          if (thumbBlob) {
+            const { error: thumbUploadError } = await supabase.storage
+              .from('report-photos')
+              .upload(thumbnailPath, thumbBlob)
+            if (thumbUploadError) {
+              console.error('Thumbnail upload failed:', thumbUploadError)
+              thumbnailPath = null
+            }
+          }
+
           await supabase.from('report_photos').insert({
             report_id: report.id,
             storage_path: path,
+            thumbnail_path: thumbnailPath,
             position: i,
           })
         }
