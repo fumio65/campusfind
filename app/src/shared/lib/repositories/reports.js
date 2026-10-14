@@ -45,9 +45,11 @@ export function prefetchThumbnails(orderedReportIds, photos) {
 // already looking at a report's cover photo on the card would still hit a
 // cold fetch the instant they tap into the report and open the lightbox -
 // which reads as "didn't this already load?" even though it's technically
-// a different (bigger) version of the same photo. Lower concurrency than
-// prefetchThumbnails so thumbnails - what the list itself needs to render -
-// never wait behind this.
+// a different (bigger) version of the same photo. Same concurrency as
+// prefetchThumbnails: now that full photos are downscaled too, there's no
+// longer a real size difference worth throttling for - and the whole point
+// is for this to finish before the user has a chance to tap into a report,
+// so it should run exactly as eagerly as the thumbnails do.
 export function prefetchFullPhotos(orderedReportIds, firstByReport) {
   const entries = orderedReportIds
     .map((id) => firstByReport.get(id))
@@ -57,7 +59,7 @@ export function prefetchFullPhotos(orderedReportIds, firstByReport) {
       return url ? { src: url, cacheKey: url } : null
     })
     .filter(Boolean)
-  ensureCachedInOrder(entries, 2)
+  ensureCachedInOrder(entries)
 }
 
 // Cache-aside refresh: fetches from Supabase when online and writes into
