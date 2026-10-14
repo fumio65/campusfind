@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { App as CapacitorApp } from '@capacitor/app'
 import { AuthProvider, useAuth } from './shared/lib/AuthContext'
 import AppShell from './shared/components/AppShell'
@@ -115,10 +115,16 @@ function RequireAuthOnly({ children }) {
   return children
 }
 
+// Paths that are a bottom-nav tab's root screen - pressing back from any
+// of these should prompt to exit rather than retrace tab-switch history,
+// since there's no "more top-level" screen to land on.
+const TOP_LEVEL_PATHS = ['/', '/activity', '/history', '/profile']
+
 function AppRoutes() {
   const { session, loading } = useAuth()
   const [minTimeElapsed, setMinTimeElapsed] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
   // Holds a report id from an App Link opened before login finished, so it
   // isn't lost when ProtectedRoutes bounces an unauthenticated visitor to
   // /login - resumed once a session shows up below. State (not a ref) so
@@ -138,16 +144,24 @@ function AppRoutes() {
   // no more in-app history to go back through, with no warning at all. Take
   // over that handler ourselves: still step back through in-app history
   // normally (canGoBack), but confirm before actually leaving the app.
+  // Bottom-nav tab switches push a new history entry each time, so
+  // canGoBack alone would make back retrace every tab visited before
+  // finally asking to exit (Profile -> Activity -> History -> Home -> exit).
+  // Treat any of the four main tabs as "home base" instead: prompt to exit
+  // straight away from one of them, and only fall back to real
+  // history.back() for navigation nested under a tab (e.g. a report detail).
   useEffect(() => {
     const listener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-      if (canGoBack) {
+      if (TOP_LEVEL_PATHS.includes(location.pathname)) {
+        setShowExitConfirm(true)
+      } else if (canGoBack) {
         window.history.back()
       } else {
         setShowExitConfirm(true)
       }
     })
     return () => { listener.then((handle) => handle.remove()) }
-  }, [])
+  }, [location.pathname])
 
   // App Links: opening a shared https://.../apps/campusfind/reports/:id link
   // while the app is installed launches it here instead of the browser -
