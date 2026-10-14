@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { UserPlus, RefreshCw, UserMinus, Copy, AlertTriangle } from 'lucide-react'
 import { fetchRecentBulkImportBatches } from './api'
+import BatchDetailDialog from './BatchDetailDialog'
 
 const STATUS_STYLES = {
   confirmed: 'bg-status-open-bg text-status-open-text',
@@ -31,6 +32,7 @@ function formatDate(iso) {
 export default function RecentImports() {
   const [batches, setBatches] = useState(null)
   const [error, setError] = useState(null)
+  const [selectedBatch, setSelectedBatch] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -55,7 +57,12 @@ export default function RecentImports() {
       <h3 className="text-sm font-semibold text-text-primary mb-2">Recent imports</h3>
       <div className="bg-surface-card border border-border rounded-xl divide-y divide-border">
         {batches.map((b) => (
-          <div key={b.id} className="px-4 py-3 flex items-center justify-between gap-4">
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => setSelectedBatch(b)}
+            className="w-full text-left px-4 py-3 flex items-center justify-between gap-4 hover:bg-surface-muted/60 transition-colors"
+          >
             <div className="min-w-0">
               <div className="text-sm font-medium text-text-primary truncate">{b.filename ?? 'Untitled import'}</div>
               <div className="text-xs text-text-muted mt-0.5">
@@ -87,9 +94,17 @@ export default function RecentImports() {
                 {STATUS_LABELS[b.status] ?? b.status}
               </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
+
+      {selectedBatch && (
+        <BatchDetailDialog
+          batchId={selectedBatch.id}
+          filename={selectedBatch.filename}
+          onClose={() => setSelectedBatch(null)}
+        />
+      )}
     </div>
   )
 }
