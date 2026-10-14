@@ -64,3 +64,24 @@ export async function markAllNotificationsRead(userId) {
     payload: { ids: unread.map((n) => n.id) },
   })
 }
+
+// Permanently removes one notification. The Activity page doesn't call this
+// directly off a swipe/tap - it holds the delete in a local "pending" state
+// with an Undo toast first, and only commits by calling this once that
+// window expires without the user undoing it (see ActivityPage.jsx). A
+// notification carries no downstream state of its own (unlike a report or
+// claim), so there's nothing else to clean up here.
+registerHandler('deleteNotification', async ({ id }) => {
+  const { error } = await supabase.from('user_notifications').delete().eq('id', id)
+  if (error) throw error
+})
+
+export async function deleteNotification(notificationId) {
+  await db.user_notifications.delete(notificationId)
+  await enqueue({
+    id: crypto.randomUUID(),
+    opType: 'deleteNotification',
+    entity: 'user_notifications',
+    payload: { id: notificationId },
+  })
+}
