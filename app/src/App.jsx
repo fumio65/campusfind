@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './shared/lib/AuthContext'
 import AppShell from './shared/components/AppShell'
 import AdminAppShell from './shared/components/admin/AdminAppShell'
 import SplashScreen from './shared/components/SplashScreen'
+import ConfirmDialog from './shared/components/ConfirmDialog'
 
 // Minimum time to hold the branded splash screen on screen, so it's
 // actually visible even when the session check resolves instantly.
@@ -125,10 +126,27 @@ function AppRoutes() {
   // resume effect - a ref would silently miss it if getLaunchUrl() resolved
   // after the session effect had already run once and found nothing pending.
   const [pendingReportId, setPendingReportId] = useState(null)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => setMinTimeElapsed(true), MIN_SPLASH_MS)
     return () => clearTimeout(timer)
+  }, [])
+
+  // Hardware back button (Android): without this, Capacitor's own default
+  // handler fires instead - it silently calls exitApp() the instant there's
+  // no more in-app history to go back through, with no warning at all. Take
+  // over that handler ourselves: still step back through in-app history
+  // normally (canGoBack), but confirm before actually leaving the app.
+  useEffect(() => {
+    const listener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back()
+      } else {
+        setShowExitConfirm(true)
+      }
+    })
+    return () => { listener.then((handle) => handle.remove()) }
   }, [])
 
   // App Links: opening a shared https://.../apps/campusfind/reports/:id link
@@ -165,7 +183,17 @@ function AppRoutes() {
   if (loading || !minTimeElapsed) return <SplashScreen />
 
   return (
-    <Routes>
+    <>
+      <ConfirmDialog
+        visible={showExitConfirm}
+        title="Exit CampusFind?"
+        message="You'll need to reopen the app to continue."
+        confirmLabel="Exit"
+        cancelLabel="Stay"
+        onConfirm={() => CapacitorApp.exitApp()}
+        onCancel={() => setShowExitConfirm(false)}
+      />
+      <Routes>
       <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
       <Route
@@ -184,7 +212,8 @@ function AppRoutes() {
         <Route path="profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   )
 }
 
