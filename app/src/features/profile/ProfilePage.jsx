@@ -31,10 +31,38 @@ export default function ProfilePage() {
   const { session, profile } = useAuth()
   const navigate = useNavigate()
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [programName, setProgramName] = useState(null)
 
   // `profile` (from AuthContext) already carries trust_score/first_name/etc.
   // and is offline-cached, so no separate fetch is needed for it here.
   const loading = profile == null
+
+  // Older accounts (created before the bulk-import/program_code work) only
+  // ever got `program_code`/`department_code` backfilled, not the legacy
+  // free-text `program` column - so profile.program is null for them even
+  // though they do have an assigned program. Resolve the human-readable
+  // name from the programs table in that case, so the Profile page doesn't
+  // show it as blank.
+  useEffect(() => {
+    if (profile?.program || !profile?.program_code) {
+      setProgramName(null)
+      return
+    }
+    let cancelled = false
+    supabase
+      .from('programs')
+      .select('program_name')
+      .eq('program_code', profile.program_code)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setProgramName(data?.program_name ?? null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.program, profile?.program_code])
+
+  const displayProgram = profile?.program ?? programName ?? profile?.program_code ?? null
   const rejections = useRecentRejections(session?.user?.id) ?? EMPTY_REJECTIONS
   // Reuses the same cached history repository History itself reads from
   // (refreshHistory is already called below) - just needs the count here.
@@ -130,8 +158,8 @@ export default function ProfilePage() {
               {profile?.first_name} {profile?.last_name}
             </h1>
             <p className="text-sm text-brand-100">{profile?.student_id}</p>
-            {profile?.program && (
-              <p className="text-xs text-brand-200 mt-0.5">{profile.program}</p>
+            {displayProgram && (
+              <p className="text-xs text-brand-200 mt-0.5">{displayProgram}</p>
             )}
           </div>
         </div>
@@ -307,7 +335,7 @@ export default function ProfilePage() {
             {[
               { label: 'Full name', value: `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() },
               { label: 'Student ID', value: profile?.student_id ?? '—' },
-              { label: 'Program', value: profile?.program ?? '—' },
+              { label: 'Program', value: displayProgram ?? '—' },
               { label: 'Email', value: session?.user?.email ?? '—' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
