@@ -72,6 +72,16 @@
   display: none;                /* Chrome / Safari / WebKit */
 }
 
+/* Every password field already has our own eye icon to toggle visibility
+   (see LoginPage.jsx / ChangePasswordPage.jsx) - without this, some
+   browsers (Edge, and Chromium builds with this feature on) also draw
+   their own built-in reveal-password eye on top of it, so the field ends
+   up showing two eye icons. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 body {
   background-color: var(--color-surface-page);
   color: var(--color-text-primary);
