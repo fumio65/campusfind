@@ -66,3 +66,10 @@ export async function cancelBulkImport(batchId) {
   if (!res.ok) throw new Error(body.error ?? 'Cancel failed.')
   return body
 }
+
+export async function fetchRecentBulkImportBatches() {
+  const res = await adminFetch('/bulk-import')
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? 'Could not load recent imports.')
+  return body // { batches }
+}

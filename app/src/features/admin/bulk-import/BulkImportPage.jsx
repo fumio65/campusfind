@@ -9,6 +9,7 @@ import EditPanel from './EditPanel'
 import DataRow from './DataRow'
 import CsvDropzone from './CsvDropzone'
 import TemplateCard from './TemplateCard'
+import RecentImports from './RecentImports'
 import ColumnMappingStep from './ColumnMappingStep'
 import { parseCsvHeaderRow, headersAlreadyMatch } from './columnMapping'
 import Dialog from '../../../shared/components/admin/Dialog'
@@ -327,12 +328,15 @@ export default function BulkImportPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-surface-card border border-border rounded-xl py-14 text-center">
-            <p className="text-sm font-semibold text-text-primary mb-1">No import in progress</p>
-            <p className="text-xs text-text-muted max-w-xs mx-auto">
-              Upload a Registrar CSV above to see a real, editable preview before anything is created.
-            </p>
-          </div>
+          <>
+            <div className="bg-surface-card border border-border rounded-xl py-14 text-center">
+              <p className="text-sm font-semibold text-text-primary mb-1">No import in progress</p>
+              <p className="text-xs text-text-muted max-w-xs mx-auto">
+                Upload a Registrar CSV above to see a real, editable preview before anything is created.
+              </p>
+            </div>
+            <RecentImports />
+          </>
         )
       ) : (
         <>

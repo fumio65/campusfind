@@ -7,6 +7,57 @@ import { validateHeaders, classifyRows, classifyRow } from '../lib/bulkImportVal
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 
+// GET /bulk-import  (list recent batches, for the Recent Imports view)
+router.get('/bulk-import', async (req, res) => {
+  const { data: batches, error: batchesError } = await supabaseAdmin
+    .from('bulk_import_batches')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (batchesError) return res.status(500).json({ error: batchesError.message })
+
+  const batchIds = (batches ?? []).map((b) => b.id)
+
+  const [{ data: rows, error: rowsError }, { data: uploaders, error: uploadersError }] = await Promise.all([
+    batchIds.length
+      ? supabaseAdmin.from('bulk_import_rows').select('batch_id, action').in('batch_id', batchIds)
+      : Promise.resolve({ data: [], error: null }),
+    (() => {
+      const uploaderIds = Array.from(new Set((batches ?? []).map((b) => b.uploaded_by).filter(Boolean)))
+      return uploaderIds.length
+        ? supabaseAdmin.from('users').select('id, first_name, last_name').in('id', uploaderIds)
+        : Promise.resolve({ data: [], error: null })
+    })(),
+  ])
+
+  if (rowsError) return res.status(500).json({ error: rowsError.message })
+  if (uploadersError) return res.status(500).json({ error: uploadersError.message })
+
+  const uploaderNameById = new Map(
+    (uploaders ?? []).map((u) => [u.id, [u.first_name, u.last_name].filter(Boolean).join(' ') || null])
+  )
+
+  const countsByBatch = new Map()
+  for (const row of rows ?? []) {
+    const counts = countsByBatch.get(row.batch_id) ?? { create: 0, update: 0, deactivate: 0, skip_duplicate: 0, error: 0 }
+    if (counts[row.action] !== undefined) counts[row.action] += 1
+    countsByBatch.set(row.batch_id, counts)
+  }
+
+  const result = (batches ?? []).map((b) => ({
+    id: b.id,
+    filename: b.filename,
+    status: b.status,
+    created_at: b.created_at,
+    confirmed_at: b.confirmed_at,
+    uploaded_by_name: uploaderNameById.get(b.uploaded_by) ?? null,
+    counts: countsByBatch.get(b.id) ?? { create: 0, update: 0, deactivate: 0, skip_duplicate: 0, error: 0 },
+  }))
+
+  res.json({ batches: result })
+})
+
 // GET /bulk-import/:batchId
 router.get('/bulk-import/:batchId', async (req, res) => {
   const { batchId } = req.params

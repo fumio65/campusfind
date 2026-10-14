@@ -252,6 +252,57 @@ Deno.serve(async (req) => {
   const rowId = pathParts[baseIndex + 3]
 
   try {
+    // GET /bulk-import  (list recent batches, for the Recent Imports view)
+    if (req.method === 'GET' && !batchId) {
+      const { data: batches, error: batchesError } = await supabaseAdmin
+        .from('bulk_import_batches')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      if (batchesError) return json({ error: batchesError.message }, 500)
+
+      const batchIds = (batches ?? []).map((b) => b.id)
+
+      const [{ data: rows, error: rowsError }, { data: uploaders, error: uploadersError }] = await Promise.all([
+        batchIds.length
+          ? supabaseAdmin.from('bulk_import_rows').select('batch_id, action').in('batch_id', batchIds)
+          : Promise.resolve({ data: [], error: null }),
+        (() => {
+          const uploaderIds = Array.from(new Set((batches ?? []).map((b) => b.uploaded_by).filter(Boolean)))
+          return uploaderIds.length
+            ? supabaseAdmin.from('users').select('id, first_name, last_name').in('id', uploaderIds)
+            : Promise.resolve({ data: [], error: null })
+        })(),
+      ])
+
+      if (rowsError) return json({ error: rowsError.message }, 500)
+      if (uploadersError) return json({ error: uploadersError.message }, 500)
+
+      const uploaderNameById = new Map(
+        (uploaders ?? []).map((u) => [u.id, [u.first_name, u.last_name].filter(Boolean).join(' ') || null])
+      )
+
+      const countsByBatch = new Map()
+      for (const row of rows ?? []) {
+        const counts = countsByBatch.get(row.batch_id) ?? { create: 0, update: 0, deactivate: 0, skip_duplicate: 0, error: 0 }
+        if (counts[row.action] !== undefined) counts[row.action] += 1
+        countsByBatch.set(row.batch_id, counts)
+      }
+
+      const result = (batches ?? []).map((b) => ({
+        id: b.id,
+        filename: b.filename,
+        status: b.status,
+        created_at: b.created_at,
+        confirmed_at: b.confirmed_at,
+        uploaded_by_name: uploaderNameById.get(b.uploaded_by) ?? null,
+        counts: countsByBatch.get(b.id) ?? { create: 0, update: 0, deactivate: 0, skip_duplicate: 0, error: 0 },
+      }))
+
+      return json({ batches: result })
+    }
+
     // GET /bulk-import/:batchId
     if (req.method === 'GET' && batchId) {
       const { data: batch, error: batchError } = await supabaseAdmin
