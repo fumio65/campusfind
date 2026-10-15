@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { SaveFile } from '../../shared/lib/saveFilePlugin'
+import { ensureCached } from '../../shared/lib/imageCache'
 
 const BRAND = '#06433C'
 const BRAND_LIGHT = '#E1F5EE'
@@ -213,22 +214,26 @@ function truncateToWidth(ctx, text, maxW) {
   return truncated.trimEnd() + '…'
 }
 
-// Loads the report photo via fetch+blob (not a plain cross-origin <img>) so
-// the canvas is never tainted, regardless of the storage host's CORS
-// headers - a tainted canvas silently breaks both toBlob() and toDataURL(),
-// which was the root cause of "Share image"/"Download card" doing nothing.
+// Loads the report photo through the shared image cache (imageCache.js) -
+// same cache key (the public URL) that the report detail page's lightbox
+// and photo thumbnails use, and that ReportDetailPage now prefetches in the
+// background - so opening the share sheet usually finds the full-res photo
+// already sitting in cache instead of re-fetching it from scratch every
+// time. That cache always resolves to a blob: object URL (never a plain
+// cross-origin <img> src), so the canvas is never tainted regardless of the
+// storage host's CORS headers - a tainted canvas silently breaks both
+// toBlob() and toDataURL(), which was the original root cause of "Share
+// image"/"Download card" doing nothing. The resolved URL is owned by the
+// shared cache indefinitely (other consumers may still be using it), so it
+// must not be revoked here.
 function loadImage(url) {
   return new Promise((resolve, reject) => {
-    fetch(url)
-      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('image fetch failed'))))
-      .then((blob) => {
-        const objectUrl = URL.createObjectURL(blob)
+    ensureCached(url, url)
+      .then((objectUrl) => {
+        if (!objectUrl) return reject(new Error('image fetch failed'))
         const img = new Image()
-        img.onload = () => resolve({ img, objectUrl })
-        img.onerror = () => {
-          URL.revokeObjectURL(objectUrl)
-          reject(new Error('image decode failed'))
-        }
+        img.onload = () => resolve({ img })
+        img.onerror = () => reject(new Error('image decode failed'))
         img.src = objectUrl
       })
       .catch(reject)
@@ -266,7 +271,6 @@ export default function ShareSheet({ report, onClose }) {
     const photoUrl = report.photoUrls?.[0] ?? null
 
     let cancelled = false
-    let objectUrl = null
 
     drawShareCard(canvas, report, null)
 
@@ -276,8 +280,7 @@ export default function ShareSheet({ report, onClose }) {
     }
 
     loadImage(photoUrl)
-      .then(({ img, objectUrl: url }) => {
-        objectUrl = url
+      .then(({ img }) => {
         if (cancelled) return
         drawShareCard(canvas, report, img)
         setCardReady(true)
@@ -288,7 +291,6 @@ export default function ShareSheet({ report, onClose }) {
 
     return () => {
       cancelled = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [report])
 
