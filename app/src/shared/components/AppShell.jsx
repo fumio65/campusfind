@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Home, Clock, Bell, User, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -172,26 +173,48 @@ export default function AppShell() {
             to="/"
             end
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors ${
+              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }
           >
-            <Home size={22} />
-            <span className="text-[10px] font-medium">Home</span>
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-pill"
+                    className="absolute inset-0 bg-brand-50 rounded-xl"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <Home size={22} className="relative z-10" />
+                <span className="relative z-10 text-[10px] font-medium">Home</span>
+              </>
+            )}
           </NavLink>
 
           {/* History */}
           <NavLink
             to="/history"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors ${
+              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }
           >
-            <Clock size={22} />
-            <span className="text-[10px] font-medium">History</span>
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-pill"
+                    className="absolute inset-0 bg-brand-50 rounded-xl"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <Clock size={22} className="relative z-10" />
+                <span className="relative z-10 text-[10px] font-medium">History</span>
+              </>
+            )}
           </NavLink>
 
           {/* Center + button */}
@@ -207,33 +230,55 @@ export default function AppShell() {
           <NavLink
             to="/activity"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors relative ${
+              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }
           >
-            <div className="relative">
-              <Bell size={22} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-status-rejected-text text-white text-[9px] font-bold flex items-center justify-center px-1">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] font-medium">Activity</span>
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-pill"
+                    className="absolute inset-0 bg-brand-50 rounded-xl"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <div className="relative z-10">
+                  <Bell size={22} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-status-rejected-text text-white text-[9px] font-bold flex items-center justify-center px-1">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </div>
+                <span className="relative z-10 text-[10px] font-medium">Activity</span>
+              </>
+            )}
           </NavLink>
 
           {/* Profile */}
           <NavLink
             to="/profile"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-colors ${
+              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }
           >
-            <User size={22} />
-            <span className="text-[10px] font-medium">Profile</span>
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-pill"
+                    className="absolute inset-0 bg-brand-50 rounded-xl"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <User size={22} className="relative z-10" />
+                <span className="relative z-10 text-[10px] font-medium">Profile</span>
+              </>
+            )}
           </NavLink>
         </div>
       </nav>
