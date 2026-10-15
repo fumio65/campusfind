@@ -7,6 +7,8 @@ import { enqueue, registerHandler } from '../syncEngine'
 // select('*') is safe to cache wholesale here since we're just mirroring
 // whatever Supabase returns - unlike the write-path tables, we never
 // construct rows for this table ourselves, so unknown columns are harmless.
+const NOTIFICATIONS_PAGE_SIZE = 50
+
 export async function refreshNotifications(userId) {
   if (!isOnline() || !userId) return
   const { data } = await supabase
@@ -14,8 +16,8 @@ export async function refreshNotifications(userId) {
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(50)
-  if (!data?.length) return
+    .limit(NOTIFICATIONS_PAGE_SIZE)
+  if (!data) return
 
   // A notification whose deleteNotification op is still sitting in the
   // outbox hasn't actually been removed server-side yet (not synced, or
@@ -29,6 +31,22 @@ export async function refreshNotifications(userId) {
   const rows = pendingDeleteIds.size ? data.filter((row) => !pendingDeleteIds.has(row.id)) : data
 
   if (rows.length) await db.user_notifications.bulkPut(rows)
+
+  // bulkPut only ever adds or overwrites - it never removes a row that
+  // disappeared server-side (deleted directly in the database, deleted
+  // from another device, or anything else that didn't go through this
+  // app's own delete flow). Without pruning, a cached notification can
+  // outlive its server-side row forever. Only safe when this fetch
+  // returned the complete set (fewer than a full page) - otherwise rows
+  // older than this page would be wrongly treated as gone.
+  if (data.length < NOTIFICATIONS_PAGE_SIZE) {
+    const serverIds = new Set(data.map((row) => row.id))
+    const cached = await db.user_notifications.where('user_id').equals(userId).toArray()
+    const staleIds = cached
+      .map((row) => row.id)
+      .filter((id) => !serverIds.has(id) && !pendingDeleteIds.has(id))
+    if (staleIds.length) await db.user_notifications.bulkDelete(staleIds)
+  }
 }
 
 // Reads reactively from the local cache - reflects whatever
