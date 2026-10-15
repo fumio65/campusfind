@@ -95,7 +95,7 @@ input[type="password"]::-ms-clear {
    it just slides up slightly, so there's never a moment where
    anything disappears. */
 @keyframes tab-fade-in {
-  from { transform: translateY(6px); }
+  from { transform: translateY(2px); }
   to { transform: translateY(0); }
 }
 .tab-fade-in {
