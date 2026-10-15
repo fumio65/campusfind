@@ -82,6 +82,29 @@ input[type="password"]::-ms-clear {
   display: none;
 }
 
+/* Bottom-nav tab content (AppShell.jsx): a plain CSS fade on the
+   freshly-mounted page. No overlap with the outgoing page (it's fully
+   unmounted first, see AppShell.jsx), so there's no risk of two tabs'
+   data-fetching effects racing each other like there was with
+   framer-motion's AnimatePresence crossfade. Two things on purpose:
+   - starts at 0.4 opacity, never 0 - going to 0 made the page briefly
+     fully invisible, which read as a "blink".
+   - no transform/translate - a slide left a thin gap at one edge
+     while content was still moving into place (the "sliver").
+   Just a quick, plain fade with nothing ever disappearing or shifting. */
+@keyframes tab-content-in {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+.tab-content-in {
+  animation: tab-content-in 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-content-in {
+    animation: none;
+  }
+}
+
 body {
   background-color: var(--color-surface-page);
   color: var(--color-text-primary);
