@@ -34,8 +34,30 @@ export async function refreshHistory(userId) {
       .order('created_at', { ascending: false }),
   ])
 
+  // Reconcile deletions per table: bulkPut only ever adds/overwrites, so a
+  // row that dropped out of the fetch (deleted server-side, deleted from
+  // another device, or anything else that didn't go through this app's own
+  // flows) would otherwise linger in the local cache forever - this is the
+  // same gap refreshReports (Home) already guards against for db.reports,
+  // applied here to every table this function owns. None of these queries
+  // are paginated (no .limit()), so the fetch is always the complete set
+  // for this user and pruning is always safe. Rows still _syncStatus:
+  // 'pending' are excluded where that applies - those are offline-created
+  // and legitimately absent from the server fetch until they sync.
+  async function pruneMissing(table, freshRows, matchField, userId, { skipPending = false } = {}) {
+    const freshIds = new Set(freshRows.map((row) => row.id))
+    const cached = await db[table].where(matchField).equals(userId).toArray()
+    const staleIds = cached
+      .filter((row) => !skipPending || row._syncStatus !== 'pending')
+      .filter((row) => !freshIds.has(row.id))
+      .map((row) => row.id)
+    if (staleIds.length) await db[table].bulkDelete(staleIds)
+  }
+
   if (r) {
     await db.reports.bulkPut(r)
+    await pruneMissing('reports', r, 'reporter_id', userId, { skipPending: true })
+
     // My Reports (History) reuses Home's ReportCard, which needs a
     // thumbnail - fetch this user's own report photos too.
     const reportIds = r.map((row) => row.id)
@@ -47,6 +69,10 @@ export async function refreshHistory(userId) {
         .order('position', { ascending: true })
       if (photos?.length) {
         await db.report_photos.bulkPut(photos)
+        const freshPhotoIds = new Set(photos.map((p) => p.id))
+        const cachedPhotos = await db.report_photos.where('report_id').anyOf(reportIds).toArray()
+        const stalePhotoIds = cachedPhotos.filter((p) => !freshPhotoIds.has(p.id)).map((p) => p.id)
+        if (stalePhotoIds.length) await db.report_photos.bulkDelete(stalePhotoIds)
         // Same thumbnail + full-res cover-photo warm-up as Home's
         // refreshReports, for the same reason: this is an offline-first
         // app, so a photo the user has already seen on a My Reports/History
@@ -61,9 +87,20 @@ export async function refreshHistory(userId) {
   // Strip the joined report title before caching - it's resolved back at
   // read time from the shared `reports` cache (see useHistory below), which
   // stays correct even if the report is later renamed.
-  if (c) await db.claims.bulkPut(c.map(({ reports: _reports, ...claim }) => claim))
-  if (t) await db.tips.bulkPut(t.map(({ reports: _reports, ...tip }) => tip))
-  if (te) await db.trust_score_events.bulkPut(te)
+  if (c) {
+    const claims = c.map(({ reports: _reports, ...claim }) => claim)
+    await db.claims.bulkPut(claims)
+    await pruneMissing('claims', claims, 'claimant_id', userId, { skipPending: true })
+  }
+  if (t) {
+    const tips = t.map(({ reports: _reports, ...tip }) => tip)
+    await db.tips.bulkPut(tips)
+    await pruneMissing('tips', tips, 'user_id', userId, { skipPending: true })
+  }
+  if (te) {
+    await db.trust_score_events.bulkPut(te)
+    await pruneMissing('trust_score_events', te, 'user_id', userId)
+  }
 }
 
 // ProfilePage's "30-day rejection window" - reuses the same cached claims
