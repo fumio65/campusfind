@@ -65,9 +65,24 @@ export function prefetchFullPhotos(orderedReportIds, firstByReport) {
 // Cache-aside refresh: fetches from Supabase when online and writes into
 // Dexie. Reads always come from the useReports live query below, whether
 // online or offline - there is one rendering code path for both.
-export async function refreshReports({ search, category, location, status } = {}) {
-  if (!isOnline()) return
+// Home's own realtime listeners/sync triggers can call this again before
+// a prior call has finished, and with the tab-switch crossfade a second,
+// still-exiting page can briefly overlap a freshly-mounted one too -
+// collapse concurrent calls into the one already in flight rather than
+// running two overlapping bulkPut/bulkDelete passes over db.reports at
+// the same time.
+let inFlight = null
 
+export function refreshReports(filters = {}) {
+  if (!isOnline()) return Promise.resolve()
+  if (inFlight) return inFlight
+  inFlight = doRefreshReports(filters).finally(() => {
+    inFlight = null
+  })
+  return inFlight
+}
+
+async function doRefreshReports({ search, category, location, status } = {}) {
   let query = supabase
     .from('reports')
     .select('id, title, description, location, category, status, created_at, type, reporter_id')

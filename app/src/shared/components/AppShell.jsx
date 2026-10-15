@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Home, Clock, Bell, User, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -10,7 +9,6 @@ import { onSyncTrigger } from '../lib/appLifecycle'
 import { trustReasonText } from '../lib/trustScoreReasons'
 import SyncStatusBadge from './SyncStatusBadge'
 import TrustScoreDialog from './TrustScoreDialog'
-import { tabTransition } from '../lib/adminMotion'
 
 export default function AppShell() {
   const { session } = useAuth()
@@ -128,16 +126,16 @@ export default function AppShell() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page">
-      <main className="flex-1 relative overflow-hidden bg-surface-page">
-        <AnimatePresence initial={false}>
-          <motion.div
-            key={location.pathname}
-            className="absolute inset-0 overflow-y-auto pb-20 no-scrollbar bg-surface-page"
-            {...tabTransition}
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+      <main className="flex-1 overflow-y-auto pb-20 no-scrollbar bg-surface-page">
+        {/* key={pathname} forces a fresh mount per tab (same as before),
+            and tab-fade-in (plain CSS, see index.css) fades just that one
+            element in. No AnimatePresence here on purpose: the old page
+            fully unmounts before the new one mounts, so there's never a
+            moment with two tabs' pages mounted (and independently
+            fetching/subscribing) at once. */}
+        <div key={location.pathname} className="tab-fade-in">
+          <Outlet />
+        </div>
       </main>
 
       <SyncStatusBadge />

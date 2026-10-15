@@ -9,8 +9,27 @@ import { enqueue, registerHandler } from '../syncEngine'
 // construct rows for this table ourselves, so unknown columns are harmless.
 const NOTIFICATIONS_PAGE_SIZE = 50
 
-export async function refreshNotifications(userId) {
-  if (!isOnline() || !userId) return
+// AppShell (on every pathname change) and ActivityPage (on its own mount)
+// both call refreshNotifications for the same user whenever the Activity
+// tab is opened, so two overlapping calls routinely fire within the same
+// tick. Without this guard they'd run two concurrent bulkPut/bulkDelete
+// passes over the same Dexie table at once, which is an easy way to end
+// up with overlapping readwrite transactions fighting over the same
+// rows - collapse concurrent calls for the same user into the one
+// already in flight instead.
+const inFlightByUser = new Map()
+
+export function refreshNotifications(userId) {
+  if (!isOnline() || !userId) return Promise.resolve()
+  if (inFlightByUser.has(userId)) return inFlightByUser.get(userId)
+  const promise = doRefreshNotifications(userId).finally(() => {
+    inFlightByUser.delete(userId)
+  })
+  inFlightByUser.set(userId, promise)
+  return promise
+}
+
+async function doRefreshNotifications(userId) {
   const { data } = await supabase
     .from('user_notifications')
     .select('*')

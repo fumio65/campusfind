@@ -4,9 +4,26 @@ import { db } from '../db'
 import { isOnline } from '../network'
 import { thumbnailUrl, prefetchThumbnails, prefetchFullPhotos } from './reports'
 
-export async function refreshHistory(userId) {
-  if (!isOnline() || !userId) return
+// History (its own tab) and Profile (for its report count) both call this
+// for the same user whenever either mounts, and with the tab-switch
+// crossfade the outgoing and incoming page can both be mounted at once -
+// so two overlapping calls can fire within the same tick. Collapse
+// concurrent calls for the same user into the one already in flight,
+// rather than running two overlapping passes of bulkPut/bulkDelete over
+// the same Dexie tables at the same time.
+const inFlightByUser = new Map()
 
+export function refreshHistory(userId) {
+  if (!isOnline() || !userId) return Promise.resolve()
+  if (inFlightByUser.has(userId)) return inFlightByUser.get(userId)
+  const promise = doRefreshHistory(userId).finally(() => {
+    inFlightByUser.delete(userId)
+  })
+  inFlightByUser.set(userId, promise)
+  return promise
+}
+
+async function doRefreshHistory(userId) {
   const [{ data: r }, { data: c }, { data: t }, { data: te }] = await Promise.all([
     // Same field list as refreshReports (Home) below, since both write
     // into the same local db.reports cache - a narrower select here would
