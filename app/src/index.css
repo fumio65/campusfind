@@ -82,31 +82,6 @@ input[type="password"]::-ms-clear {
   display: none;
 }
 
-/* Bottom-nav tab switch (AppShell.jsx): a plain CSS fade-in on the
-   freshly-mounted page, no JS animation library involved. Kept
-   deliberately simple after framer-motion's AnimatePresence crossfade
-   caused real problems (two tabs' pages mounted and fetching data at
-   once). Respects reduce-motion like everything else animated in this
-   app. */
-/* No opacity here on purpose: fading from opacity:0 means the page is
-   briefly fully invisible right after it mounts, exposing the plain
-   background underneath for a frame - that's what read as a "blink".
-   Pure transform instead: content is at full opacity the whole time,
-   it just slides up slightly, so there's never a moment where
-   anything disappears. */
-@keyframes tab-fade-in {
-  from { transform: translateY(2px); }
-  to { transform: translateY(0); }
-}
-.tab-fade-in {
-  animation: tab-fade-in 0.15s ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tab-fade-in {
-    animation: none;
-  }
-}
-
 body {
   background-color: var(--color-surface-page);
   color: var(--color-text-primary);

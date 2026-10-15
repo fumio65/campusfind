@@ -127,15 +127,7 @@ export default function AppShell() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page">
       <main className="flex-1 overflow-y-auto pb-20 no-scrollbar bg-surface-page">
-        {/* key={pathname} forces a fresh mount per tab (same as before),
-            and tab-fade-in (plain CSS, see index.css) fades just that one
-            element in. No AnimatePresence here on purpose: the old page
-            fully unmounts before the new one mounts, so there's never a
-            moment with two tabs' pages mounted (and independently
-            fetching/subscribing) at once. */}
-        <div key={location.pathname} className="tab-fade-in">
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
 
       <SyncStatusBadge />
