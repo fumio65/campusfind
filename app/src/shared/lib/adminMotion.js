@@ -17,6 +17,23 @@ export const pageTransition = prefersReducedMotion
       transition: { duration: 0.16, ease: 'easeOut' },
     }
 
+// Used for switching between the student app's bottom-nav tabs
+// (Home/History/Activity/Profile). Deliberately opacity-only, no
+// transform: each of those pages already animates its own header/body
+// in on mount with its own y-translate, so adding a second, outer
+// y-translate here would stack two independent vertical motions on
+// top of each other and read as jittery instead of smooth. A plain
+// crossfade complements the page's own entrance animation instead of
+// competing with it.
+export const tabTransition = prefersReducedMotion
+  ? { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
+  : {
+      initial: { opacity: 0 },
+      animate: { opacity: 1 },
+      exit: { opacity: 0 },
+      transition: { duration: 0.14, ease: 'easeOut' },
+    }
+
 export const staggerContainer = prefersReducedMotion
   ? { initial: {}, animate: {} }
   : {

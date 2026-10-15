@@ -10,7 +10,7 @@ import { onSyncTrigger } from '../lib/appLifecycle'
 import { trustReasonText } from '../lib/trustScoreReasons'
 import SyncStatusBadge from './SyncStatusBadge'
 import TrustScoreDialog from './TrustScoreDialog'
-import { pageTransition } from '../lib/adminMotion'
+import { tabTransition } from '../lib/adminMotion'
 
 export default function AppShell() {
   const { session } = useAuth()
@@ -133,7 +133,7 @@ export default function AppShell() {
           <motion.div
             key={location.pathname}
             className="absolute inset-0 overflow-y-auto pb-20 no-scrollbar bg-surface-page"
-            {...pageTransition}
+            {...tabTransition}
           >
             <Outlet />
           </motion.div>
