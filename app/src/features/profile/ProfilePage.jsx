@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  User, Star, TrendingUp, TrendingDown, AlertTriangle,
+  Star, TrendingUp, TrendingDown, AlertTriangle,
   LogOut, ChevronRight, Shield, Clock, CheckCircle2, FileText
 } from 'lucide-react'
 import { supabase } from '../../shared/lib/supabase'
@@ -316,34 +316,6 @@ export default function ProfilePage() {
             </div>
             <ChevronRight size={16} className="text-text-muted shrink-0" />
           </Link>
-        </motion.div>
-
-        {/* Account */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-surface-card rounded-2xl border border-border shadow-sm overflow-hidden"
-        >
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-sm font-bold text-text-primary flex items-center gap-1.5">
-              <User size={15} className="text-brand-600" />
-              Account
-            </h2>
-          </div>
-          <div className="divide-y divide-border">
-            {[
-              { label: 'Full name', value: `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() },
-              { label: 'Student ID', value: profile?.student_id ?? '—' },
-              { label: 'Program', value: displayProgram ?? '—' },
-              { label: 'Email', value: session?.user?.email ?? '—' },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
-                <p className="text-xs text-text-muted">{label}</p>
-                <p className="text-xs font-medium text-text-primary">{value}</p>
-              </div>
-            ))}
-          </div>
         </motion.div>
 
         {/* Log out */}
