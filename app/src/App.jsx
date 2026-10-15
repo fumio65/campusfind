@@ -123,6 +123,13 @@ const TOP_LEVEL_PATHS = ['/', '/activity', '/history', '/profile']
 function AppRoutes() {
   const { session, loading } = useAuth()
   const [minTimeElapsed, setMinTimeElapsed] = useState(false)
+  // The branded splash art is a mobile-app launch screen (sized and
+  // composed for a narrow portrait phone) - on a wide desktop browser
+  // window it doesn't belong there even once drawn correctly (object-
+  // contain), so skip it entirely above a phone-ish width and fall back
+  // to a plain spinner instead. Checked once at mount, not on resize -
+  // this only matters for the instant the app is cold-starting.
+  const [isWideScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768)
   const navigate = useNavigate()
   const location = useLocation()
   // Holds a report id from an App Link opened before login finished, so it
@@ -135,9 +142,15 @@ function AppRoutes() {
   const [showExitConfirm, setShowExitConfirm] = useState(false)
 
   useEffect(() => {
+    // No point artificially holding a spinner on screen for 2s on a wide
+    // screen the way the branded splash is deliberately held for below.
+    if (isWideScreen) {
+      setMinTimeElapsed(true)
+      return
+    }
     const timer = setTimeout(() => setMinTimeElapsed(true), MIN_SPLASH_MS)
     return () => clearTimeout(timer)
-  }, [])
+  }, [isWideScreen])
 
   // Hardware back button (Android): without this, Capacitor's own default
   // handler fires instead - it silently calls exitApp() the instant there's
@@ -194,7 +207,16 @@ function AppRoutes() {
     }
   }, [session, pendingReportId, navigate])
 
-  if (loading || !minTimeElapsed) return <SplashScreen />
+  if (loading || !minTimeElapsed) {
+    if (isWideScreen) {
+      return (
+        <div className="h-screen flex items-center justify-center bg-surface-page">
+          <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )
+    }
+    return <SplashScreen />
+  }
 
   return (
     <>
