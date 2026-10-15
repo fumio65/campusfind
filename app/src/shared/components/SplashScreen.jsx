@@ -8,11 +8,17 @@ export default function SplashScreen() {
   }, [])
 
   return (
-    <div className="fixed inset-0 h-screen w-screen bg-[#012F28]">
+    <div className="fixed inset-0 h-screen w-screen bg-[#012F28] flex items-center justify-center">
+      {/* object-contain (not cover) - the artwork is designed to be seen
+          whole, centered. object-cover looked fine full-bleed on a phone's
+          narrow portrait screen, but on a wide desktop browser window it
+          crops the top/bottom of the crest off to fill the width. Since
+          the image's own background already matches the page's bg color,
+          contain shows the full artwork with no visible letterboxing. */}
       <img
         src={splashImage}
         alt=""
-        className="h-full w-full object-cover"
+        className="max-h-full max-w-full object-contain"
       />
     </div>
   )
