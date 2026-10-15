@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Home, Clock, Bell, User, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -9,6 +10,7 @@ import { onSyncTrigger } from '../lib/appLifecycle'
 import { trustReasonText } from '../lib/trustScoreReasons'
 import SyncStatusBadge from './SyncStatusBadge'
 import TrustScoreDialog from './TrustScoreDialog'
+import { pageTransition } from '../lib/adminMotion'
 
 export default function AppShell() {
   const { session } = useAuth()
@@ -127,7 +129,11 @@ export default function AppShell() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page">
       <main className="flex-1 overflow-y-auto pb-20 no-scrollbar">
-        <Outlet />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div key={location.pathname} {...pageTransition}>
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <SyncStatusBadge />
