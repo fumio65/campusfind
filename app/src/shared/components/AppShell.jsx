@@ -129,8 +129,8 @@ export default function AppShell() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page">
       <main className="flex-1 overflow-y-auto pb-20 no-scrollbar">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div key={location.pathname} {...pageTransition}>
+        <AnimatePresence initial={false}>
+          <motion.div key={location.pathname} className="min-h-full bg-surface-page" {...pageTransition}>
             <Outlet />
           </motion.div>
         </AnimatePresence>
