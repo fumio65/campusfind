@@ -128,14 +128,7 @@ export default function AppShell() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page">
       <main className="flex-1 overflow-y-auto pb-20 no-scrollbar bg-surface-page">
-        {/* key={pathname} forces a fresh mount per tab, so the fade
-            replays on every switch. The old page is already fully gone
-            by the time this mounts (no AnimatePresence, no overlap) -
-            see the tab-content-in comment in index.css for why it's
-            opacity-only and never touches 0. */}
-        <div key={location.pathname} className="tab-content-in">
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
 
       <SyncStatusBadge />
