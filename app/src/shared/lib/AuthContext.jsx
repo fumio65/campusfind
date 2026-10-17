@@ -76,9 +76,21 @@ export function AuthProvider({ children }) {
     if (cached) setProfile(cached)
 
     try {
+      // Explicit column list, not '*' - '*' expands to the table's full
+      // literal column list at parse time, including enrollment_number
+      // (the user's login password, per CONTEXT.md). That column's SELECT
+      // grant was intentionally dropped for the `authenticated` role (see
+      // 20261017144827/20261017145120 migrations) so no account's password
+      // can be read back by anyone, including themselves - but that also
+      // means a bare '*' now fails outright for every user, since Postgres
+      // requires privilege on every column the '*' expands to, not just
+      // the ones actually used. List every column this app's `profile`
+      // object is allowed to have instead.
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select(
+          'id, student_id, last_name, first_name, middle_name, program, year_level, role, status, trust_score, force_password_change, created_at, updated_at, department_code, program_code'
+        )
         .eq('id', userId)
         .single()
       if (error) throw error
