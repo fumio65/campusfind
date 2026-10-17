@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 // Looks up a report's public preview data (title/description/photo) and
 // serves it as JSON, plus a resized/robots-clean image proxy. This does NOT
@@ -14,11 +15,6 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 // gated to authenticated users, but a public preview page needs a database
 // role/policy that can read it), which must never leave the server.
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-}
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 
@@ -38,7 +34,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_
 // just slowly). 1200px/q75 comfortably covers a link-preview card at a
 // fraction of the size and fetch time. (image/* responses aren't subject to
 // the text/html restriction above, so this part can stay here.)
-async function serveImage(reportId: string | undefined): Promise<Response> {
+async function serveImage(reportId: string | undefined, corsHeaders: Record<string, string>): Promise<Response> {
   if (!reportId) return new Response('Missing report id', { status: 400, headers: corsHeaders })
 
   const { data: photos } = await supabaseAdmin
@@ -67,7 +63,7 @@ async function serveImage(reportId: string | undefined): Promise<Response> {
   })
 }
 
-async function servePreviewData(reportId: string | undefined): Promise<Response> {
+async function servePreviewData(reportId: string | undefined, corsHeaders: Record<string, string>): Promise<Response> {
   const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
 
   if (!reportId) {
@@ -112,6 +108,7 @@ async function servePreviewData(reportId: string | undefined): Promise<Response>
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'), 'GET, OPTIONS')
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
   }
@@ -121,11 +118,11 @@ Deno.serve(async (req) => {
   const baseIndex = pathParts.indexOf('og-preview')
 
   if (pathParts[baseIndex + 1] === 'image') {
-    return serveImage(pathParts[baseIndex + 2])
+    return serveImage(pathParts[baseIndex + 2], corsHeaders)
   }
 
   try {
-    return await servePreviewData(pathParts[baseIndex + 1])
+    return await servePreviewData(pathParts[baseIndex + 1], corsHeaders)
   } catch (err) {
     console.error('og-preview error:', err)
     return new Response(JSON.stringify({ error: 'Unexpected server error' }), {

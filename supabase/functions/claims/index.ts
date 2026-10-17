@@ -1,10 +1,7 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
+import { requireUser } from '../_shared/requireUser.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-}
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -64,6 +61,7 @@ async function notifyUser({ userId, type, title, body, reportId = null, claimId 
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'))
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
   }
@@ -107,6 +105,14 @@ Deno.serve(async (req) => {
 
     // PATCH /claims/:id
     if (req.method === 'PATCH' && id && !action) {
+      // SECURITY FIX: this handler previously approved/rejected claims for
+      // ANY caller, unauthenticated - verify_jwt was false and there was no
+      // ownership check, so anyone could self-approve their own claim on
+      // any report. Only the reporter who owns the underlying report may
+      // approve or reject a claim against it.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { action: claimAction } = await req.json()
       if (!['approve', 'reject'].includes(claimAction)) {
         return new Response(JSON.stringify({ error: 'action must be approve or reject' }), {
@@ -123,6 +129,14 @@ Deno.serve(async (req) => {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+
+      const reporterId = (claim.reports as any)?.reporter_id
+      if (caller.id !== reporterId) {
+        return new Response(JSON.stringify({ error: 'Only the reporter may approve or reject this claim.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
       const reportTitle = (claim.reports as any)?.title ?? 'your item'
       const claimantId = claim.claimant_id
       const reportId = claim.report_id

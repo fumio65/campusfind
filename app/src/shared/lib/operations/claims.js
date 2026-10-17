@@ -4,6 +4,7 @@ import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
 import { makeDisplayImage } from '../imageThumbnail'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
 
 registerHandler('submitClaim', async (payload) => {
   const { claim, photos, message, originalTipId } = payload
@@ -19,8 +20,13 @@ registerHandler('submitClaim', async (payload) => {
   for (const photo of photos) {
     const blob = await db.blobs.get(photo.id)
     if (blob) {
+      // FIX: claim evidence photos are private (reporter + claimant +
+      // admin only, see claim_photos RLS) and must live in their own
+      // private bucket - report-photos is public, which would make this
+      // file fetchable by anyone with the URL regardless of any RLS on
+      // the claim_photos table row.
       const { error: uploadError } = await supabase.storage
-        .from('report-photos')
+        .from('claim-photos')
         .upload(photo.storage_path, blob.data, { cacheControl: '3600', upsert: true })
       if (uploadError) throw uploadError
     }
@@ -59,10 +65,17 @@ registerHandler('submitClaim', async (payload) => {
   notifyClaimServer(claim).catch(() => {})
 })
 
-function notifyClaimServer(claim) {
+// FIX: claims function now requires a valid JWT (verify_jwt=true), so this
+// best-effort notify call needs the signed-in user's access token too.
+async function notifyClaimServer(claim) {
+  const { data: { session } } = await supabase.auth.getSession()
   return fetch(`${SERVER_URL}/claims`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: ANON_KEY,
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
     body: JSON.stringify({ reportId: claim.report_id, claimantId: claim.claimant_id }),
   })
 }

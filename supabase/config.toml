@@ -12,7 +12,7 @@ entrypoint = "./functions/hello/index.ts"
 
 [functions.claims]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/claims/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -45,7 +45,7 @@ entrypoint = "./functions/reports/index.ts"
 
 [functions.proxy]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/proxy/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -56,7 +56,7 @@ entrypoint = "./functions/proxy/index.ts"
 
 [functions.confirmation]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/confirmation/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

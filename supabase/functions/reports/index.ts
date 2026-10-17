@@ -1,10 +1,7 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
+import { requireAdmin } from '../_shared/requireAdmin.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-}
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -53,6 +50,7 @@ async function notifyUser({ userId, type, title, body, reportId = null, claimId 
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'))
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
   }
@@ -66,6 +64,11 @@ Deno.serve(async (req) => {
   try {
     // GET /reports
     if (req.method === 'GET' && !id) {
+      // FIX: this listing exposes reporter/claimant names, student IDs, and
+      // private claim message bodies - admin-only, so require an admin JWT.
+      const caller = await requireAdmin(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50'), 200)
       const offset = parseInt(url.searchParams.get('offset') ?? '0')
       const status = url.searchParams.get('status') ?? 'all'
@@ -95,7 +98,14 @@ Deno.serve(async (req) => {
       }
 
       if (search) {
-        query = query.or(`title.ilike.%${search}%,location.ilike.%${search}%`)
+        // FIX: search was interpolated raw into a PostgREST `.or()` filter
+        // string, letting a crafted value (commas/parentheses) inject extra
+        // filter clauses. PostgREST treats a double-quoted value as a single
+        // opaque literal, so quoting it (after escaping embedded backslashes
+        // and quotes) closes that off while keeping the ilike wildcard match.
+        const escaped = search.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        const safe = `"%${escaped}%"`
+        query = query.or(`title.ilike.${safe},location.ilike.${safe}`)
       }
 
       const { data, error, count } = await query

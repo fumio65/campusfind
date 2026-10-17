@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from 'jsr:@supabase/supabase-js@2'
+import { getCorsHeaders } from './cors.ts'
 
 // Verifies the caller is a logged-in user with role 'admin' before letting
 // them reach account-management / dashboard endpoints. Pair with
@@ -14,11 +15,7 @@ export async function requireAdmin(
   const authHeader = req.headers.get('authorization') ?? ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null
 
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-  }
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'))
 
   if (!token) {
     return new Response(JSON.stringify({ error: 'Missing Authorization header.' }), {

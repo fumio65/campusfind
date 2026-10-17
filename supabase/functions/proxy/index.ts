@@ -1,10 +1,7 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
+import { requireUser } from '../_shared/requireUser.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-}
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -12,6 +9,7 @@ const supabaseAdmin = createClient(
 )
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'))
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
   }
@@ -24,12 +22,38 @@ Deno.serve(async (req) => {
   try {
     // POST /proxy
     if (req.method === 'POST' && !reportId) {
-      const { reportId: rId, reporterId, proxyName, proxyStudentId } = await req.json()
-      if (!rId || !reporterId || !proxyName || !proxyStudentId) {
-        return new Response(JSON.stringify({ error: 'reportId, reporterId, proxyName, and proxyStudentId are required.' }), {
+      // SECURITY FIX: this handler previously had no auth check at all and
+      // blindly trusted a client-supplied reporterId - anyone could
+      // register themselves (or anyone) as the reporter authorizing a
+      // proxy pickup on someone else's report. Now the caller must be
+      // logged in, and the reporter identity is taken from the report
+      // itself, never from the request body.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
+      const { reportId: rId, proxyName, proxyStudentId } = await req.json()
+      if (!rId || !proxyName || !proxyStudentId) {
+        return new Response(JSON.stringify({ error: 'reportId, proxyName, and proxyStudentId are required.' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+
+      const { data: report } = await supabaseAdmin
+        .from('reports')
+        .select('reporter_id')
+        .eq('id', rId)
+        .single()
+      if (!report) {
+        return new Response(JSON.stringify({ error: 'Report not found.' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      if (report.reporter_id !== caller.id) {
+        return new Response(JSON.stringify({ error: 'Only the report\'s reporter may register a proxy pickup.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      const reporterId = caller.id
 
       const { data: proxyUser } = await supabaseAdmin
         .from('users')
@@ -82,10 +106,18 @@ Deno.serve(async (req) => {
 
     // GET /proxy/:reportId
     if (req.method === 'GET' && reportId) {
+      // SECURITY FIX: this handler previously had no auth check at all and
+      // returned the registered proxy's full name + student ID for ANY
+      // report ID, to anyone. Now it requires a valid session and only
+      // returns data when the caller is that report's actual reporter.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { data, error } = await supabaseAdmin
         .from('proxy_requests')
         .select('*')
         .eq('report_id', reportId)
+        .eq('reporter_id', caller.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

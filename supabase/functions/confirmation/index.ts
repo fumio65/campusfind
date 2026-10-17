@@ -1,10 +1,7 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
+import { requireUser } from '../_shared/requireUser.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-}
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -29,6 +26,7 @@ async function notifyUser({ userId, type, title, body, reportId = null }: {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'))
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
   }
@@ -41,12 +39,37 @@ Deno.serve(async (req) => {
   try {
     // POST /confirmation
     if (req.method === 'POST' && !id) {
-      const { reportId, reporterId, proxyName, proxyStudentId } = await req.json()
-      if (!reportId || !reporterId || !proxyName || !proxyStudentId) {
-        return new Response(JSON.stringify({ error: 'reportId, reporterId, proxyName, and proxyStudentId are required.' }), {
+      // SECURITY FIX: this handler previously had no auth check at all and
+      // blindly trusted a client-supplied reporterId - anyone could create
+      // a confirmation request "on behalf of" any reporter they chose,
+      // including one not their own. Now the caller must be logged in, and
+      // the reporter identity is taken from the report itself.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
+      const { reportId, proxyName, proxyStudentId } = await req.json()
+      if (!reportId || !proxyName || !proxyStudentId) {
+        return new Response(JSON.stringify({ error: 'reportId, proxyName, and proxyStudentId are required.' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+
+      const { data: report } = await supabaseAdmin
+        .from('reports')
+        .select('reporter_id')
+        .eq('id', reportId)
+        .single()
+      if (!report) {
+        return new Response(JSON.stringify({ error: 'Report not found.' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      if (report.reporter_id !== caller.id) {
+        return new Response(JSON.stringify({ error: 'Only the report\'s reporter may create a confirmation request for it.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      const reporterId = caller.id
 
       await supabaseAdmin
         .from('confirmation_requests')
@@ -88,10 +111,20 @@ Deno.serve(async (req) => {
 
     // GET /confirmation/:reportId
     if (req.method === 'GET' && id) {
+      // SECURITY FIX: this handler previously had no ownership check -
+      // verify_jwt=true only proves someone is logged in, not that they're
+      // this report's reporter, so any authenticated user could read
+      // another reporter's pending proxy-pickup request (proxy's name +
+      // student ID). Require a valid session and scope the query to rows
+      // this caller actually owns.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { data, error } = await supabaseAdmin
         .from('confirmation_requests')
         .select('*')
         .eq('report_id', id)
+        .eq('reporter_id', caller.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -109,6 +142,31 @@ Deno.serve(async (req) => {
 
     // PATCH /confirmation/:id
     if (req.method === 'PATCH' && id) {
+      // SECURITY FIX: this handler previously let ANY caller approve a
+      // proxy pickup - unauthenticated, no check that the caller was the
+      // reporter who actually owns this confirmation request. That meant
+      // an attacker could self-authorize releasing a physical item to a
+      // proxy of their own choosing. Only the reporter the request was
+      // created for may respond to it.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
+      const { data: existing, error: fetchError } = await supabaseAdmin
+        .from('confirmation_requests')
+        .select('reporter_id')
+        .eq('id', id)
+        .single()
+      if (fetchError || !existing) {
+        return new Response(JSON.stringify({ error: 'Confirmation request not found' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      if (caller.id !== existing.reporter_id) {
+        return new Response(JSON.stringify({ error: 'Only the reporter may respond to this confirmation request.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
       const { status } = await req.json()
       if (!['approved', 'denied'].includes(status)) {
         return new Response(JSON.stringify({ error: 'status must be approved or denied.' }), {

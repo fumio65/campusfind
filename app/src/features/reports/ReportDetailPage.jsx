@@ -661,14 +661,23 @@ export default function ReportDetailPage() {
           claimData.id,
           (claimPhotos ?? []).map((p) => ({ ...p, claim_id: claimData.id })),
         );
-        const photoUrls = (claimPhotos ?? []).map((p) => {
-          const {
-            data: { publicUrl },
-          } = supabase.storage
-            .from("report-photos")
-            .getPublicUrl(p.storage_path);
-          return publicUrl;
-        });
+        // FIX: claim evidence photos now live in a private bucket
+        // (claim-photos), so they need a time-limited signed URL instead
+        // of getPublicUrl (which would just return a URL that 403s). Note:
+        // unlike report photos, this means the URL - and so the
+        // CachedImage cacheKey below, which is keyed on the URL - rotates
+        // every time this re-fetches, so claim photos don't get the
+        // persistent cross-session caching report photos get. Acceptable
+        // trade-off for keeping them private; once fetched in a session
+        // the blob is still cached for the rest of that session.
+        const claimPhotoUrlResults = await Promise.all(
+          (claimPhotos ?? []).map((p) =>
+            supabase.storage.from("claim-photos").createSignedUrl(p.storage_path, 60 * 60),
+          ),
+        );
+        const photoUrls = claimPhotoUrlResults
+          .map((r) => r.data?.signedUrl)
+          .filter(Boolean);
         ensureCachedInOrder(photoUrls.map((u) => ({ src: u, cacheKey: u })));
         await cacheClaimMessages(
           claimData.id,
@@ -738,15 +747,20 @@ export default function ReportDetailPage() {
   }
 
   // FIX: was hitting dead Express SERVER_URL — now uses Edge Function
+  // FIX: claims function now requires a valid JWT (verify_jwt=true) and
+  // checks the caller is the report's reporter, so this must send the
+  // signed-in user's access token, not just the anon apikey.
   async function handleClaimAction(action) {
     if (!claim) return;
     setActioning(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       await fetch(`${EDGE_URL}/claims/${claim.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           "apikey": ANON_KEY,
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({ action }),
       });
@@ -892,7 +906,7 @@ export default function ReportDetailPage() {
 
         if (claimPhotos?.length) {
           const { error: cpRemoveErr } = await supabase.storage
-            .from("report-photos")
+            .from("claim-photos")
             .remove(claimPhotos.map((p) => p.storage_path));
           if (cpRemoveErr) console.error("claim photo storage remove:", cpRemoveErr);
         }

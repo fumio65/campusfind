@@ -6,10 +6,9 @@ import {
   Package, Share2,
 } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
+import { adminFetch, SERVER_URL } from '../../../shared/lib/apiClient'
 import Dialog from '../../../shared/components/admin/Dialog'
 import ShareCardDialog from './ShareCardDialog'
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
 const STATUS_TABS = [
   { label: 'All',      value: 'all'      },
@@ -87,10 +86,13 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, reso
           .select('storage_path')
           .eq('claim_id', report.active_claim.id)
 
-        const claimUrls = (cp ?? []).map((p) => {
-          const { data } = supabase.storage.from('report-photos').getPublicUrl(p.storage_path)
-          return data?.publicUrl
-        }).filter(Boolean)
+        // FIX: claim evidence photos now live in a private bucket
+        // (claim-photos) - getPublicUrl would just return a URL that 403s,
+        // so this needs a signed URL instead.
+        const signedResults = await Promise.all(
+          (cp ?? []).map((p) => supabase.storage.from('claim-photos').createSignedUrl(p.storage_path, 60 * 60))
+        )
+        const claimUrls = signedResults.map((r) => r.data?.signedUrl).filter(Boolean)
         setClaimPhotos(claimUrls)
       }
     } catch (err) {
@@ -377,8 +379,11 @@ export default function ReportsPage() {
         status: activeTab,
         ...(search ? { search } : {}),
       })
-      const res  = await fetch(`${SERVER_URL}/reports?${params}`)
+      // FIX: this listing now requires an admin JWT on the server, so send
+      // the signed-in admin's access token instead of an unauthenticated call.
+      const res  = await adminFetch(`/reports?${params}`)
       const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? `Failed to load reports (${res.status})`)
       setReports(body.reports ?? [])
       setTotal(body.total ?? 0)
     } catch (e) {
@@ -522,7 +527,7 @@ export default function ReportsPage() {
         const { data: claimPhotos } = await supabase
           .from('claim_photos').select('storage_path').eq('claim_id', c.id)
         if (claimPhotos?.length) {
-          await supabase.storage.from('report-photos').remove(claimPhotos.map((p) => p.storage_path))
+          await supabase.storage.from('claim-photos').remove(claimPhotos.map((p) => p.storage_path))
         }
         await supabase.from('claim_photos').delete().eq('claim_id', c.id)
       }

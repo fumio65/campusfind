@@ -1,11 +1,7 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { getCorsHeaders } from '../_shared/cors.ts'
 import { SignJWT, importPKCS8 } from 'npm:jose@5'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
 
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -13,6 +9,16 @@ const supabaseAdmin = createClient(
 )
 
 const serviceAccount = JSON.parse(Deno.env.get('FCM_SERVICE_ACCOUNT_JSON')!)
+const webhookSecret = Deno.env.get('PUSH_WEBHOOK_SECRET')
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const aBytes = new TextEncoder().encode(a)
+  const bBytes = new TextEncoder().encode(b)
+  if (aBytes.length !== bBytes.length) return false
+  let diff = 0
+  for (let i = 0; i < aBytes.length; i++) diff |= aBytes[i] ^ bBytes[i]
+  return diff === 0
+}
 
 async function getAccessToken(): Promise<string> {
   const privateKey = await importPKCS8(serviceAccount.private_key, 'RS256')
@@ -38,8 +44,24 @@ async function getAccessToken(): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'), 'POST, OPTIONS')
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
+  }
+
+  // SECURITY FIX: this function had no auth check at all - its only
+  // legitimate caller is a database trigger (no user JWT available to it),
+  // but that also meant anyone could call it directly and have an
+  // arbitrary push notification sent to any user_id. Require a shared
+  // secret that only our own trigger knows (see migration
+  // 0015_secure_send_push_webhook.sql), checked with a constant-time
+  // comparison so response timing can't leak how much of a guess matched.
+  const providedSecret = req.headers.get('x-webhook-secret')
+  if (!webhookSecret || !providedSecret || !timingSafeEqual(providedSecret, webhookSecret)) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
   try {
