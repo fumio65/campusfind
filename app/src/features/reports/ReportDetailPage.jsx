@@ -493,7 +493,10 @@ export default function ReportDetailPage() {
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [loading, claimReady]);
+  // claim/report status too: the cached copy can render first without the
+  // claim panel, and the background refresh adds it without touching
+  // loading or claimReady.
+  }, [loading, claimReady, claim?.id, report?.status]);
 
   useEffect(() => {
     hashScrolledRef.current = false;
