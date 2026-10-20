@@ -52,12 +52,15 @@ function FormSection({ label, children }) {
 
 export default function AccountsPage() {
   const [showAdd, setShowAdd] = useState(false)
-  const [accounts, setAccounts] = useState([])
-  const [total, setTotal] = useState(0)
+  // Start from the cached first page (if any) so a revisit doesn't flash
+  // the loading skeleton; load() still refreshes it.
+  const initialCached = getAdminCache('accounts?0&')
+  const [accounts, setAccounts] = useState(initialCached?.accounts ?? [])
+  const [total, setTotal] = useState(initialCached?.total ?? 0)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialCached)
   const [error, setError] = useState(null)
   const [form, setForm] = useState({
     studentId: '',

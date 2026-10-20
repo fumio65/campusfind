@@ -339,12 +339,18 @@ export default function ReportsPage() {
   const [searchParams] = useSearchParams()
   const highlightId = searchParams.get('highlight')
 
-  const [reports, setReports]         = useState([])
-  const [total, setTotal]             = useState(0)
+  // Reopen on the status tab the admin last used, and start from that
+  // view's cached list (if any) so a revisit doesn't flash the skeleton.
+  const initialTab = getAdminCache('reports:lastTab') ?? 'open'
+  const initialCached = getAdminCache(
+    `reports?${new URLSearchParams({ limit: PAGE_SIZE, offset: 0, status: initialTab })}`,
+  )
+  const [reports, setReports]         = useState(initialCached?.reports ?? [])
+  const [total, setTotal]             = useState(initialCached?.total ?? 0)
   const [offset, setOffset]           = useState(0)
-  const [activeTab, setActiveTab]     = useState('open')
+  const [activeTab, setActiveTab]     = useState(initialTab)
   const [search, setSearch]           = useState('')
-  const [loading, setLoading]         = useState(true)
+  const [loading, setLoading]         = useState(!initialCached)
   const [error, setError]             = useState(null)
   const [successMsg, setSuccessMsg]   = useState(null)
   const [resolving, setResolving]     = useState(null)
@@ -381,6 +387,7 @@ export default function ReportsPage() {
     // Show the last result for this exact view right away (no skeleton),
     // then refresh it.
     const cacheKey = `reports?${params}`
+    setAdminCache('reports:lastTab', activeTab)
     const cached = getAdminCache(cacheKey)
     if (cached) {
       setReports(cached.reports)
