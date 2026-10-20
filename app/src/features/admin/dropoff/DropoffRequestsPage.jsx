@@ -260,6 +260,8 @@ export default function DropoffRequestsPage() {
   const [actioning, setActioning]         = useState(false)
   const [lightboxUrl, setLightboxUrl]     = useState(null)
   const fileRef = useRef(null)
+  // Coming back with a cached list: show it without the per-card fade-in.
+  const animateList = useRef(!getAdminCache(`dropoff?${filter}`)).current
 
   // Keep a ref to the current filter so the realtime callback always
   // reads the latest value without needing to re-subscribe on every change.
@@ -546,7 +548,7 @@ export default function DropoffRequestsPage() {
           return (
             <motion.div
               key={req.id}
-              initial={{ opacity: 0, y: 6 }}
+              initial={animateList ? { opacity: 0, y: 6 } : false}
               animate={{ opacity: 1, y: 0 }}
               className="bg-surface-card rounded-2xl border border-border p-4"
             >

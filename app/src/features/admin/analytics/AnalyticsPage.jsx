@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../../shared/lib/supabase'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -93,6 +93,9 @@ export default function AnalyticsPage() {
   // Last loaded charts, so returning to this tab shows them immediately
   // while load() refreshes them in the background.
   const cached = getAdminCache('analytics')
+  // Revisiting with cached charts: draw them immediately instead of
+  // replaying the grow-in animation (which made a revisit look like a reload).
+  const animateCharts = useRef(!cached).current
   const [stats, setStats] = useState(cached?.stats ?? { total: 0, resolved: 0, open: 0, claimed: 0, approved: 0, avgResolutionDays: null })
   const [categoryData, setCategoryData] = useState(cached?.categoryData ?? [])
   const [trendData, setTrendData] = useState(cached?.trendData ?? [])
@@ -1177,7 +1180,7 @@ export default function AnalyticsPage() {
               <XAxis dataKey="status" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="count" fill="#0d8f82" radius={[4, 4, 0, 0]} />
+              <Bar isAnimationActive={animateCharts} dataKey="count" fill="#0d8f82" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1186,7 +1189,7 @@ export default function AnalyticsPage() {
           <h3 className="text-sm font-semibold text-text-primary mb-4">Student trust score distribution</h3>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <Pie data={trustDistribution} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="band" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
+              <Pie isAnimationActive={animateCharts} data={trustDistribution} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="band" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                 {trustDistribution.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -1215,7 +1218,7 @@ export default function AnalyticsPage() {
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                <Pie data={resolvedViaData} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="name" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
+                <Pie isAnimationActive={animateCharts} data={resolvedViaData} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="name" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                   {resolvedViaData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
@@ -1233,7 +1236,7 @@ export default function AnalyticsPage() {
           <h3 className="text-sm font-semibold text-text-primary mb-4">Lost reports vs. ISSC walk-in drop-offs</h3>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <Pie data={reportTypeData} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="name" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
+              <Pie isAnimationActive={animateCharts} data={reportTypeData} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="name" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                 {reportTypeData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
@@ -1252,7 +1255,7 @@ export default function AnalyticsPage() {
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="value" fill="#0a6b61" radius={[4, 4, 0, 0]} />
+              <Bar isAnimationActive={animateCharts} dataKey="value" fill="#0a6b61" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1372,7 +1375,7 @@ export default function AnalyticsPage() {
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="#06433C" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              <Line isAnimationActive={animateCharts} type="monotone" dataKey="count" stroke="#06433C" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1381,7 +1384,7 @@ export default function AnalyticsPage() {
           <h3 className="text-sm font-semibold text-text-primary mb-4">Reports by category</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <Pie data={categoryData} cx="50%" cy="44%" outerRadius={75} dataKey="value" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
+              <Pie isAnimationActive={animateCharts} data={categoryData} cx="50%" cy="44%" outerRadius={75} dataKey="value" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
                 {categoryData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name] ?? COLORS[index % COLORS.length]} />
                 ))}
@@ -1410,7 +1413,7 @@ export default function AnalyticsPage() {
               <XAxis dataKey="status" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="count" fill="#06433C" radius={[4, 4, 0, 0]} />
+              <Bar isAnimationActive={animateCharts} dataKey="count" fill="#06433C" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

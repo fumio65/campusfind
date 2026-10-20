@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -71,6 +71,9 @@ export default function OverviewPage() {
   const [dropOffReports, setDropOffReports] = useState(cached?.dropOffReports ?? []);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState(null);
+  // Returning with cached data: render it as-is, with no entrance or chart
+  // animation, so a revisit doesn't look like a reload.
+  const fromCache = useRef(Boolean(cached)).current;
 
   function fetchAll() {
     Promise.all([
@@ -81,6 +84,10 @@ export default function OverviewPage() {
       .then(([overviewBody, analyticsBody, dropoffBody]) => {
         if (overviewBody.error) throw new Error(overviewBody.error);
         const dropOffs = Array.isArray(dropoffBody) ? dropoffBody : [];
+        const next = { data: overviewBody, analytics: analyticsBody, dropOffReports: dropOffs };
+        // Nothing changed since the cached copy: keep the current objects so
+        // nothing re-renders or re-animates.
+        if (JSON.stringify(next) === JSON.stringify(getAdminCache("overview"))) return;
         setData(overviewBody);
         setAnalytics(analyticsBody);
         setDropOffReports(dropOffs);
@@ -157,6 +164,7 @@ export default function OverviewPage() {
           <motion.div
             className="grid grid-cols-4 gap-2.5 mb-5"
             {...staggerContainer}
+            initial={fromCache ? false : staggerContainer.initial}
           >
             <StatCard
               label="Total accounts"
@@ -195,7 +203,7 @@ export default function OverviewPage() {
           {/* ── Open reports alert ─────────────────────────────────────────── */}
           {data.openReports > 0 && (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={fromCache ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.2 }}
               className="bg-status-claimed-bg border border-status-claimed-text/30 rounded-xl p-3.5 mb-5 flex gap-3 items-center"
@@ -270,7 +278,7 @@ export default function OverviewPage() {
                         strokeWidth={2}
                         dot={false}
                         name="Reports filed"
-                        isAnimationActive
+                        isAnimationActive={!fromCache}
                         animationDuration={500}
                       />
                     </LineChart>
@@ -342,7 +350,7 @@ export default function OverviewPage() {
             {/* RIGHT RAIL — ISSC drop-offs only */}
             <div>
               <motion.div
-                initial={{ opacity: 0 }}
+                initial={fromCache ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.2 }}
                 className="bg-surface-card border border-border rounded-xl overflow-hidden"
