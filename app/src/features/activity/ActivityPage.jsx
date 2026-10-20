@@ -5,7 +5,6 @@ import {
   Bell, CheckCircle2, XCircle, MessageSquare,
   Star, MapPin, Lightbulb, Trash2
 } from 'lucide-react'
-import { supabase } from '../../shared/lib/supabase'
 import { useAuth } from '../../shared/lib/AuthContext'
 import {
   useNotifications,
@@ -107,32 +106,14 @@ export default function ActivityPage() {
     [session.user.id],
   )
 
+  // Live updates come from AppShell's notifications channel (always
+  // mounted around this page), which writes new rows straight into the
+  // cache that useNotifications reads - a second channel here on the same
+  // rows only doubled the refetches.
   useEffect(() => {
     fetchNotifications()
-
-    const existing = supabase.getChannels().find((c) => c.topic === 'realtime:activity-page')
-    if (existing) supabase.removeChannel(existing)
-
-    const channel = supabase
-      .channel('activity-page')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'user_notifications',
-          filter: `user_id=eq.${session.user.id}`,
-        },
-        () => fetchNotifications()
-      )
-      .subscribe()
-
     const unsubscribeSync = onSyncTrigger(fetchNotifications)
-
-    return () => {
-      supabase.removeChannel(channel)
-      unsubscribeSync()
-    }
+    return () => unsubscribeSync()
   }, [fetchNotifications])
 
   async function handleTap(notification) {

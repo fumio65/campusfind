@@ -5,7 +5,7 @@ import { Home, Clock, Bell, User, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { registerPushToken } from '../lib/pushToken'
-import { useUnreadCount, refreshNotifications } from '../lib/repositories/notifications'
+import { useUnreadCount, refreshNotifications, cacheNotificationRow } from '../lib/repositories/notifications'
 import { onSyncTrigger } from '../lib/appLifecycle'
 import { trustReasonText } from '../lib/trustScoreReasons'
 import SyncStatusBadge from './SyncStatusBadge'
@@ -24,13 +24,27 @@ export default function AppShell() {
 
   const fetchUnread = useCallback(() => refreshNotifications(session.user.id), [session.user.id])
 
+  // FIX: notifications weren't reliably real-time. The live channel was
+  // never re-joined after it dropped (phone locked, network switch, token
+  // refresh), and there was no fallback. Now: realtime rows are written to
+  // the cache directly, the channel re-subscribes itself after an error or
+  // close, and a light poll + refresh-on-resume cover any gap.
   useEffect(() => {
     fetchUnread()
+    let channel = null
+    let retryTimer = null
+    let stopped = false
 
-    const existing = supabase.getChannels().find((c) => c.topic === 'realtime:appshell-notifications')
-    if (existing) supabase.removeChannel(existing)
+    const subscribe = () => {
+      // Clear `channel` before removing the old one, so its CLOSED callback
+      // is ignored instead of scheduling yet another re-subscribe.
+      const old = channel
+      channel = null
+      if (old) supabase.removeChannel(old)
+      const existing = supabase.getChannels().find((c) => c.topic === 'realtime:appshell-notifications')
+      if (existing) supabase.removeChannel(existing)
 
-    const channel = supabase
+      const ch = supabase
       .channel('appshell-notifications')
       .on(
         'postgres_changes',
@@ -40,7 +54,10 @@ export default function AppShell() {
           table: 'user_notifications',
           filter: `user_id=eq.${session.user.id}`,
         },
-        () => fetchUnread()
+        (payload) => {
+          cacheNotificationRow(payload.new)
+          fetchUnread()
+        }
       )
       .on(
         'postgres_changes',
@@ -50,7 +67,7 @@ export default function AppShell() {
           table: 'user_notifications',
           filter: `user_id=eq.${session.user.id}`,
         },
-        () => fetchUnread()
+        (payload) => cacheNotificationRow(payload.new)
       )
       .on(
         // Fires app-wide, regardless of which page the user is on, for any
@@ -74,12 +91,37 @@ export default function AppShell() {
           })
         }
       )
-      .subscribe()
+      channel = ch
+      ch.subscribe((status) => {
+        if (stopped || ch !== channel) return
+        if (status === 'SUBSCRIBED') {
+          // Catch anything inserted while the channel was down.
+          fetchUnread()
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          clearTimeout(retryTimer)
+          retryTimer = setTimeout(() => {
+            if (!stopped) subscribe()
+          }, 3000)
+        }
+      })
+    }
+    subscribe()
 
     const unsubscribeSync = onSyncTrigger(fetchUnread)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchUnread()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    const poll = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchUnread()
+    }, 30_000)
 
     return () => {
-      supabase.removeChannel(channel)
+      stopped = true
+      clearTimeout(retryTimer)
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', onVisible)
+      if (channel) supabase.removeChannel(channel)
       unsubscribeSync()
     }
   }, [fetchUnread])

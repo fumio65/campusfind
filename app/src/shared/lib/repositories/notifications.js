@@ -18,15 +18,31 @@ const NOTIFICATIONS_PAGE_SIZE = 50
 // rows - collapse concurrent calls for the same user into the one
 // already in flight instead.
 const inFlightByUser = new Map()
+// FIX: a refresh requested while one is already running used to just
+// reuse it - but that running query may have started before the new
+// notification existed, so the new row was missed until the next refresh.
+// Now a request during a run queues exactly one follow-up run.
+const rerunByUser = new Set()
 
 export function refreshNotifications(userId) {
   if (!isOnline() || !userId) return Promise.resolve()
-  if (inFlightByUser.has(userId)) return inFlightByUser.get(userId)
+  if (inFlightByUser.has(userId)) {
+    rerunByUser.add(userId)
+    return inFlightByUser.get(userId)
+  }
   const promise = doRefreshNotifications(userId).finally(() => {
     inFlightByUser.delete(userId)
+    if (rerunByUser.delete(userId)) refreshNotifications(userId)
   })
   inFlightByUser.set(userId, promise)
   return promise
+}
+
+// Writes a row delivered by a realtime INSERT/UPDATE straight into the
+// cache, so Activity and the badge update instantly without waiting on a
+// refetch round-trip.
+export async function cacheNotificationRow(row) {
+  if (row?.id) await db.user_notifications.put(row)
 }
 
 async function doRefreshNotifications(userId) {
