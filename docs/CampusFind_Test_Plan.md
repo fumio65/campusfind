@@ -27,7 +27,7 @@ Tick the box when the result matches **Should happen**. If it doesn't, write wha
 | Lhester | | 0 | |
 | Emerson | | +10 | |
 | Revin | | +7 | |
-| Viece | | −5 | |
+| Viece | | −5 per rejected claim (extra −5 at 3 rejections in 30 days) | |
 
 ---
 
@@ -38,7 +38,7 @@ Tick the box when the result matches **Should happen**. If it doesn't, write wha
 | ✓ | # | Who | Do | Should happen | Notes |
 |---|---|---|---|---|---|
 | [ ] | 1 | Lhester | File report **"TEST - Black wallet"**, location "Library", category Wallet, add 2 photos | Report appears in Lhester's list | |
-| [ ] | 2 | Emerson, Revin, Viece | Check Activity | "New lost item" notification; push notification if the app is closed | |
+| [ ] | 2 | Emerson, Revin, Viece | Check Notifications | "New lost item" notification; push notification if the app is closed | |
 | [ ] | 3 | Emerson | Search "wallet", then filter by category Wallet | The report shows up | |
 | [ ] | 4 | Revin | Open the report, leave tip: "Saw a black wallet near the canteen" | Lhester gets a "New tip" notification | |
 | [ ] | 5 | Lhester | Reply to Revin's tip | Revin gets a "New reply" notification | |
@@ -61,7 +61,7 @@ Tick the box when the result matches **Should happen**. If it doesn't, write wha
 |---|---|---|---|---|---|
 | [ ] | 14 | Lhester | File **"TEST - School ID"** | Others notified | |
 | [ ] | 15 | Emerson | Claim it with a photo; Lhester approves | Message thread opens | |
-| [ ] | 16 | Emerson | In the thread, choose **ISSC drop-off** (or suggest it and Lhester accepts) | Admin bell shows "New drop-off request" | |
+| [ ] | 16 | Emerson | In the thread, suggest **ISSC drop-off**; Lhester declines once, Emerson suggests again, Lhester accepts | Lhester gets "ISSC drop-off suggested", Emerson gets "ISSC drop-off declined" (not "New message"); on accept, Emerson gets "ISSC drop-off confirmed" and the admin bell shows "New drop-off request" | |
 | [ ] | 17 | Admin | Drop-off Requests → open it → **Mark received** with a photo | Lhester gets "Your item is at the ISSC office" | |
 | [ ] | 18 | Admin | **Confirm pickup** | Report Resolved; **Emerson +5**; Lhester and Emerson notified | |
 | [ ] | 19 | Admin | Click Confirm pickup again (if the button is still there) | Refused — no second +5 | |
@@ -117,7 +117,7 @@ Student ID,Enrollment Number,Last Name,First Name,Middle Name,Program/Course,Yea
 | [ ] | 35 | Lhester | Log in on the website and try opening `/admin` | Blocked | |
 | [ ] | 36 | Each student | History → tap today on the calendar; check All / Reports / Claims / Tips | Today's activity is listed | |
 | [ ] | 37 | Each student | Compare trust scores with the table at the top | **Emerson +10, Revin +7, Viece −5, Lhester unchanged** | |
-| [ ] | 38 | Any student | Activity → swipe a notification to delete, tap **Undo** | Notification comes back | |
+| [ ] | 38 | Any student | Notifications → swipe a notification to delete, tap **Undo** | Notification comes back | |
 | [ ] | 39 | Emerson | Airplane mode → browse the feed | Loaded reports still show | |
 | [ ] | 40 | Emerson | Still offline: file **"TEST - Offline bag"**, then turn airplane mode off | It uploads by itself; others notified | |
 | [ ] | 41 | Any | Browser tab on the website | Title is **CampusFind** with the green logo | |

@@ -348,7 +348,7 @@ export default function WalkInIntakePage() {
               <p className="text-xs font-semibold text-text-secondary mb-2">What happens next?</p>
               <ul className="text-xs text-text-muted space-y-1">
                 <li>• Item appears on the app for students to browse</li>
-                <li>• All students receive an Activity notification</li>
+                <li>• All students receive a notification</li>
                 <li>• Finder receives +5 trust score immediately</li>
                 <li>• Owner submits a claim via the app</li>
                 <li>• Owner comes in person with their ID to collect</li>

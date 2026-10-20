@@ -163,7 +163,7 @@ export default function AppShell() {
   const navItems = [
     { to: '/', icon: Home, label: 'Home' },
     { to: '/history', icon: Clock, label: 'History' },
-    { to: '/activity', icon: Bell, label: 'Activity' },
+    { to: '/activity', icon: Bell, label: 'Notifications' },
     { to: '/profile', icon: User, label: 'Profile' },
   ]
 
@@ -215,7 +215,7 @@ export default function AppShell() {
             to="/"
             end
             className={({ isActive }) =>
-              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
+              `relative flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }
@@ -239,7 +239,7 @@ export default function AppShell() {
           <NavLink
             to="/history"
             className={({ isActive }) =>
-              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
+              `relative flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }
@@ -268,11 +268,11 @@ export default function AppShell() {
             <Plus size={26} />
           </button>
 
-          {/* Activity */}
+          {/* Notifications */}
           <NavLink
             to="/activity"
             className={({ isActive }) =>
-              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
+              `relative flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }
@@ -294,7 +294,7 @@ export default function AppShell() {
                     </span>
                   )}
                 </div>
-                <span className="relative z-10 text-[10px] font-medium">Activity</span>
+                <span className="relative z-10 text-[10px] font-medium whitespace-nowrap">Notifications</span>
               </>
             )}
           </NavLink>
@@ -303,7 +303,7 @@ export default function AppShell() {
           <NavLink
             to="/profile"
             className={({ isActive }) =>
-              `relative flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl ${
+              `relative flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-xl ${
                 isActive ? 'text-brand-600' : 'text-text-muted'
               }`
             }

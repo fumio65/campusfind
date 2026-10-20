@@ -176,7 +176,7 @@ export default function ActivityPage() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-white text-xl font-bold">Activity</h1>
+            <h1 className="text-white text-xl font-bold">Notifications</h1>
             <p className="text-brand-200 text-xs mt-0.5">
               {unreadCount > 0
                 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
@@ -217,7 +217,7 @@ export default function ActivityPage() {
             <div className="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center mb-4">
               <Bell size={24} className="text-text-muted" />
             </div>
-            <p className="text-sm font-semibold text-text-primary mb-1">No activity yet</p>
+            <p className="text-sm font-semibold text-text-primary mb-1">No notifications yet</p>
             <p className="text-xs text-text-muted max-w-xs">
               Notifications about your reports, claims, and tips will appear here.
             </p>
