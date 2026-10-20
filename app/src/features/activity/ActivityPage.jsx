@@ -39,6 +39,8 @@ const TYPE_CONFIG = {
   claim_resolved:    { icon: Star,          color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
   dropoff_resolved:  { icon: Star,          color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
   report_resolved:   { icon: CheckCircle2,  color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
+  walkin_collected:  { icon: CheckCircle2,  color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
+  walkin_returned:   { icon: Star,          color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
   dropoff_received:  { icon: MapPin,        color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
   default:           { icon: Bell,          color: 'text-text-muted',          bg: 'bg-surface-muted'     },
 }

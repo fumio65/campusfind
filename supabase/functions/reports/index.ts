@@ -160,11 +160,11 @@ Deno.serve(async (req) => {
       const caller = await requireUser(req, supabaseAdmin)
       if (caller instanceof Response) return caller
 
-      const { resolvedVia } = await req.json()
+      const { resolvedVia, verifiedStudentId, notes, isProxy, proxyStudentId } = await req.json()
 
       const { data: report } = await supabaseAdmin
         .from('reports')
-        .select('id, title, status, reporter_id, claims(id, claimant_id, status)')
+        .select('id, title, status, type, reporter_id, walkin_finder_ref, claims(id, claimant_id, status)')
         .eq('id', id)
         .single()
 
@@ -174,7 +174,8 @@ Deno.serve(async (req) => {
         })
       }
 
-      if (report.reporter_id !== caller.id && !(await isAdmin(caller.id))) {
+      const callerIsAdmin = await isAdmin(caller.id)
+      if (report.reporter_id !== caller.id && !callerIsAdmin) {
         return forbidden(corsHeaders, 'Only the reporter or an admin can resolve this report.')
       }
 
@@ -182,10 +183,86 @@ Deno.serve(async (req) => {
         return forbidden(corsHeaders, 'Report is already resolved.', 409)
       }
 
-      await supabaseAdmin
-        .from('reports')
-        .update({ status: 'resolved', resolved_via: resolvedVia ?? 'handoff', resolved_at: new Date().toISOString() })
-        .eq('id', id)
+      // Walk-in items are claimed in person at the ISSC office: the admin
+      // checks the owner's school ID and releases the item. Previously the
+      // admin dashboard only offered this once a walk-in was 'approved',
+      // which never happens (nobody files an app claim on a walk-in), so
+      // walk-ins could never be closed. The ID the admin verified must be a
+      // real student account, and who collected it is now recorded.
+      const isWalkIn = report.type === 'found_walkin'
+      const now = new Date().toISOString()
+      const sid = String(verifiedStudentId ?? '').trim()
+      let collector: { id: string, first_name: string, last_name: string, student_id: string } | null = null
+      if (isWalkIn) {
+        if (!callerIsAdmin) {
+          return forbidden(corsHeaders, 'Only the ISSC office can release a walk-in item.')
+        }
+        if (!sid) {
+          return forbidden(corsHeaders, "Verify the owner's student ID before releasing the item.", 400)
+        }
+      }
+      if (sid && callerIsAdmin) {
+        const { data } = await supabaseAdmin
+          .from('users')
+          .select('id, first_name, last_name, student_id')
+          .eq('student_id', sid)
+          .eq('role', 'student')
+          .maybeSingle()
+        collector = data as any
+        if (isWalkIn && !collector) {
+          return forbidden(corsHeaders, `No student account matches ${sid}.`, 400)
+        }
+      }
+
+      const update: Record<string, unknown> = {
+        status: 'resolved',
+        resolved_via: isWalkIn ? 'issc_walkin_pickup' : (resolvedVia ?? 'handoff'),
+        resolved_at: now,
+      }
+      if (callerIsAdmin && sid) {
+        update.handoff_record = {
+          collected_by_student_id: sid,
+          collected_by_user_id: collector?.id ?? null,
+          collected_by_name: collector ? `${collector.first_name} ${collector.last_name}` : null,
+          is_proxy: !!isProxy,
+          proxy_student_id: isProxy ? (proxyStudentId ?? null) : null,
+          notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 500) : null,
+          recorded_by: caller.id,
+          recorded_at: now,
+        }
+      }
+      if (isWalkIn) {
+        update.walkin_pickup_verified_by = caller.id
+        update.walkin_pickup_verified_at = now
+      }
+
+      await supabaseAdmin.from('reports').update(update).eq('id', id)
+
+      if (isWalkIn && collector) {
+        await notifyUser({
+          userId: collector.id,
+          type: 'walkin_collected',
+          title: 'Item collected from ISSC',
+          body: `You collected "${report.title}" from the ISSC office. Thank you for using CampusFind!`,
+          reportId: id,
+        })
+        if (report.walkin_finder_ref) {
+          const { data: finder } = await supabaseAdmin
+            .from('users')
+            .select('id')
+            .eq('student_id', report.walkin_finder_ref)
+            .maybeSingle()
+          if (finder && finder.id !== collector.id) {
+            await notifyUser({
+              userId: finder.id,
+              type: 'walkin_returned',
+              title: 'The item you turned in was returned',
+              body: `"${report.title}" has been collected by its owner. Thank you for your honesty!`,
+              reportId: id,
+            })
+          }
+        }
+      }
 
       const approvedClaim = (report.claims as any[])?.find((c: any) => c.status === 'approved')
       if (approvedClaim) {
