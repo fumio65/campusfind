@@ -1749,6 +1749,9 @@ export default function ReportDetailPage() {
                       isHighlighted={highlightedTipId === parent.id}
                       credited={parent.credited_for_recovery}
                       onConvert={
+                        // The reporter can't claim their own lost item, so
+                        // their own tips/replies never get "I can prove this".
+                        !isOwner &&
                         parent.user_id === session?.user.id &&
                         isOpen &&
                         claim?.status !== "pending" &&
@@ -1780,6 +1783,7 @@ export default function ReportDetailPage() {
                         isHighlighted={highlightedTipId === reply.id}
                         credited={reply.credited_for_recovery}
                         onConvert={
+                          !isOwner &&
                           reply.user_id === session?.user.id &&
                           isOpen &&
                           claim?.status !== "pending" &&
