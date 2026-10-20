@@ -42,10 +42,8 @@ registerHandler('submitClaim', async (payload) => {
     await db.blobs.delete(photo.id)
   }
 
-  // Note: RLS only lets the report's reporter (not the claimant) update
-  // `reports`, so this currently has no effect when run as the claimant -
-  // matches existing (pre-offline) app behavior, not something introduced here.
-  await supabase.from('reports').update({ status: 'claimed' }).eq('id', claim.report_id)
+  // The report is marked 'claimed' by the trg_claims_mark_report_claimed
+  // trigger when the claim row is inserted (students can't update status).
 
   const { error: messageError } = await supabase.from('claim_messages').insert({
     id: message.id,
