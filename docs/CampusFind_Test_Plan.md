@@ -62,7 +62,7 @@ Tick the box when the result matches **Should happen**. If it doesn't, write wha
 | [ ] | 14 | Lhester | File **"TEST - School ID"** | Others notified | |
 | [ ] | 15 | Emerson | Claim it with a photo; Lhester approves | Message thread opens | |
 | [ ] | 16 | Emerson | In the thread, suggest **ISSC drop-off**; Lhester declines once, Emerson suggests again, Lhester accepts | Lhester gets "ISSC drop-off suggested", Emerson gets "ISSC drop-off declined" (not "New message"); on accept, Emerson gets "ISSC drop-off confirmed" and the admin bell shows "New drop-off request" | |
-| [ ] | 17 | Admin | Drop-off Requests → open it → **Mark received** with a photo | Lhester gets "Your item is at the ISSC office" | |
+| [ ] | 17 | Admin | ISSC Handoffs → **Incoming** → **Mark as received** with a photo | Lhester gets "Your item is at the ISSC office" | |
 | [ ] | 18 | Admin | **Confirm pickup** | Report Resolved; **Emerson +5**; Lhester and Emerson notified | |
 | [ ] | 19 | Admin | Click Confirm pickup again (if the button is still there) | Refused — no second +5 | |
 
@@ -76,7 +76,7 @@ Tick the box when the result matches **Should happen**. If it doesn't, write wha
 |---|---|---|---|---|---|
 | [ ] | 20 | Admin | Walk-in Intake → register **"TEST - Umbrella"** with a photo, finder ID **23-01066** (Revin) | Revin gets "Thank you… +5"; students get the found-item notification | |
 | [ ] | 21 | Viece | Find the umbrella in the feed | Shows as found at the ISSC office | |
-| [ ] | 22 | Admin | Reports → umbrella → verify Viece's pickup with her Student ID → Resolve | Report Resolved | |
+| [ ] | 22 | Admin | ISSC Handoffs → **Ready for pickup** → umbrella (Walk-in) → **Verify & confirm pickup** → enter Viece's ID **23-01165** → **Release item** | Umbrella moves to **Completed** and the report is Resolved; Viece gets "Item collected from ISSC", Revin gets "The item you turned in was returned" | |
 
 ---
 

@@ -307,12 +307,11 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, reso
                 <Share2 size={12} /> Share
               </button>
             )}
-            {/* Walk-ins are claimed in person, so they stay 'open' until the
-                owner shows up - collection must be recordable from 'open'. */}
-            {report.type === 'found_walkin' && (report.status === 'open' || (report.status === 'approved' && !report.active_claim?.drop_off_chosen)) && (
-              <button onClick={() => { onResolve(report, 'issc_walkin_pickup', true); onClose() }} disabled={resolving === report.id} className="px-3 h-9 rounded-lg bg-status-approved-bg text-status-approved-text text-xs font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap disabled:opacity-50">
-                Record collection
-              </button>
+            {/* Walk-ins are released to their owner from ISSC Handoffs. */}
+            {report.type === 'found_walkin' && report.status === 'open' && (
+              <Link to="/admin/dropoff" className="px-3 h-9 rounded-lg bg-status-approved-bg text-status-approved-text text-xs font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
+                Release in ISSC Handoffs
+              </Link>
             )}
             {report.status === 'approved' && report.active_claim?.drop_off_chosen && (
               <Link to="/admin/dropoff" className="px-3 h-9 rounded-lg bg-status-claimed-bg text-status-claimed-text text-xs font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
@@ -881,10 +880,10 @@ export default function ReportsPage() {
                             Share
                           </button>
                         )}
-                        {r.type === 'found_walkin' && (r.status === 'open' || (r.status === 'approved' && !r.active_claim?.drop_off_chosen)) && (
-                          <button onClick={() => { setConfirmResolve({ id: r.id, via: 'issc_walkin_pickup', reporterStudentId: r.reporter_student_id, hasPreAuthorizedProxy: false, isWalkIn: true }); setConfirmOpen(true) }} disabled={resolving === r.id} className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
-                            Record collection
-                          </button>
+                        {r.type === 'found_walkin' && r.status === 'open' && (
+                          <Link to="/admin/dropoff" className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
+                            Release
+                          </Link>
                         )}
                         {r.status === 'approved' && r.active_claim?.drop_off_chosen && (
                           <Link to="/admin/dropoff" className="px-2.5 py-1 rounded-lg bg-status-claimed-bg text-status-claimed-text text-[11px] font-semibold border border-status-claimed-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1">

@@ -9,9 +9,50 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const STATUS_STYLES = {
-  pending:  { label: 'Pending',  bg: 'bg-status-claimed-bg',  text: 'text-status-claimed-text'  },
-  received: { label: 'Received', bg: 'bg-status-approved-bg', text: 'text-status-approved-text' },
-  resolved: { label: 'Resolved', bg: 'bg-status-resolved-bg', text: 'text-status-resolved-text' },
+  pending:  { label: 'Incoming',         bg: 'bg-status-claimed-bg',  text: 'text-status-claimed-text'  },
+  received: { label: 'Ready for pickup', bg: 'bg-status-approved-bg', text: 'text-status-approved-text' },
+  resolved: { label: 'Completed',        bg: 'bg-status-resolved-bg', text: 'text-status-resolved-text' },
+}
+
+// The page covers every item handled at the ISSC office: drop-offs that a
+// finder arranged in the app (dropoff_requests) and walk-in items a finder
+// brought to the counter (reports of type found_walkin). Walk-ins are
+// already at the office, so they only ever appear as "Ready for pickup"
+// (report status open) or "Completed" (resolved).
+const FILTERS = [
+  { value: 'pending',  label: 'Incoming' },
+  { value: 'received', label: 'Ready for pickup' },
+  { value: 'resolved', label: 'Completed' },
+]
+
+async function fetchWalkIns(filter) {
+  if (filter === 'pending') return []
+  const { data: reports, error } = await supabase
+    .from('reports')
+    .select('id, title, category, status, created_at, resolved_at, walkin_finder_ref, report_photos(storage_path, position)')
+    .eq('type', 'found_walkin')
+    .eq('status', filter === 'received' ? 'open' : 'resolved')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  const refs = [...new Set((reports ?? []).map((r) => r.walkin_finder_ref).filter(Boolean))]
+  const { data: finders } = refs.length
+    ? await supabase.from('users').select('first_name, last_name, student_id').in('student_id', refs)
+    : { data: [] }
+  const finderBySid = new Map((finders ?? []).map((f) => [f.student_id, f]))
+  return (reports ?? []).map((r) => {
+    const photo = [...(r.report_photos ?? [])].sort((a, b) => a.position - b.position)[0]
+    return {
+      id: `walkin-${r.id}`,
+      kind: 'walkin',
+      report_id: r.id,
+      status: filter,
+      created_at: r.created_at,
+      reports: { title: r.title, category: r.category },
+      claimant: finderBySid.get(r.walkin_finder_ref) ?? { first_name: r.walkin_finder_ref ?? 'Unknown', last_name: '' },
+      reporter: null,
+      drop_off_photo_path: photo?.storage_path ?? null,
+    }
+  })
 }
 
 function timeAgo(dateStr) {
@@ -25,7 +66,8 @@ function timeAgo(dateStr) {
 }
 
 // ─── Pickup Verification Dialog ───────────────────────────────────────────────
-function PickupDialog({ request, onClose, onConfirm, actioning }) {
+function PickupDialog({ request, onClose, onConfirm, actioning, actionError }) {
+  const isWalkIn = request.kind === 'walkin'
   const [studentId, setStudentId]       = useState('')
   const [validation, setValidation]     = useState(null)
   const [verifiedName, setVerifiedName] = useState(null)
@@ -76,7 +118,11 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
         .maybeSingle()
       if (!user) { setValidation('not-found'); return }
       const fullName = `${user.first_name} ${user.last_name}`
-      if (!isProxy) {
+      if (isWalkIn) {
+        // No reporter on a walk-in: any registered student may claim it,
+        // after the admin checks their school ID/COR and their description.
+        setValidation('found'); setVerifiedName(fullName)
+      } else if (!isProxy) {
         if (user.student_id === request.reporter?.student_id) {
           setValidation('found'); setVerifiedName(fullName)
         } else {
@@ -127,9 +173,15 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
         <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4">
           <div className="bg-surface-muted rounded-xl px-3 py-2.5">
             <p className="text-xs font-semibold text-text-primary">{request.reports?.title ?? 'Unknown item'}</p>
-            <p className="text-[11px] text-text-muted mt-0.5">
-              Owner: {request.reporter?.first_name} {request.reporter?.last_name}
-            </p>
+            {isWalkIn ? (
+              <p className="text-[11px] text-text-muted mt-0.5">
+                Walk-in item · turned in by {request.claimant?.first_name} {request.claimant?.last_name}
+              </p>
+            ) : (
+              <p className="text-[11px] text-text-muted mt-0.5">
+                Owner: {request.reporter?.first_name} {request.reporter?.last_name}
+              </p>
+            )}
             {proxyRecord && (
               <p className="text-[11px] text-status-approved-text mt-0.5">
                 Authorized proxy: {proxyRecord.proxy_name}
@@ -137,7 +189,14 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
             )}
           </div>
 
-          <div>
+          {isWalkIn && (
+            <p className="text-[11px] text-text-secondary bg-status-claimed-bg/60 rounded-xl px-3 py-2.5 leading-relaxed">
+              Nobody filed a report for this item. Check the student's school ID or COR,
+              and ask them to describe the item before releasing it.
+            </p>
+          )}
+
+          <div className={isWalkIn ? 'hidden' : ''}>
             <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
               Who is collecting the item?
             </p>
@@ -175,7 +234,7 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
 
           <div>
             <label className="text-xs font-semibold text-text-secondary block mb-1.5">
-              {isProxy ? 'Proxy Student ID' : 'Owner Student ID'}
+              {isWalkIn ? "Owner's Student ID" : isProxy ? 'Proxy Student ID' : 'Owner Student ID'}
               <span className="text-status-rejected-text ml-0.5">*</span>
             </label>
             <div className="relative">
@@ -230,12 +289,17 @@ function PickupDialog({ request, onClose, onConfirm, actioning }) {
           </div>
         </div>
 
+        {actionError && (
+          <p className="mx-5 mb-1 text-xs text-status-rejected-text flex items-center gap-1.5">
+            <AlertCircle size={13} className="shrink-0" /> {actionError}
+          </p>
+        )}
         <div className="flex gap-2 px-5 py-4 border-t border-border shrink-0">
           <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-border-strong text-sm font-medium text-text-secondary hover:bg-surface-muted transition-colors">
             Cancel
           </button>
           <button
-            onClick={() => onConfirm(request.id, isProxy)}
+            onClick={() => onConfirm(request, isProxy, studentId.trim().toUpperCase())}
             disabled={!canConfirm || actioning}
             className="flex-1 h-11 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 hover:bg-brand-700 transition-colors"
           >
@@ -258,6 +322,7 @@ export default function DropoffRequestsPage() {
   const [photo, setPhoto]                 = useState(null)
   const [photoPreview, setPhotoPreview]   = useState(null)
   const [actioning, setActioning]         = useState(false)
+  const [actionError, setActionError]     = useState(null)
   const [lightboxUrl, setLightboxUrl]     = useState(null)
   const fileRef = useRef(null)
   // Coming back with a cached list: show it without the per-card fade-in.
@@ -281,13 +346,17 @@ export default function DropoffRequestsPage() {
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const res = await fetch(
-        `${SERVER_URL}/dropoff?status=${filterRef.current}`,
-        { headers: await authHeaders({ 'Content-Type': 'application/json' }) },
-      )
+      const [res, walkIns] = await Promise.all([
+        fetch(
+          `${SERVER_URL}/dropoff?status=${filterRef.current}`,
+          { headers: await authHeaders({ 'Content-Type': 'application/json' }) },
+        ),
+        fetchWalkIns(filterRef.current),
+      ])
       if (!res.ok) throw new Error(`Server responded with ${res.status}`)
       const data = await res.json()
-      const list = Array.isArray(data) ? data : []
+      const list = [...(Array.isArray(data) ? data : []), ...walkIns]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       setRequests(list)
       setAdminCache(cacheKey, list)
     } catch (err) {
@@ -312,6 +381,14 @@ export default function DropoffRequestsPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'dropoff_requests' },
         () => fetchRequests(true), // silent: skip loading spinner on realtime updates
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reports' },
+        (payload) => {
+          // Walk-in items are reports; refresh when one is added or released.
+          if ((payload.new ?? payload.old)?.type === 'found_walkin') fetchRequests(true)
+        },
       )
       .subscribe()
     return () => supabase.removeChannel(channel)
@@ -346,18 +423,30 @@ export default function DropoffRequestsPage() {
     setActioning(false)
   }
 
-  async function handlePickupConfirm(requestId, isProxy) {
+  async function handlePickupConfirm(request, isProxy, studentId) {
     setActioning(true)
+    setActionError(null)
     try {
-      await fetch(`${SERVER_URL}/dropoff/${requestId}/pickup`, {
-        method: 'PATCH',
-        headers: await authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ isProxy }),
-      })
+      const res = request.kind === 'walkin'
+        ? await fetch(`${SERVER_URL}/reports/${request.report_id}/resolve`, {
+            method: 'PATCH',
+            headers: await authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ resolvedVia: 'issc_walkin_pickup', verifiedStudentId: studentId }),
+          })
+        : await fetch(`${SERVER_URL}/dropoff/${request.id}/pickup`, {
+            method: 'PATCH',
+            headers: await authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ isProxy }),
+          })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `Server responded with ${res.status}`)
+      }
       setPickupRequest(null)
       fetchRequests()
     } catch (err) {
       console.error(err)
+      setActionError(err.message)
     }
     setActioning(false)
   }
@@ -472,31 +561,32 @@ export default function DropoffRequestsPage() {
       {pickupRequest && (
         <PickupDialog
           request={pickupRequest}
-          onClose={() => setPickupRequest(null)}
+          onClose={() => { setPickupRequest(null); setActionError(null) }}
           onConfirm={handlePickupConfirm}
           actioning={actioning}
+          actionError={actionError}
         />
       )}
 
       {/* Header */}
       <div className="px-6 py-5 border-b border-border">
-        <h1 className="text-lg font-bold text-text-primary">Drop-off Requests</h1>
-        <p className="text-xs text-text-muted mt-0.5">Manage ISSC drop-off requests from finders</p>
+        <h1 className="text-lg font-bold text-text-primary">ISSC Handoffs</h1>
+        <p className="text-xs text-text-muted mt-0.5">Items passing through the ISSC office: finder drop-offs and walk-in items waiting for their owners</p>
       </div>
 
       {/* Filter tabs */}
       <div className="px-6 pt-4 flex gap-2">
-        {['pending', 'received', 'resolved'].map((s) => (
+        {FILTERS.map(({ value, label }) => (
           <button
-            key={s}
-            onClick={() => handleFilterChange(s)}
+            key={value}
+            onClick={() => handleFilterChange(value)}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-              filter === s
+              filter === value
                 ? 'bg-brand-600 text-white'
                 : 'bg-surface-muted text-text-secondary hover:bg-surface-card'
             }`}
           >
-            {s.charAt(0).toUpperCase() + s.slice(1)}
+            {label}
           </button>
         ))}
       </div>
@@ -537,8 +627,14 @@ export default function DropoffRequestsPage() {
             <div className="w-12 h-12 rounded-full bg-surface-muted flex items-center justify-center mb-3">
               <PackageCheck size={22} className="text-text-muted" />
             </div>
-            <p className="text-sm font-semibold text-text-primary mb-1">No {filter} requests</p>
-            <p className="text-xs text-text-muted">Drop-off requests will appear here.</p>
+            <p className="text-sm font-semibold text-text-primary mb-1">
+              {filter === 'pending' ? 'No incoming drop-offs' : filter === 'received' ? 'Nothing waiting for pickup' : 'No completed handoffs yet'}
+            </p>
+            <p className="text-xs text-text-muted">
+              {filter === 'pending'
+                ? 'Drop-offs a finder arranges in the app appear here until the item arrives.'
+                : 'Received drop-offs and walk-in items appear here.'}
+            </p>
           </div>
         )}
 
@@ -557,7 +653,9 @@ export default function DropoffRequestsPage() {
                   <p className="text-sm font-semibold text-text-primary">
                     {req.reports?.title ?? 'Unknown item'}
                   </p>
-                  <p className="text-xs text-text-muted mt-0.5">{req.reports?.category ?? '—'}</p>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    {req.kind === 'walkin' ? 'Walk-in · ' : 'Drop-off · '}{req.reports?.category ?? '—'}
+                  </p>
                 </div>
                 <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${statusStyle.bg} ${statusStyle.text}`}>
                   {statusStyle.label}
@@ -566,7 +664,7 @@ export default function DropoffRequestsPage() {
 
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div className="bg-surface-muted rounded-xl px-3 py-2">
-                  <p className="text-[10px] text-text-muted mb-0.5">Finder</p>
+                  <p className="text-[10px] text-text-muted mb-0.5">{req.kind === 'walkin' ? 'Turned in by' : 'Finder'}</p>
                   <p className="text-xs font-medium text-text-primary">
                     {req.claimant?.first_name} {req.claimant?.last_name}
                   </p>
@@ -574,7 +672,9 @@ export default function DropoffRequestsPage() {
                 <div className="bg-surface-muted rounded-xl px-3 py-2">
                   <p className="text-[10px] text-text-muted mb-0.5">Owner</p>
                   <p className="text-xs font-medium text-text-primary">
-                    {req.reporter?.first_name} {req.reporter?.last_name}
+                    {req.kind === 'walkin'
+                      ? (req.status === 'resolved' ? 'Collected' : 'Waiting for owner')
+                      : `${req.reporter?.first_name ?? ''} ${req.reporter?.last_name ?? ''}`}
                   </p>
                 </div>
               </div>
@@ -646,7 +746,7 @@ function DropoffPhoto({ path, onClick }) {
         className="w-12 h-12 object-cover rounded-lg shrink-0 border border-border"
       />
       <div className="flex flex-col items-start min-w-0">
-        <p className="text-xs font-medium text-text-primary">Drop-off photo</p>
+        <p className="text-xs font-medium text-text-primary">Item photo</p>
         <p className="text-[10px] text-text-muted group-hover:text-brand-600 transition-colors">Tap to view full size</p>
       </div>
     </button>

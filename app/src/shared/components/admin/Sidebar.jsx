@@ -29,7 +29,7 @@ const NAV_GROUPS = [
     label: 'Operations',
     items: [
       { to: '/admin/reports',  label: 'Reports',           icon: ListChecks    },
-      { to: '/admin/dropoff',  label: 'Drop-off Requests', icon: PackageCheck  },
+      { to: '/admin/dropoff',  label: 'ISSC Handoffs', icon: PackageCheck  },
       { to: '/admin/walk-in',  label: 'Walk-in Item',      icon: PersonStanding },
     ],
   },
