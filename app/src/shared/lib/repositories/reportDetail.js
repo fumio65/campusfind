@@ -7,6 +7,18 @@ function publicUrl(storagePath) {
   return data?.publicUrl ?? null
 }
 
+async function signedClaimPhotoUrls(photos) {
+  if (!photos.length) return []
+  try {
+    const results = await Promise.all(
+      photos.map((p) => supabase.storage.from('claim-photos').createSignedUrl(p.storage_path, 60 * 60)),
+    )
+    return results.map((r) => r.data?.signedUrl).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 // Merges onto whatever's already cached rather than overwriting wholesale -
 // fetchAll() caches the report twice (once with the raw row, again once the
 // reporter's name has resolved), and a second concurrent fetchAll (React's
@@ -91,7 +103,10 @@ export async function getCachedReportDetail(reportId) {
       messages.find((m) => m.sender_role === 'claimant' && !m.body?.startsWith('📍'))?.body ?? null
     claim = {
       ...activeClaim,
-      photoUrls: claimPhotos.map((p) => publicUrl(p.storage_path)),
+      // Claim photos live in the private claim-photos bucket, so a public
+      // report-photos URL 400s. Sign them (works online); offline, the
+      // signing fails and the photo strip is simply left empty.
+      photoUrls: await signedClaimPhotoUrls(claimPhotos),
       drop_off_chosen: dropOffChosen,
       claimant_message: claimantMessage,
     }
