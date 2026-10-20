@@ -193,7 +193,8 @@ Deno.serve(async (req) => {
           .select('storage_path')
           .eq('claim_id', claim.id)
         if (rejectedPhotos?.length) {
-          await supabaseAdmin.storage.from('report-photos').remove(rejectedPhotos.map((p) => p.storage_path))
+          // Claim photos live in the private claim-photos bucket.
+          await supabaseAdmin.storage.from('claim-photos').remove(rejectedPhotos.map((p) => p.storage_path))
         }
         await supabaseAdmin.from('claim_photos').delete().eq('claim_id', claim.id)
 
