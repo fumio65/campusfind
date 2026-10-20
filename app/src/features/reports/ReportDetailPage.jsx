@@ -461,20 +461,43 @@ export default function ReportDetailPage() {
     };
   }, [id]);
 
+  // FIX: deep links (#claim from "Someone found your item!", #tips) used
+  // scrollIntoView({block:"start"}), which tucked the target under the
+  // sticky header, and fired before the claim panel (gated on claimReady)
+  // had rendered. Wait for the target, then offset by the header height.
+  const hashScrolledRef = useRef(false);
   useEffect(() => {
-    if (!loading) {
-      if (window.location.hash) {
-        const el = document.querySelector(window.location.hash);
-        if (el) {
-          setTimeout(() => {
-            el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }, 300);
-        }
-      } else if (!highlightedTipId) {
-        scrollContainerTo(0);
-      }
+    if (loading) return;
+    if (!window.location.hash) {
+      if (!highlightedTipId) scrollContainerTo(0);
+      return;
     }
-  }, [loading]);
+    if (hashScrolledRef.current || !claimReady) return;
+    const el = document.querySelector(window.location.hash);
+    if (!el) return;
+    hashScrolledRef.current = true;
+    const t = setTimeout(() => {
+      const container = getScrollContainer();
+      const header = document.querySelector("[data-detail-header]");
+      const offset = (header?.offsetHeight ?? 0) + 12;
+      if (container && container.scrollHeight > container.clientHeight) {
+        const top =
+          el.getBoundingClientRect().top -
+          container.getBoundingClientRect().top +
+          container.scrollTop -
+          offset;
+        container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      } else {
+        const top = el.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [loading, claimReady]);
+
+  useEffect(() => {
+    hashScrolledRef.current = false;
+  }, [id]);
 
   useEffect(() => {
     if (!loading && highlightedTipId) {
@@ -1286,7 +1309,7 @@ export default function ReportDetailPage() {
       )}
 
       {/* Header */}
-      <div className="bg-brand-600 px-4 pt-12 pb-3 sticky top-0 z-10">
+      <div data-detail-header className="bg-brand-600 px-4 pt-12 pb-3 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-2">
           <button
             onClick={() => navigate(-1)}
