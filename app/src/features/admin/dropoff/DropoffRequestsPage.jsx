@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { PackageCheck, Clock, CheckCircle2, ImagePlus, ArrowLeft, X, AlertCircle, User, RefreshCw } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
 import { authHeaders } from '../../../shared/lib/apiClient'
+import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -267,6 +268,14 @@ export default function DropoffRequestsPage() {
 
   // Stable fetch function — reads filter from ref, not closure.
   const fetchRequests = useCallback(async (silent = false) => {
+    // Show the last list for this filter right away, then refresh it.
+    const cacheKey = `dropoff?${filterRef.current}`
+    const cached = getAdminCache(cacheKey)
+    if (cached) {
+      setRequests(cached)
+      setLoading(false)
+      silent = true
+    }
     if (!silent) setLoading(true)
     setError(null)
     try {
@@ -276,7 +285,9 @@ export default function DropoffRequestsPage() {
       )
       if (!res.ok) throw new Error(`Server responded with ${res.status}`)
       const data = await res.json()
-      setRequests(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data : []
+      setRequests(list)
+      setAdminCache(cacheKey, list)
     } catch (err) {
       console.error('fetchRequests error:', err)
       setError('Failed to load requests. Check your connection and try again.')

@@ -24,6 +24,7 @@ import StatusPill from "../../../shared/components/admin/StatusPill";
 import { staggerContainer, staggerItem } from "../../../shared/lib/adminMotion";
 import { supabase } from "../../../shared/lib/supabase";
 import { adminFetch, SERVER_URL } from "../../../shared/lib/apiClient";
+import { getAdminCache, setAdminCache } from "../../../shared/lib/adminCache";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,10 +63,13 @@ function StatCard({ label, value, sub, tone, icon: Icon }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
-  const [data, setData] = useState(null);
-  const [analytics, setAnalytics] = useState(null);
-  const [dropOffReports, setDropOffReports] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Start from the last result (if any) so returning to this tab is instant;
+  // fetchAll() still refreshes it in the background.
+  const cached = getAdminCache("overview");
+  const [data, setData] = useState(cached?.data ?? null);
+  const [analytics, setAnalytics] = useState(cached?.analytics ?? null);
+  const [dropOffReports, setDropOffReports] = useState(cached?.dropOffReports ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState(null);
 
   function fetchAll() {
@@ -76,9 +80,11 @@ export default function OverviewPage() {
     ])
       .then(([overviewBody, analyticsBody, dropoffBody]) => {
         if (overviewBody.error) throw new Error(overviewBody.error);
+        const dropOffs = Array.isArray(dropoffBody) ? dropoffBody : [];
         setData(overviewBody);
         setAnalytics(analyticsBody);
-        setDropOffReports(Array.isArray(dropoffBody) ? dropoffBody : []);
+        setDropOffReports(dropOffs);
+        setAdminCache("overview", { data: overviewBody, analytics: analyticsBody, dropOffReports: dropOffs });
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));

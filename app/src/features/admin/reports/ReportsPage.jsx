@@ -9,6 +9,7 @@ import { supabase } from '../../../shared/lib/supabase'
 import { adminFetch, authHeaders, SERVER_URL } from '../../../shared/lib/apiClient'
 import Dialog from '../../../shared/components/admin/Dialog'
 import ShareCardDialog from './ShareCardDialog'
+import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 
 const STATUS_TABS = [
   { label: 'All',      value: 'all'      },
@@ -371,14 +372,23 @@ export default function ReportsPage() {
   const searchTimer = useRef(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    const params = new URLSearchParams({
+      limit: PAGE_SIZE,
+      offset,
+      status: activeTab,
+      ...(search ? { search } : {}),
+    })
+    // Show the last result for this exact view right away (no skeleton),
+    // then refresh it.
+    const cacheKey = `reports?${params}`
+    const cached = getAdminCache(cacheKey)
+    if (cached) {
+      setReports(cached.reports)
+      setTotal(cached.total)
+    } else {
+      setLoading(true)
+    }
     try {
-      const params = new URLSearchParams({
-        limit: PAGE_SIZE,
-        offset,
-        status: activeTab,
-        ...(search ? { search } : {}),
-      })
       // FIX: this listing now requires an admin JWT on the server, so send
       // the signed-in admin's access token instead of an unauthenticated call.
       const res  = await adminFetch(`/reports?${params}`)
@@ -386,6 +396,7 @@ export default function ReportsPage() {
       if (!res.ok) throw new Error(body.error ?? `Failed to load reports (${res.status})`)
       setReports(body.reports ?? [])
       setTotal(body.total ?? 0)
+      setAdminCache(cacheKey, { reports: body.reports ?? [], total: body.total ?? 0 })
     } catch (e) {
       setError(e.message)
     } finally {

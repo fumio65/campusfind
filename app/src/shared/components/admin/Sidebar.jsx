@@ -15,6 +15,7 @@ import {
 import sealSrc from '../../../assets/icon-only.png'
 import { supabase } from '../../lib/supabase'
 import NotificationBell from './NotificationBell'
+import { clearAdminCache } from '../../lib/adminCache'
 
 // ── Nav groups ────────────────────────────────────────────────────────────────
 const NAV_GROUPS = [
@@ -133,7 +134,7 @@ export default function Sidebar() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => supabase.auth.signOut({ scope: "local" })}
+                  onClick={() => { clearAdminCache(); supabase.auth.signOut({ scope: "local" }) }}
                   className="flex-1 h-11 rounded-xl bg-status-rejected-text text-white text-sm font-semibold hover:opacity-90 transition-colors flex items-center justify-center gap-2"
                 >
                   <LogOut size={15} />

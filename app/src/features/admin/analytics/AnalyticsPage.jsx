@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
 } from 'recharts'
 import { FileText } from 'lucide-react'
+import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 
 const TRUST_REASON_LABELS = {
   claim_rejected: 'Claim rejected',
@@ -89,29 +90,40 @@ function StatCard({ label, value, sub, color }) {
 }
 
 export default function AnalyticsPage() {
-  const [stats, setStats] = useState({ total: 0, resolved: 0, open: 0, claimed: 0, approved: 0, avgResolutionDays: null })
-  const [categoryData, setCategoryData] = useState([])
-  const [trendData, setTrendData] = useState([])
-  const [topLocations, setTopLocations] = useState([])
-  const [claimsFunnel, setClaimsFunnel] = useState({ pending: 0, approved: 0, rejected: 0, approvalRate: 0 })
-  const [trustDistribution, setTrustDistribution] = useState([])
-  const [avgTrustScore, setAvgTrustScore] = useState(null)
-  const [reportTypeData, setReportTypeData] = useState([])
-  const [resolvedViaData, setResolvedViaData] = useState([])
-  const [tipsStats, setTipsStats] = useState({ total: 0, credited: 0, rate: 0 })
-  const [trustEventReasons, setTrustEventReasons] = useState([])
-  const [accountStatus, setAccountStatus] = useState({ active: 0, deactivated: 0 })
-  const [accountsByProgram, setAccountsByProgram] = useState([])
-  const [accountsByDepartment, setAccountsByDepartment] = useState([])
-  const [accountsByYear, setAccountsByYear] = useState([])
-  const [lostByDepartment, setLostByDepartment] = useState([])
-  const [lostByProgram, setLostByProgram] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Last loaded charts, so returning to this tab shows them immediately
+  // while load() refreshes them in the background.
+  const cached = getAdminCache('analytics')
+  const [stats, setStats] = useState(cached?.stats ?? { total: 0, resolved: 0, open: 0, claimed: 0, approved: 0, avgResolutionDays: null })
+  const [categoryData, setCategoryData] = useState(cached?.categoryData ?? [])
+  const [trendData, setTrendData] = useState(cached?.trendData ?? [])
+  const [topLocations, setTopLocations] = useState(cached?.topLocations ?? [])
+  const [claimsFunnel, setClaimsFunnel] = useState(cached?.claimsFunnel ?? { pending: 0, approved: 0, rejected: 0, approvalRate: 0 })
+  const [trustDistribution, setTrustDistribution] = useState(cached?.trustDistribution ?? [])
+  const [avgTrustScore, setAvgTrustScore] = useState(cached?.avgTrustScore ?? null)
+  const [reportTypeData, setReportTypeData] = useState(cached?.reportTypeData ?? [])
+  const [resolvedViaData, setResolvedViaData] = useState(cached?.resolvedViaData ?? [])
+  const [tipsStats, setTipsStats] = useState(cached?.tipsStats ?? { total: 0, credited: 0, rate: 0 })
+  const [trustEventReasons, setTrustEventReasons] = useState(cached?.trustEventReasons ?? [])
+  const [accountStatus, setAccountStatus] = useState(cached?.accountStatus ?? { active: 0, deactivated: 0 })
+  const [accountsByProgram, setAccountsByProgram] = useState(cached?.accountsByProgram ?? [])
+  const [accountsByDepartment, setAccountsByDepartment] = useState(cached?.accountsByDepartment ?? [])
+  const [accountsByYear, setAccountsByYear] = useState(cached?.accountsByYear ?? [])
+  const [lostByDepartment, setLostByDepartment] = useState(cached?.lostByDepartment ?? [])
+  const [lostByProgram, setLostByProgram] = useState(cached?.lostByProgram ?? [])
+  const [loading, setLoading] = useState(!cached)
+  // Bumped each time load() finishes, so the snapshot below is saved after
+  // background refreshes too (loading stays false for those).
+  const [loadedVersion, setLoadedVersion] = useState(0)
 
   useEffect(() => { load() }, [])
 
+  // Save the finished snapshot once every chart has loaded.
+  useEffect(() => {
+    if (loadedVersion > 0) setAdminCache('analytics', { stats, categoryData, trendData, topLocations, claimsFunnel, trustDistribution, avgTrustScore, reportTypeData, resolvedViaData, tipsStats, trustEventReasons, accountStatus, accountsByProgram, accountsByDepartment, accountsByYear, lostByDepartment, lostByProgram })
+  }, [loadedVersion])
+
   async function load() {
-    setLoading(true)
+    if (!getAdminCache('analytics')) setLoading(true)
     try {
       await Promise.all([
         fetchStats(),
@@ -128,6 +140,7 @@ export default function AnalyticsPage() {
       ])
     } finally {
       setLoading(false)
+      setLoadedVersion((v) => v + 1)
     }
   }
 

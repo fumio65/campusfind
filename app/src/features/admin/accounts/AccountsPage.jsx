@@ -4,6 +4,7 @@ import { fetchAccounts, fetchPrograms, createSingleAccount, toggleAccountStatus,
 import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
 import Dropdown from '../../../shared/components/Dropdown'
+import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 
 // Program/department names are stored in ALL CAPS (the official NWSSU list
 // uses that style) - fine for a database column, not for a UI label.
@@ -103,12 +104,21 @@ export default function AccountsPage() {
   }, [])
 
   async function load(currentOffset, currentSearch) {
-    setLoading(true)
+    // Show the last result for this page/search right away, then refresh.
+    const cacheKey = `accounts?${currentOffset}&${currentSearch ?? ''}`
+    const cached = getAdminCache(cacheKey)
+    if (cached) {
+      setAccounts(cached.accounts)
+      setTotal(cached.total)
+    } else {
+      setLoading(true)
+    }
     setError(null)
     try {
       const result = await fetchAccounts({ limit: PAGE_SIZE, offset: currentOffset, search: currentSearch })
       setAccounts(result.accounts)
       setTotal(result.total)
+      setAdminCache(cacheKey, { accounts: result.accounts, total: result.total })
     } catch (err) {
       setError(err.message)
       setAccounts([])

@@ -62,6 +62,9 @@ export function getCorsHeaders(
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': methods,
     'Vary': 'Origin',
+    // Let the browser reuse a successful preflight for 2 hours (Chrome's
+    // cap) instead of sending an extra OPTIONS round trip before every call.
+    'Access-Control-Max-Age': '7200',
   }
   if (origin && allowedOrigins().includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin
