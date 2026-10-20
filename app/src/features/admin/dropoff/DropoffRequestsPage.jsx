@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
+import { useSearchParams } from 'react-router-dom'
 import { PackageCheck, Clock, CheckCircle2, ImagePlus, ArrowLeft, X, AlertCircle, User, RefreshCw } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
 import { authHeaders } from '../../../shared/lib/apiClient'
@@ -316,7 +317,13 @@ export default function DropoffRequestsPage() {
   const [requests, setRequests]           = useState([])
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState(null)
-  const [filter, setFilter]               = useState('pending')
+  // Links can open a specific tab, e.g. Reports' "Release" on a walk-in
+  // opens ?filter=received (Ready for pickup).
+  const [searchParams] = useSearchParams()
+  const [filter, setFilter]               = useState(() => {
+    const requested = searchParams.get('filter')
+    return FILTERS.some((f) => f.value === requested) ? requested : 'pending'
+  })
   const [selected, setSelected]           = useState(null)
   const [pickupRequest, setPickupRequest] = useState(null)
   const [photo, setPhoto]                 = useState(null)

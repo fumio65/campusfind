@@ -309,7 +309,7 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, reso
             )}
             {/* Walk-ins are released to their owner from ISSC Handoffs. */}
             {report.type === 'found_walkin' && report.status === 'open' && (
-              <Link to="/admin/dropoff" className="px-3 h-9 rounded-lg bg-status-approved-bg text-status-approved-text text-xs font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
+              <Link to="/admin/dropoff?filter=received" className="px-3 h-9 rounded-lg bg-status-approved-bg text-status-approved-text text-xs font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap flex items-center gap-1.5">
                 Release in ISSC Handoffs
               </Link>
             )}
@@ -881,7 +881,7 @@ export default function ReportsPage() {
                           </button>
                         )}
                         {r.type === 'found_walkin' && r.status === 'open' && (
-                          <Link to="/admin/dropoff" className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
+                          <Link to="/admin/dropoff?filter=received" className="px-2.5 py-1 rounded-lg bg-status-approved-bg text-status-approved-text text-[11px] font-semibold border border-status-approved-text/20 hover:opacity-80 transition-opacity whitespace-nowrap">
                             Release
                           </Link>
                         )}
