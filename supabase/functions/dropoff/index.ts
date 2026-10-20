@@ -132,6 +132,23 @@ Deno.serve(async (req) => {
         console.error('[dropoff] notification insert failed:', notifError)
       }
 
+      // Tell the other student on the claim that the drop-off is agreed
+      // (previously only the admin was notified).
+      const otherPartyId = caller.id === claimantId ? reporterId : claimantId
+      if (otherPartyId) {
+        const { error: partyError } = await supabaseAdmin.from('user_notifications').insert({
+          user_id: otherPartyId,
+          type: 'dropoff_chosen',
+          title: 'ISSC drop-off confirmed',
+          body: otherPartyId === reporterId
+            ? `The finder will bring "${reportTitle}" to the ISSC office. You'll be notified when it's ready for pickup.`
+            : `The ISSC drop-off for "${reportTitle}" is confirmed. Bring the item to the ISSC office.`,
+          report_id: reportId,
+          claim_id: claimId,
+        })
+        if (partyError) console.error('[dropoff] party notification failed:', partyError)
+      }
+
       return new Response(JSON.stringify({ ok: true, id: request.id }), {
         status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })

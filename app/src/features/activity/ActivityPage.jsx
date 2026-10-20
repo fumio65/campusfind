@@ -31,6 +31,8 @@ const TYPE_CONFIG = {
   walkin_registered: { icon: MapPin,        color: 'text-brand-600',           bg: 'bg-brand-50'          },
   new_message:       { icon: MessageSquare, color: 'text-brand-600',           bg: 'bg-brand-50'          },
   dropoff_chosen:    { icon: MapPin,        color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
+  dropoff_suggested: { icon: MapPin,        color: 'text-brand-600',           bg: 'bg-brand-50'          },
+  dropoff_declined:  { icon: XCircle,       color: 'text-status-rejected-text',bg: 'bg-status-rejected-bg'},
   new_report:        { icon: Bell,          color: 'text-brand-600',           bg: 'bg-brand-50'          },
   resolve_reminder:  { icon: CheckCircle2,  color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
   // Trust-score rewards and recovery confirmations

@@ -1,7 +1,7 @@
 // Where tapping a notification should land, shared between the in-app
 // Activity list and the native push/local notification tap handlers so a
 // tap always resolves to the same place regardless of how it was received.
-const MESSAGE_TYPES = ['new_message', 'dropoff_chosen', 'claim_approved']
+const MESSAGE_TYPES = ['new_message', 'dropoff_chosen', 'dropoff_suggested', 'dropoff_declined', 'claim_approved']
 const HASH_BY_TYPE = {
   claim_submitted: '#claim',
   claim_rejected:  '#claim',

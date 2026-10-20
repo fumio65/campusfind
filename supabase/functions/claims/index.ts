@@ -30,6 +30,12 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
   if (error) console.error('Failed to log trust_score_events:', JSON.stringify(error))
 }
 
+// Marker bodies the app sends for ISSC drop-off actions
+// (app/src/shared/lib/operations/messages.js).
+const DROPOFF_CHOSEN_BODY = '📍 ISSC_DROPOFF'
+const DROPOFF_REQUESTED_BODY = '🔔 ISSC_DROPOFF_REQUESTED'
+const DROPOFF_DECLINED_BODY = '🚫 ISSC_DROPOFF_DECLINED'
+
 async function checkRepeatedRejections(userId: string): Promise<boolean> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const { count } = await supabaseAdmin
@@ -239,12 +245,48 @@ Deno.serve(async (req) => {
       const recipientId = senderRole === 'reporter'
         ? claim.claimant_id
         : (claim.reports as any)?.reporter_id
-      if (recipientId) {
+      // The ISSC drop-off suggest/decline actions are sent as marker chat
+      // messages; notifying them as a plain "New message" was misleading.
+      // Read the caller's message from the database (never trust the body
+      // sent in the request) and word the notification to match it.
+      const { messageId } = await req.json().catch(() => ({}))
+      let latest: { body: string } | null = null
+      {
+        let q = supabaseAdmin
+          .from('claim_messages')
+          .select('body')
+          .eq('claim_id', claim.id)
+          .eq('sender_id', caller.id)
+        if (messageId) q = q.eq('id', messageId)
+        const { data } = await q.order('created_at', { ascending: false }).limit(1)
+        latest = data?.[0] ?? null
+      }
+      const who = senderRole === 'reporter' ? 'The reporter' : 'The finder'
+      let note = {
+        type: 'new_message',
+        title: 'New message',
+        body: `${who} sent a message about "${reportTitle}".`,
+      }
+      if (latest?.body === DROPOFF_REQUESTED_BODY) {
+        note = {
+          type: 'dropoff_suggested',
+          title: 'ISSC drop-off suggested',
+          body: `${who} suggested returning "${reportTitle}" through the ISSC office. Open the chat to accept or decline.`,
+        }
+      } else if (latest?.body === DROPOFF_DECLINED_BODY) {
+        note = {
+          type: 'dropoff_declined',
+          title: 'ISSC drop-off declined',
+          body: `${who} declined the ISSC drop-off for "${reportTitle}". Arrange the handoff in the chat.`,
+        }
+      } else if (latest?.body === DROPOFF_CHOSEN_BODY) {
+        // The accepted drop-off is notified by the dropoff function.
+        note = null as any
+      }
+      if (recipientId && note) {
         await notifyUser({
           userId: recipientId,
-          type: 'new_message',
-          title: 'New message',
-          body: `${senderRole === 'reporter' ? 'The reporter' : 'The finder'} sent a message about "${reportTitle}".`,
+          ...note,
           reportId,
           claimId: claim.id,
         })

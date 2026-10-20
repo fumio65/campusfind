@@ -36,7 +36,7 @@ async function notifyMessageServer(message) {
       apikey: ANON_KEY,
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
     },
-    body: JSON.stringify({ senderId: message.sender_id, senderRole: message.sender_role }),
+    body: JSON.stringify({ messageId: message.id }),
   })
 }
 
