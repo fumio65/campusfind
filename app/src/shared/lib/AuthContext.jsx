@@ -109,7 +109,7 @@ export function AuthProvider({ children }) {
         if (window.location.pathname !== '/login') {
           sessionStorage.setItem(FORCED_SIGNOUT_KEY, '1')
         }
-        supabase.auth.signOut()
+        supabase.auth.signOut({ scope: "local" })
       }
     } catch {
       // Offline or request failed - keep the cached profile (if any) rather

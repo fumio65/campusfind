@@ -62,7 +62,7 @@ export default function LoginPage() {
       .single()
 
     if (profile?.status === 'deactivated') {
-      await supabase.auth.signOut()
+      await supabase.auth.signOut({ scope: "local" })
       setError('This account has been deactivated. Please contact the ISSC office for assistance.')
       setLoading(false)
       return

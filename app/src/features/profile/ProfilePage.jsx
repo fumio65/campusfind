@@ -75,7 +75,7 @@ export default function ProfilePage() {
   }, [session?.user?.id])
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: "local" })
     navigate('/login')
   }
 
