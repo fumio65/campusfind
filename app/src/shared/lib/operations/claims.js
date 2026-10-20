@@ -3,8 +3,7 @@ import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
 import { makeDisplayImage } from '../imageThumbnail'
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
+import { SERVER_URL, authFetch } from '../apiClient'
 
 registerHandler('submitClaim', async (payload) => {
   const { claim, photos, message, originalTipId } = payload
@@ -66,14 +65,9 @@ registerHandler('submitClaim', async (payload) => {
 // FIX: claims function now requires a valid JWT (verify_jwt=true), so this
 // best-effort notify call needs the signed-in user's access token too.
 async function notifyClaimServer(claim) {
-  const { data: { session } } = await supabase.auth.getSession()
-  return fetch(`${SERVER_URL}/claims`, {
+  return authFetch(`${SERVER_URL}/claims`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: ANON_KEY,
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reportId: claim.report_id, claimantId: claim.claimant_id }),
   })
 }

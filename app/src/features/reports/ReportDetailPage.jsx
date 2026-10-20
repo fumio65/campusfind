@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
-import { authHeaders } from "../../shared/lib/apiClient";
+import { authHeaders, authFetch } from "../../shared/lib/apiClient";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { submitTip } from "../../shared/lib/operations/tips";
 import { liveQuery } from "dexie";
@@ -711,16 +711,34 @@ export default function ReportDetailPage() {
     }
 
     if (session?.user?.id) {
-      const { data: rejectedClaim } = await supabase
+      // FIX: a claimant can be rejected more than once on the same report;
+      // maybeSingle() errored on 2+ rejected rows, so the stale cached
+      // "pending" claim stayed on screen and hid the claim button.
+      const { data: rejectedRows } = await supabase
         .from("claims")
         .select("id, status, claimant_id")
         .eq("report_id", id)
         .eq("claimant_id", session.user.id)
         .eq("status", "rejected")
-        .maybeSingle();
-      if (rejectedClaim && !activeClaim) {
-        setClaim(rejectedClaim);
-        await cacheClaim(rejectedClaim);
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const rejectedClaim = rejectedRows?.[0] ?? null;
+      if (!activeClaim) {
+        // The server has no active claim: drop cached pending/approved
+        // claims that already synced (they were rejected since), but keep
+        // one still waiting to upload from offline.
+        const stale = await db.claims
+          .where("report_id")
+          .equals(id)
+          .filter((c) => ["pending", "approved"].includes(c.status) && c._syncStatus !== "pending")
+          .toArray();
+        if (stale.length) await db.claims.bulkDelete(stale.map((c) => c.id));
+        if (rejectedClaim) {
+          setClaim(rejectedClaim);
+          await cacheClaim(rejectedClaim);
+        } else {
+          setClaim((prev) => (prev?._syncStatus === "pending" ? prev : null));
+        }
       }
     }
     setClaimReady(true);
@@ -755,16 +773,12 @@ export default function ReportDetailPage() {
     if (!claim) return;
     setActioning(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      await fetch(`${EDGE_URL}/claims/${claim.id}`, {
+      const res = await authFetch(`${EDGE_URL}/claims/${claim.id}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": ANON_KEY,
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
+      if (!res.ok) console.error("Claim action failed", res.status, await res.text());
     } catch (err) {
       console.error(err);
     }
