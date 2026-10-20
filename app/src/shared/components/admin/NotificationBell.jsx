@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, X, MapPin, CheckCircle2, UserCheck, XCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { authHeaders } from '../../lib/apiClient'
 
 const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
@@ -65,7 +66,7 @@ export default function NotificationBell() {
   async function fetchNotifications() {
     try {
       const res = await fetch(`${EDGE_URL}/notifications`, {
-        headers: { 'apikey': ANON_KEY },
+        headers: await authHeaders(),
       })
       const data = await res.json()
       setNotifications(Array.isArray(data) ? data : [])
@@ -79,7 +80,7 @@ export default function NotificationBell() {
   async function markAllRead() {
     await fetch(`${EDGE_URL}/notifications/read-all`, {
       method: 'PATCH',
-      headers: { 'apikey': ANON_KEY },
+      headers: await authHeaders(),
     })
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
   }
@@ -87,7 +88,7 @@ export default function NotificationBell() {
   async function markRead(id) {
     await fetch(`${EDGE_URL}/notifications/${id}`, {
       method: 'PATCH',
-      headers: { 'apikey': ANON_KEY },
+      headers: await authHeaders(),
     })
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n))
   }

@@ -1,5 +1,6 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { requireAdmin } from '../_shared/requireAdmin.ts'
 
 
 const supabaseAdmin = createClient(
@@ -17,6 +18,12 @@ Deno.serve(async (req) => {
   const pathParts = url.pathname.split('/').filter(Boolean)
   const baseIndex = pathParts.indexOf('notifications')
   const id = pathParts[baseIndex + 1]
+
+  // SECURITY FIX (Strix WEB-03): every route here reads or changes the admin
+  // dashboard's notifications, but none had an auth check, so anyone could
+  // read, forge, or mass-dismiss admin alerts. All routes are now admin-only.
+  const caller = await requireAdmin(req, supabaseAdmin)
+  if (caller instanceof Response) return caller
 
   try {
     // GET /notifications

@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../../shared/lib/supabase";
+import { authHeaders } from "../../shared/lib/apiClient";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { submitTip } from "../../shared/lib/operations/tips";
 import { liveQuery } from "dexie";
@@ -810,10 +811,7 @@ export default function ReportDetailPage() {
         // tracked separately from a plain claim-approved handoff.
         await fetch(`${EDGE_URL}/tips/${resolveTip.id}/credit`, {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": ANON_KEY,
-          },
+          headers: await authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             userId: resolveTip.user_id,
             reportId: id,
@@ -824,10 +822,7 @@ export default function ReportDetailPage() {
 
       await fetch(`${EDGE_URL}/reports/${id}/resolve`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": ANON_KEY,
-        },
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           resolvedVia: resolveTip ? "tip_credited" : "handoff",
           resolvePhotoPath: path,

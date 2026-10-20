@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { authHeaders } from '../apiClient'
 import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
 
@@ -16,10 +17,10 @@ registerHandler('submitTip', async (tip) => {
   notifyTipServer(tip).catch(() => {})
 })
 
-function notifyTipServer(tip) {
+async function notifyTipServer(tip) {
   return fetch(`${SERVER_URL}/tips/notify`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       reportId: tip.report_id,
       tipAuthorId: tip.user_id,

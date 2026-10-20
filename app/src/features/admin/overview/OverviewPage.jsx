@@ -72,7 +72,7 @@ export default function OverviewPage() {
     Promise.all([
       adminFetch(`/overview`).then((r) => r.json()),
       adminFetch(`/analytics`).then((r) => r.json()),
-      fetch(`${SERVER_URL}/dropoff?status=pending`).then((r) => r.json()),
+      adminFetch(`/dropoff?status=pending`).then((r) => r.json()),
     ])
       .then(([overviewBody, analyticsBody, dropoffBody]) => {
         if (overviewBody.error) throw new Error(overviewBody.error);

@@ -6,7 +6,7 @@ import {
   Package, Share2,
 } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
-import { adminFetch, SERVER_URL } from '../../../shared/lib/apiClient'
+import { adminFetch, authHeaders, SERVER_URL } from '../../../shared/lib/apiClient'
 import Dialog from '../../../shared/components/admin/Dialog'
 import ShareCardDialog from './ShareCardDialog'
 
@@ -464,7 +464,7 @@ export default function ReportsPage() {
     try {
       const res = await fetch(`${SERVER_URL}/reports/${id}/resolve`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           resolvedVia: via,
           verifiedStudentId: handoffRecord.isProxy ? handoffRecord.proxyStudentId : handoffRecord.verifiedStudentId,

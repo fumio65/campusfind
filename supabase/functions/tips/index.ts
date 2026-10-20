@@ -1,5 +1,6 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
+import { requireUser } from '../_shared/requireUser.ts'
 
 
 const supabaseAdmin = createClient(
@@ -64,16 +65,19 @@ Deno.serve(async (req) => {
   try {
     // PATCH /tips/:id/credit
     if (req.method === 'PATCH' && id && action === 'credit') {
-      const { userId, reportId, resolveReport } = await req.json()
-      if (!userId || !reportId) {
-        return new Response(JSON.stringify({ error: 'userId and reportId required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
+      // SECURITY FIX (Strix WEB-02): this route had no auth check and took the
+      // user to reward and the report to resolve from the request body, so
+      // anyone could grant trust score to any account or close any report.
+      // Now only the signed-in reporter of the tip's report can credit it,
+      // and the tip author and report are read from the database.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
+      const { resolveReport } = await req.json().catch(() => ({}))
 
       const { data: tip } = await supabaseAdmin
         .from('tips')
-        .select('id, user_id, report_id, reports(title)')
+        .select('id, user_id, report_id, credited_for_recovery, reports(title, reporter_id)')
         .eq('id', id)
         .single()
 
@@ -82,6 +86,28 @@ Deno.serve(async (req) => {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+
+      if ((tip.reports as any)?.reporter_id !== caller.id) {
+        return new Response(JSON.stringify({ error: 'Only the reporter can credit a tip on this report.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (tip.user_id === caller.id) {
+        return new Response(JSON.stringify({ error: 'You cannot credit your own tip.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      // Already credited: don't award the +2 a second time.
+      if (tip.credited_for_recovery) {
+        return new Response(JSON.stringify({ ok: true, alreadyCredited: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      const userId = tip.user_id
+      const reportId = tip.report_id
 
       // FIX: the tips table has no "credited" column - it's
       // "credited_for_recovery" - so this update was silently failing (error
@@ -116,12 +142,51 @@ Deno.serve(async (req) => {
 
     // POST /tips/notify
     if (req.method === 'POST' && id === 'notify') {
-      const { reportId, tipAuthorId, parentTipId, tipId } = await req.json()
-      if (!reportId || !tipAuthorId) {
-        return new Response(JSON.stringify({ error: 'reportId and tipAuthorId required' }), {
+      // SECURITY FIX (Strix WEB-02): anyone could trigger notification spam to
+      // a report's reporter and tippers. Now the caller must be the signed-in
+      // author of the tip being announced, the tip details are read from the
+      // database, and each tip is announced only once.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
+      const { tipId } = await req.json()
+      if (!tipId) {
+        return new Response(JSON.stringify({ error: 'tipId required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+
+      const { data: tip } = await supabaseAdmin
+        .from('tips')
+        .select('id, user_id, report_id, parent_tip_id')
+        .eq('id', tipId)
+        .single()
+
+      if (!tip) {
+        return new Response(JSON.stringify({ error: 'Tip not found' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (tip.user_id !== caller.id) {
+        return new Response(JSON.stringify({ error: 'Only the tip author can send its notifications.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      const { count: alreadySent } = await supabaseAdmin
+        .from('user_notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('tip_id', tipId)
+      if ((alreadySent ?? 0) > 0) {
+        return new Response(JSON.stringify({ ok: true, alreadySent: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      const reportId = tip.report_id
+      const tipAuthorId = tip.user_id
+      const parentTipId = tip.parent_tip_id
 
       const { data: report } = await supabaseAdmin
         .from('reports')

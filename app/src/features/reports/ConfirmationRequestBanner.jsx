@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react'
 import { AlertCircle, CheckCircle2, XCircle } from 'lucide-react'
+import { supabase } from '../../shared/lib/supabase'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
+
+// FIX: confirmation function now requires a valid JWT (verify_jwt=true) and
+// checks the caller is the report's reporter, so these calls must send the
+// signed-in user's access token and the apikey header, not neither.
+async function authHeaders() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return {
+    'Content-Type': 'application/json',
+    apikey: ANON_KEY,
+    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+  }
+}
 
 export default function ConfirmationRequestBanner({ reportId }) {
   const [request, setRequest] = useState(undefined)
@@ -16,7 +30,9 @@ export default function ConfirmationRequestBanner({ reportId }) {
 
   async function fetchRequest() {
     try {
-      const res = await fetch(`${SERVER_URL}/confirmation/${reportId}`)
+      const res = await fetch(`${SERVER_URL}/confirmation/${reportId}`, {
+        headers: await authHeaders(),
+      })
       const data = await res.json()
       setRequest(data ?? null)
     } catch {
@@ -30,7 +46,7 @@ export default function ConfirmationRequestBanner({ reportId }) {
     try {
       const res = await fetch(`${SERVER_URL}/confirmation/${request.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({ status }),
       })
       if (!res.ok) throw new Error('Failed to respond')

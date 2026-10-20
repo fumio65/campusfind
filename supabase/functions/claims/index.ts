@@ -75,10 +75,28 @@ Deno.serve(async (req) => {
   try {
     // POST /claims
     if (req.method === 'POST' && !id) {
-      const { reportId, claimantId } = await req.json()
-      if (!reportId || !claimantId) {
-        return new Response(JSON.stringify({ error: 'reportId and claimantId required' }), {
+      // SECURITY FIX: anyone could send a "Someone found your item!"
+      // notification to any reporter. The caller must be signed in and must
+      // actually have a pending claim on the report.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
+      const { reportId } = await req.json()
+      if (!reportId) {
+        return new Response(JSON.stringify({ error: 'reportId required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      const { data: ownClaim } = await supabaseAdmin
+        .from('claims')
+        .select('id')
+        .eq('report_id', reportId)
+        .eq('claimant_id', caller.id)
+        .eq('status', 'pending')
+        .maybeSingle()
+      if (!ownClaim) {
+        return new Response(JSON.stringify({ error: 'No pending claim by you on this report.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
       const { data: report } = await supabaseAdmin
@@ -192,12 +210,12 @@ Deno.serve(async (req) => {
 
     // POST /claims/:id/message
     if (req.method === 'POST' && id && action === 'message') {
-      const { senderId, senderRole } = await req.json()
-      if (!senderId || !senderRole) {
-        return new Response(JSON.stringify({ error: 'senderId and senderRole required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
+      // SECURITY FIX: the sender and their role came from the request body,
+      // so anyone could send message notifications on any claim. The sender
+      // is now the signed-in caller, who must be the claimant or reporter.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { data: claim } = await supabaseAdmin
         .from('claims')
         .select('id, claimant_id, report_id, reports(title, reporter_id)')
@@ -208,6 +226,14 @@ Deno.serve(async (req) => {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+      const isClaimant = caller.id === claim.claimant_id
+      const isReporter = caller.id === (claim.reports as any)?.reporter_id
+      if (!isClaimant && !isReporter) {
+        return new Response(JSON.stringify({ error: 'Only the claimant or reporter can message on this claim.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      const senderRole = isReporter ? 'reporter' : 'claimant'
       const reportTitle = (claim.reports as any)?.title ?? 'your item'
       const reportId = claim.report_id
       const recipientId = senderRole === 'reporter'
@@ -230,6 +256,9 @@ Deno.serve(async (req) => {
 
     // POST /claims/:id/dropoff
     if (req.method === 'POST' && id && action === 'dropoff') {
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { data: claim } = await supabaseAdmin
         .from('claims')
         .select('id, claimant_id, report_id, reports(title, reporter_id)')
@@ -238,6 +267,11 @@ Deno.serve(async (req) => {
       if (!claim) {
         return new Response(JSON.stringify({ error: 'Claim not found' }), {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      if (caller.id !== claim.claimant_id && caller.id !== (claim.reports as any)?.reporter_id) {
+        return new Response(JSON.stringify({ error: 'Only the claimant or reporter can choose a drop-off.' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
       await supabaseAdmin.from('reports').update({ drop_off_chosen: true }).eq('id', claim.report_id)

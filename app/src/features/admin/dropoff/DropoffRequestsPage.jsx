@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion'
 import { PackageCheck, Clock, CheckCircle2, ImagePlus, ArrowLeft, X, AlertCircle, User, RefreshCw } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
+import { authHeaders } from '../../../shared/lib/apiClient'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -271,7 +272,7 @@ export default function DropoffRequestsPage() {
     try {
       const res = await fetch(
         `${SERVER_URL}/dropoff?status=${filterRef.current}`,
-        { headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' } },
+        { headers: await authHeaders({ 'Content-Type': 'application/json' }) },
       )
       if (!res.ok) throw new Error(`Server responded with ${res.status}`)
       const data = await res.json()
@@ -319,7 +320,7 @@ export default function DropoffRequestsPage() {
       await supabase.storage.from('report-photos').upload(path, photo)
       await fetch(`${SERVER_URL}/dropoff/${selected.id}/receive`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ photoPath: path }),
       })
       setSelected(null)
@@ -337,7 +338,7 @@ export default function DropoffRequestsPage() {
     try {
       await fetch(`${SERVER_URL}/dropoff/${requestId}/pickup`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ isProxy }),
       })
       setPickupRequest(null)

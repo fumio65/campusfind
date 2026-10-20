@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { authHeaders } from '../apiClient'
 import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
 import { seedCache } from '../imageCache'
@@ -84,10 +85,10 @@ registerHandler('createReport', async (payload) => {
   notifyReportServer(report).catch(() => {})
 })
 
-function notifyReportServer(report) {
+async function notifyReportServer(report) {
   return fetch(`${SERVER_URL}/reports/${report.id}/announce`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       reporterId: report.reporter_id,
       title: report.title,

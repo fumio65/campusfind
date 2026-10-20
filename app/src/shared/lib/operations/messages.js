@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { authHeaders } from '../apiClient'
 import { db } from '../db'
 import { enqueue, registerHandler, isPrimaryKeyConflict } from '../syncEngine'
 
@@ -24,10 +25,17 @@ registerHandler('sendMessage', async (message) => {
   notifyMessageServer(message).catch(() => {})
 })
 
-function notifyMessageServer(message) {
+// FIX: claims function now requires a valid JWT (verify_jwt=true), so this
+// best-effort notify call needs the signed-in user's access token too.
+async function notifyMessageServer(message) {
+  const { data: { session } } = await supabase.auth.getSession()
   return fetch(`${SERVER_URL}/claims/${message.claim_id}/message`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: ANON_KEY,
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
     body: JSON.stringify({ senderId: message.sender_id, senderRole: message.sender_role }),
   })
 }
@@ -63,7 +71,7 @@ registerHandler('chooseDropoff', async (payload) => {
 
   const res = await fetch(`${EDGE_URL}/dropoff`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: ANON_KEY },
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ reportId, claimId, claimantId, reporterId }),
   })
   if (!res.ok) {

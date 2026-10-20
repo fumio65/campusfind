@@ -1,6 +1,7 @@
 ﻿import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { getCorsHeaders } from '../_shared/cors.ts'
 import { requireAdmin } from '../_shared/requireAdmin.ts'
+import { requireUser } from '../_shared/requireUser.ts'
 
 
 const supabaseAdmin = createClient(
@@ -29,6 +30,14 @@ async function adjustTrustScore(userId: string, delta: number, reason: string) {
   })
   if (error) console.error('Failed to log trust_score_events:', JSON.stringify(error))
 }
+
+async function isAdmin(userId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin.from('users').select('role').eq('id', userId).single()
+  return data?.role === 'admin'
+}
+
+const forbidden = (corsHeaders: Record<string, string>, error: string, status = 403) =>
+  new Response(JSON.stringify({ error }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
 async function notifyUser({ userId, type, title, body, reportId = null, claimId = null }: {
   userId: string
@@ -145,11 +154,17 @@ Deno.serve(async (req) => {
 
     // PATCH /reports/:id/resolve
     if (req.method === 'PATCH' && id && action === 'resolve') {
+      // SECURITY FIX: this route had no auth check, so anyone could close any
+      // report and award +5 trust score. Only the report's reporter or an
+      // admin may resolve it, and only once.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { resolvedVia } = await req.json()
 
       const { data: report } = await supabaseAdmin
         .from('reports')
-        .select('id, title, reporter_id, claims(id, claimant_id, status)')
+        .select('id, title, status, reporter_id, claims(id, claimant_id, status)')
         .eq('id', id)
         .single()
 
@@ -157,6 +172,14 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: 'Report not found' }), {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
+      }
+
+      if (report.reporter_id !== caller.id && !(await isAdmin(caller.id))) {
+        return forbidden(corsHeaders, 'Only the reporter or an admin can resolve this report.')
+      }
+
+      if (report.status === 'resolved') {
+        return forbidden(corsHeaders, 'Report is already resolved.', 409)
       }
 
       await supabaseAdmin
@@ -185,6 +208,9 @@ Deno.serve(async (req) => {
 
     // POST /reports/walkin
     if (req.method === 'POST' && id === 'walkin') {
+      const caller = await requireAdmin(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const body = await req.json()
       const { title, description, location, category, finderStudentId, photoStoragePaths } = body
 
@@ -257,6 +283,11 @@ Deno.serve(async (req) => {
 
     // POST /reports/:id/credit-finder
     if (req.method === 'POST' && id && action === 'credit-finder') {
+      // SECURITY FIX: admin-only - anyone could award +5 trust score to any
+      // student ID.
+      const caller = await requireAdmin(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { finderStudentId } = await req.json()
 
       const { data: report } = await supabaseAdmin
@@ -295,6 +326,12 @@ Deno.serve(async (req) => {
 
     // POST /reports/:id/announce
     if (req.method === 'POST' && id && action === 'announce') {
+      // SECURITY FIX: anyone could send a notification about any report to
+      // every student. Only the report's reporter or an admin may announce
+      // it, and each report is announced only once.
+      const caller = await requireUser(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { data: report } = await supabaseAdmin
         .from('reports')
         .select('id, title, category, location, reporter_id')
@@ -304,6 +341,21 @@ Deno.serve(async (req) => {
       if (!report) {
         return new Response(JSON.stringify({ error: 'Report not found' }), {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (report.reporter_id !== caller.id && !(await isAdmin(caller.id))) {
+        return forbidden(corsHeaders, 'Only the reporter or an admin can announce this report.')
+      }
+
+      const { count: alreadyAnnounced } = await supabaseAdmin
+        .from('user_notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('report_id', id)
+        .eq('type', 'new_report')
+      if ((alreadyAnnounced ?? 0) > 0) {
+        return new Response(JSON.stringify({ ok: true, alreadyAnnounced: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
@@ -331,6 +383,9 @@ Deno.serve(async (req) => {
 
     // POST /reports/admin-notify
     if (req.method === 'POST' && id === 'admin-notify') {
+      const caller = await requireAdmin(req, supabaseAdmin)
+      if (caller instanceof Response) return caller
+
       const { reportId, reportTitle } = await req.json()
 
       const { data: admins } = await supabaseAdmin

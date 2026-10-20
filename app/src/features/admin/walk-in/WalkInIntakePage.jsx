@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Camera, X, CheckCircle2, Package, AlertCircle } from 'lucide-react'
 import { supabase } from '../../../shared/lib/supabase'
 import { useAuth } from '../../../shared/lib/AuthContext'
-import { adminFetch, SERVER_URL } from '../../../shared/lib/apiClient'
+import { adminFetch, authHeaders, SERVER_URL } from '../../../shared/lib/apiClient'
 import { makeThumbnail, makeDisplayImage } from '../../../shared/lib/imageThumbnail'
 import CategoryPicker from '../../../shared/components/CategoryPicker'
 
@@ -149,14 +149,14 @@ export default function WalkInIntakePage() {
       // 3. Credit finder +5 trust score
       await fetch(`${SERVER_URL}/reports/${report.id}/credit-finder`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ finderStudentId: finderStudentId.trim().toUpperCase() }),
       })
 
       // 4. Notify all students
       await fetch(`${SERVER_URL}/reports/${report.id}/announce`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           reporterId: session.user.id,
           title: report.title,
