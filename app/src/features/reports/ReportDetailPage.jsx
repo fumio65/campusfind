@@ -1033,6 +1033,8 @@ export default function ReportDetailPage() {
     if (!tipText.trim()) return;
     if (tips.length >= 25)
       return setTipError("This report has reached the 25-tip limit.");
+    if (tipsClosed)
+      return setTipError("Tips are closed because a claim on this item was approved.");
     setSubmittingTip(true);
     setTipError(null);
     try {
@@ -1090,6 +1092,8 @@ export default function ReportDetailPage() {
   const isClaimed = report?.status === "claimed";
   const isApproved = report?.status === "approved";
   const isResolved = report?.status === "resolved";
+  // Once a claim is approved the item is found, so tips are closed.
+  const tipsClosed = isApproved || isResolved;
   const canShare = isOpen || isResolved;
   // "claimant" is only ever populated once an active (pending/approved) claim
   // exists on this report, so this is naturally falsy until there's actually
@@ -1806,7 +1810,7 @@ export default function ReportDetailPage() {
                           : null
                       }
                       onReply={
-                        parent.user_id !== session?.user.id
+                        !tipsClosed && parent.user_id !== session?.user.id
                           ? () => {
                               setParentTipId(parent.id);
                               setTipText(`@${parent.users?.first_name ?? ""} `);
@@ -1838,7 +1842,7 @@ export default function ReportDetailPage() {
                             : null
                         }
                         onReply={
-                          reply.user_id !== session?.user.id
+                          !tipsClosed && reply.user_id !== session?.user.id
                             ? () => {
                                 setParentTipId(parent.id);
                                 setTipText(
@@ -1859,6 +1863,10 @@ export default function ReportDetailPage() {
             <div className="bg-surface-muted rounded-xl px-3 py-2.5 text-xs text-text-secondary text-center">
               This report has reached the maximum of 25 tips. No further tips
               can be submitted.
+            </div>
+          ) : isApproved ? (
+            <div className="bg-surface-muted rounded-xl px-3 py-2.5 text-xs text-text-secondary text-center">
+              A claim on this item has been approved, so tips are closed.
             </div>
           ) : (
             !isResolved && (
