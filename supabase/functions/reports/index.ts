@@ -194,8 +194,8 @@ Deno.serve(async (req) => {
         await notifyUser({
           userId: approvedClaim.claimant_id,
           type: 'claim_resolved',
-          title: 'Item recovered!',
-          body: `"${report.title}" has been marked as recovered. Thank you for your honesty! +5 trust score.`,
+          title: 'Item returned! +5 Trust Score',
+          body: `The reporter confirmed they got "${report.title}" back. Thank you for your honesty! You earned +5 trust score.`,
           reportId: id,
           claimId: approvedClaim.id,
         })

@@ -34,6 +34,11 @@ const TYPE_CONFIG = {
   dropoff_chosen:    { icon: MapPin,        color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
   new_report:        { icon: Bell,          color: 'text-brand-600',           bg: 'bg-brand-50'          },
   resolve_reminder:  { icon: CheckCircle2,  color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
+  // Trust-score rewards and recovery confirmations
+  claim_resolved:    { icon: Star,          color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
+  dropoff_resolved:  { icon: Star,          color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
+  report_resolved:   { icon: CheckCircle2,  color: 'text-status-open-text',    bg: 'bg-status-open-bg'    },
+  dropoff_received:  { icon: MapPin,        color: 'text-status-claimed-text', bg: 'bg-status-claimed-bg' },
   default:           { icon: Bell,          color: 'text-text-muted',          bg: 'bg-surface-muted'     },
 }
 
