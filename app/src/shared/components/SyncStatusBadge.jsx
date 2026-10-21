@@ -103,9 +103,9 @@ export default function SyncStatusBadge() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" onClick={() => !busy && setOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !busy && setOpen(false)}>
           <div
-            className="bg-surface-card w-full max-w-md rounded-t-2xl p-4 pb-6 safe-bottom"
+            className="bg-surface-card w-full max-w-sm rounded-2xl p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-label="Changes that couldn't sync"
