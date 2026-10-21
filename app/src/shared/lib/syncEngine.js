@@ -1,5 +1,4 @@
 import { db } from './db'
-import { isOnline } from './network'
 import { onSyncTrigger } from './appLifecycle'
 
 const handlers = new Map()
@@ -38,8 +37,17 @@ let flushing = false
 // Processes the queue in FIFO order. Stops (preserving order) on the first
 // transient failure so it can be retried later; terminal failures are
 // marked 'failed' and the queue advances past them.
+//
+// FIX: used to also bail out whenever isOnline() reported false. That flag
+// comes from the Capacitor Network plugin and can go stale or misreport
+// (observed: "Try again" on a failed change doing nothing even with a
+// working connection) - with no feedback, since flush() just silently
+// returned. Now the actual request is the source of truth: if the device is
+// genuinely offline, the fetch itself throws and isTransient() below
+// already schedules a backoff retry, so nothing is lost - it's just no
+// longer possible for a stale flag to block a sync that would have worked.
 export async function flush() {
-  if (flushing || !isOnline()) return
+  if (flushing) return
   flushing = true
   try {
     for (;;) {

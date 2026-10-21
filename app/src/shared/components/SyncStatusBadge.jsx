@@ -42,6 +42,7 @@ export default function SyncStatusBadge() {
   const online = useOnlineStatus()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [retryNote, setRetryNote] = useState(false)
   const state = useLiveQuery(async () => {
     const rows = await db.sync_queue.toArray()
     return {
@@ -59,14 +60,27 @@ export default function SyncStatusBadge() {
       ? 'bg-status-rejected-bg text-status-rejected-text'
       : 'bg-brand-50 text-brand-700'
 
-  async function run(action) {
+  async function run(action, { isRetry = false } = {}) {
     setBusy(true)
+    setRetryNote(false)
+    const before = state.failed.length
     try {
       await action()
+      // retryFailed() can legitimately leave a change still failing (e.g.
+      // it needs an internet connection that genuinely isn't there yet).
+      // Closing the dialog silently then made it look like the button did
+      // nothing - show what actually happened instead.
+      if (isRetry) {
+        const after = (await db.sync_queue.where('status').equals('failed').count())
+        if (after > 0) {
+          setRetryNote(after === before ? 'stuck' : 'partial')
+          return
+        }
+      }
     } finally {
       setBusy(false)
-      setOpen(false)
     }
+    setOpen(false)
   }
 
   return (
@@ -119,6 +133,13 @@ export default function SyncStatusBadge() {
             <p className="text-xs text-text-muted mb-3">
               These were saved on this phone but the server didn't accept them.
             </p>
+            {retryNote && (
+              <p className="text-[11px] font-medium text-status-rejected-text bg-status-rejected-bg rounded-lg px-2.5 py-2 mb-3">
+                {retryNote === 'partial'
+                  ? 'Some changes synced, but these still couldn\'t go through.'
+                  : 'Still couldn\'t sync — check your connection, or discard them below.'}
+              </p>
+            )}
             <div className="flex flex-col gap-2 max-h-64 overflow-y-auto mb-4">
               {state.failed.map((row) => (
                 <div key={row.seq} className="bg-surface-muted rounded-xl px-3 py-2.5">
@@ -136,7 +157,7 @@ export default function SyncStatusBadge() {
                 Discard
               </button>
               <button
-                onClick={() => run(retryFailed)}
+                onClick={() => run(retryFailed, { isRetry: true })}
                 disabled={busy}
                 className="flex-1 h-11 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50"
               >
