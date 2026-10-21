@@ -2,14 +2,20 @@ import { motion } from 'framer-motion'
 import { Pencil, PenLine } from 'lucide-react'
 import StatusPill from '../../../shared/components/admin/StatusPill'
 
-function Diff({ from, to }) {
+function Diff({ label, from, to }) {
   return (
-    <span className="inline-flex items-center gap-1">
-      <span className="text-text-muted line-through">{from ?? '—'}</span>
+    <span className="inline-flex items-center gap-1 flex-wrap">
+      {label && <span className="text-text-secondary font-medium">{label}:</span>}
+      <span className="text-text-muted line-through">{from || '—'}</span>
       <span className="text-text-muted">→</span>
-      <span className="font-medium text-text-primary">{to ?? '—'}</span>
+      <span className="font-medium text-text-primary">{to || '—'}</span>
     </span>
   )
+}
+
+function fullName(last, first, middle) {
+  if (!last && !first) return null
+  return `${last ?? ''}, ${first ?? ''}${middle ? ` ${middle}` : ''}`.trim()
 }
 
 export default function DataRow({ row, canEdit, isEditing, onStartEdit, justFixed = false }) {
@@ -19,7 +25,12 @@ export default function DataRow({ row, canEdit, isEditing, onStartEdit, justFixe
 
   const isUpdate = row.action === 'update'
   const enrollmentChanged = isUpdate && row.previous_enrollment_number !== row.enrollment_number
-  const programChanged = isUpdate && (row.previous_program ?? null) !== (row.program ?? null)
+  // Compare programs by code when there is one: accounts created one at a
+  // time store only program_code (program text is null), which used to show
+  // the old program as "—".
+  const previousProgram = row.previous_program_code ?? row.previous_program ?? null
+  const newProgram = row.program_code ?? row.program ?? null
+  const programChanged = isUpdate && previousProgram !== newProgram
   const yearLevelChanged = isUpdate && (row.previous_year_level ?? null) !== (row.year_level ?? null)
   const nameChanged =
     isUpdate &&
@@ -42,13 +53,20 @@ export default function DataRow({ row, canEdit, isEditing, onStartEdit, justFixe
     )
   }
   if (yearLevelChanged) {
-    changeNotes.push(<Diff key="year" from={row.previous_year_level} to={row.year_level} />)
+    changeNotes.push(<Diff key="year" label="Year level" from={row.previous_year_level} to={row.year_level} />)
   }
   if (programChanged) {
-    changeNotes.push(<Diff key="program" from={row.previous_program} to={row.program} />)
+    changeNotes.push(<Diff key="program" label="Program" from={previousProgram} to={newProgram} />)
   }
   if (nameChanged) {
-    changeNotes.push(<span key="name" className="text-text-secondary">Name updated</span>)
+    changeNotes.push(
+      <Diff
+        key="name"
+        label="Name"
+        from={fullName(row.previous_last_name, row.previous_first_name, row.previous_middle_name)}
+        to={fullName(row.last_name, row.first_name, row.middle_name)}
+      />
+    )
   }
 
   return (
@@ -85,7 +103,7 @@ export default function DataRow({ row, canEdit, isEditing, onStartEdit, justFixe
       <td className="py-2 px-3">
         <div className="flex items-center justify-between gap-3">
           {changeNotes.length > 0 ? (
-            <span className="text-xs flex items-center gap-2.5 flex-wrap">{changeNotes}</span>
+            <span className="text-xs flex flex-col items-start gap-1">{changeNotes}</span>
           ) : (
             <span className="text-status-rejected-text text-xs">{row.error_message ?? ''}</span>
           )}
