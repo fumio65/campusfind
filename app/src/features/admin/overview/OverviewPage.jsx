@@ -165,9 +165,9 @@ export default function OverviewPage() {
             initial={fromCache ? false : staggerContainer.initial}
           >
             <StatCard
-              label="Total accounts"
+              label="Student accounts"
               value={data.totalAccounts}
-              sub={`${data.activeAccounts} active`}
+              sub={`${data.activeAccounts} set up · ${data.pendingSetupAccounts ?? 0} pending setup`}
               tone="brand"
               icon={Users}
             />
@@ -326,7 +326,9 @@ export default function OverviewPage() {
                             {a.student_id}
                           </div>
                         </div>
-                        <StatusPill status={a.status} />
+                        <StatusPill
+                          status={a.status === 'active' && a.force_password_change ? 'pending_setup' : a.status}
+                        />
                       </div>
                     ))}
                     <div className="px-3.5 py-2.5 border-t border-border">

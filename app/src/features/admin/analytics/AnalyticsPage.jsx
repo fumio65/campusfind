@@ -108,7 +108,9 @@ export default function AnalyticsPage() {
   const [resolvedViaData, setResolvedViaData] = useState(cached?.resolvedViaData ?? [])
   const [tipsStats, setTipsStats] = useState(cached?.tipsStats ?? { total: 0, credited: 0, rate: 0 })
   const [trustEventReasons, setTrustEventReasons] = useState(cached?.trustEventReasons ?? [])
-  const [accountStatus, setAccountStatus] = useState(cached?.accountStatus ?? { active: 0, deactivated: 0 })
+  // active = set up (enabled, and the student has logged in and set their own
+  // password); pendingSetup = enabled but not yet; deactivated = switched off.
+  const [accountStatus, setAccountStatus] = useState(cached?.accountStatus ?? { active: 0, pendingSetup: 0, deactivated: 0 })
   const [accountsByProgram, setAccountsByProgram] = useState(cached?.accountsByProgram ?? [])
   const [accountsByDepartment, setAccountsByDepartment] = useState(cached?.accountsByDepartment ?? [])
   const [accountsByYear, setAccountsByYear] = useState(cached?.accountsByYear ?? [])
@@ -205,17 +207,31 @@ export default function AnalyticsPage() {
   }
 
   async function fetchTrustDistribution() {
-    const { data, error } = await supabase.from('users').select('trust_score').eq('role', 'student')
+    const { data, error } = await supabase
+      .from('users')
+      .select('trust_score, status, force_password_change')
+      .eq('role', 'student')
     if (error || !data) return
-    const bands = { '90-100': 0, '70-89': 0, 'Below 70': 0 }
-    for (const u of data) {
+    // Only students who actually use the app: every account starts at 100,
+    // so counting accounts nobody has logged into (or deactivated ones)
+    // pulled the average and the distribution toward the starting score.
+    const users = data.filter((u) => u.status === 'active' && !u.force_password_change)
+    // Scores run 0-200 and start at 100, so earning trust puts a student
+    // above 100 - the old top band "90-100" also held everyone above 100.
+    const bands = { 'Above 100': 0, '90-100': 0, '70-89': 0, 'Below 70': 0 }
+    for (const u of users) {
       const s = u.trust_score ?? 100
-      if (s >= 90) bands['90-100']++
+      if (s > 100) bands['Above 100']++
+      else if (s >= 90) bands['90-100']++
       else if (s >= 70) bands['70-89']++
       else bands['Below 70']++
     }
     setTrustDistribution(Object.entries(bands).map(([band, value]) => ({ band, value })))
-    setAvgTrustScore(data.length > 0 ? Math.round(data.reduce((sum, u) => sum + (u.trust_score ?? 100), 0) / data.length) : null)
+    setAvgTrustScore(
+      users.length > 0
+        ? Math.round((users.reduce((sum, u) => sum + (u.trust_score ?? 100), 0) / users.length) * 10) / 10
+        : null,
+    )
   }
 
   async function fetchReportTypeAndResolution() {
@@ -261,12 +277,13 @@ export default function AnalyticsPage() {
     // for any account that somehow still has no program_code set.
     const { data, error } = await supabase
       .from('users')
-      .select('program, program_code, department_code, year_level, status, programs:program_code ( program_name, department_name )')
+      .select('program, program_code, department_code, year_level, status, force_password_change, programs:program_code ( program_name, department_name )')
       .eq('role', 'student')
     if (error || !data) return
 
     setAccountStatus({
-      active: data.filter((u) => u.status === 'active').length,
+      active: data.filter((u) => u.status === 'active' && !u.force_password_change).length,
+      pendingSetup: data.filter((u) => u.status === 'active' && u.force_password_change).length,
       deactivated: data.filter((u) => u.status === 'deactivated').length,
     })
 
@@ -393,6 +410,7 @@ export default function AnalyticsPage() {
     const execSummary = `The system logged ${stats.total} report${stats.total === 1 ? '' : 's'} during this period, of which ${stats.resolved} (${resolutionRate}%) ${stats.resolved === 1 ? 'was' : 'were'} resolved` +
       (stats.avgResolutionDays !== null ? `, with an average resolution time of ${stats.avgResolutionDays} day${stats.avgResolutionDays === 1 ? '' : 's'}` : '') +
       `. Claims were approved at a ${claimsFunnel.approvalRate}% rate (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} rejected)` +
+      `. ${accountStatus.active} of ${accountStatus.active + (accountStatus.pendingSetup ?? 0) + accountStatus.deactivated} student accounts have been set up, with an average trust score of ${avgTrustScore ?? '—'} among them` +
       (topLostDept ? `, and ${topLostDept.name} students filed lost reports at the highest rate of any department, at ${topLostDept.rate.toFixed(2)} reports per student` : '') +
       `.`
 
@@ -453,7 +471,7 @@ export default function AnalyticsPage() {
       ? `${topResolutionMethod.name} accounts for ${resolutionMethodShare}% of resolved items.`
       : 'No items have been resolved yet.'
     const trustDistNote = topTrustBand && topTrustBand.value > 0
-      ? `Most students fall in the "${topTrustBand.band}" trust band.`
+      ? `Among the ${accountStatus.active} student${accountStatus.active === 1 ? '' : 's'} using the app, most fall in the "${topTrustBand.band}" trust band (average ${avgTrustScore}). Accounts that have not been set up yet are excluded, since every account starts at 100.`
       : 'No trust score data is available yet.'
     const reportTypeNote = walkInShare !== null
       ? `ISSC walk-in drop-offs make up ${walkInShare}% of all lost/found activity logged this period.`
@@ -707,7 +725,7 @@ export default function AnalyticsPage() {
                   <div class="stat-card">
                     <div class="stat-label">Avg. Trust Score</div>
                     <div class="stat-value">${avgTrustScore ?? '—'}</div>
-                    <div class="stat-sub">${accountStatus.active} active students</div>
+                    <div class="stat-sub">across ${accountStatus.active} student${accountStatus.active === 1 ? '' : 's'} using the app</div>
                   </div>
                   <div class="stat-card">
                     <div class="stat-label">Tip Conversion</div>
@@ -715,9 +733,9 @@ export default function AnalyticsPage() {
                     <div class="stat-sub">${tipsStats.credited} of ${tipsStats.total} tips credited</div>
                   </div>
                   <div class="stat-card">
-                    <div class="stat-label">Deactivated Accounts</div>
-                    <div class="stat-value">${accountStatus.deactivated}</div>
-                    <div class="stat-sub">graduated/inactive</div>
+                    <div class="stat-label">Accounts Set Up</div>
+                    <div class="stat-value">${accountStatus.active}/${accountStatus.active + (accountStatus.pendingSetup ?? 0) + accountStatus.deactivated}</div>
+                    <div class="stat-sub">${accountStatus.pendingSetup ?? 0} pending setup · ${accountStatus.deactivated} deactivated</div>
                   </div>
                 </div>
               </div>
@@ -1160,9 +1178,13 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <StatCard label="Claim Approval Rate" value={`${claimsFunnel.approvalRate}%`} sub={`${claimsFunnel.approved} approved · ${claimsFunnel.rejected} rejected`} />
-        <StatCard label="Avg Trust Score" value={avgTrustScore ?? '—'} sub={`${accountStatus.active} active students`} />
+        <StatCard label="Avg Trust Score" value={avgTrustScore ?? '—'} sub={`across ${accountStatus.active} student${accountStatus.active === 1 ? '' : 's'} using the app`} />
         <StatCard label="Tip Conversion" value={`${tipsStats.rate}%`} sub={`${tipsStats.credited} of ${tipsStats.total} tips credited`} />
-        <StatCard label="Deactivated Accounts" value={accountStatus.deactivated} sub="graduated/inactive" />
+        <StatCard
+          label="Accounts Set Up"
+          value={`${accountStatus.active}/${accountStatus.active + (accountStatus.pendingSetup ?? 0) + accountStatus.deactivated}`}
+          sub={`${accountStatus.pendingSetup ?? 0} pending setup · ${accountStatus.deactivated} deactivated`}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -1187,7 +1209,8 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="bg-surface-card border border-border rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-text-primary mb-4">Student trust score distribution</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-1">Student trust score distribution</h3>
+          <p className="text-[11px] text-text-muted mb-3">Students using the app (accounts not yet set up are excluded)</p>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
               <Pie isAnimationActive={animateCharts} data={trustDistribution} cx="50%" cy="46%" outerRadius={70} dataKey="value" nameKey="band" label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11} fontWeight={600}>
