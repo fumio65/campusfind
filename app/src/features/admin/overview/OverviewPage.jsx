@@ -25,6 +25,7 @@ import { staggerContainer, staggerItem } from "../../../shared/lib/adminMotion";
 import { supabase } from "../../../shared/lib/supabase";
 import { adminFetch, SERVER_URL } from "../../../shared/lib/apiClient";
 import { getAdminCache, setAdminCache } from "../../../shared/lib/adminCache";
+import { uniqueChannelName } from "../../../shared/lib/realtimeChannel";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ export default function OverviewPage() {
     fetchAll();
 
     const channel = supabase
-      .channel("admin-overview")
+      .channel(uniqueChannelName("admin-overview"))
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "reports" },

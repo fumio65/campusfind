@@ -10,6 +10,7 @@ import { onSyncTrigger } from '../lib/appLifecycle'
 import { trustReasonText } from '../lib/trustScoreReasons'
 import SyncStatusBadge from './SyncStatusBadge'
 import TrustScoreDialog from './TrustScoreDialog'
+import { uniqueChannelName } from '../lib/realtimeChannel'
 
 export default function AppShell() {
   const { session } = useAuth()
@@ -45,7 +46,7 @@ export default function AppShell() {
       if (existing) supabase.removeChannel(existing)
 
       const ch = supabase
-      .channel('appshell-notifications')
+      .channel(uniqueChannelName('appshell-notifications'))
       .on(
         'postgres_changes',
         {

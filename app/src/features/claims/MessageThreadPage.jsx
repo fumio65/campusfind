@@ -24,6 +24,7 @@ import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
 import ValidationDialog from '../../shared/components/ValidationDialog'
 import ConfirmDialog from '../../shared/components/ConfirmDialog'
+import { uniqueChannelName } from '../../shared/lib/realtimeChannel'
 
 const MESSAGE_LIMIT = 10
 // Matches Tips' 20/25 (80%) warning threshold, scaled to this limit.
@@ -102,7 +103,7 @@ export default function MessageThreadPage() {
     if (existing) supabase.removeChannel(existing)
 
     const channel = supabase
-      .channel(channelName)
+      .channel(uniqueChannelName(channelName))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'claim_messages' }, (payload) => {
         if (payload.new?.claim_id === claim.id) refreshMessages(claim.id)
       })

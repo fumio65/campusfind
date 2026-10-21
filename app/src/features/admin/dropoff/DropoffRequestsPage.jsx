@@ -5,6 +5,7 @@ import { PackageCheck, Clock, CheckCircle2, ImagePlus, ArrowLeft, X, AlertCircle
 import { supabase } from '../../../shared/lib/supabase'
 import { authHeaders } from '../../../shared/lib/apiClient'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
+import { uniqueChannelName } from '../../../shared/lib/realtimeChannel'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -383,7 +384,7 @@ export default function DropoffRequestsPage() {
   // Single realtime subscription — created once, never recreated on tab change.
   useEffect(() => {
     const channel = supabase
-      .channel('dropoff-admin')
+      .channel(uniqueChannelName('dropoff-admin'))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'dropoff_requests' },

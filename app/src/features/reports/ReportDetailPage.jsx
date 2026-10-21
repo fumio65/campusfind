@@ -52,6 +52,7 @@ import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import ShareSheet from "./ShareSheet";
 import ValidationDialog from "../../shared/components/ValidationDialog";
+import { uniqueChannelName } from "../../shared/lib/realtimeChannel";
 
 // FIX: claim actions and resolve were hitting dead Express server
 // Now correctly call Supabase Edge Functions
@@ -394,7 +395,7 @@ export default function ReportDetailPage() {
     if (existing) supabase.removeChannel(existing);
 
     const channel = supabase
-      .channel(channelName)
+      .channel(uniqueChannelName(channelName))
       .on(
         "postgres_changes",
         {

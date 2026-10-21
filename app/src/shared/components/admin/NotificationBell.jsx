@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, X, MapPin, CheckCircle2, UserCheck, XCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { authHeaders } from '../../lib/apiClient'
+import { uniqueChannelName } from '../../lib/realtimeChannel'
 
 const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
@@ -45,7 +46,7 @@ export default function NotificationBell() {
     if (existing) supabase.removeChannel(existing)
 
     const channel = supabase
-      .channel(channelName)
+      .channel(uniqueChannelName(channelName))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => fetchNotifications())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => fetchNotifications())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proxy_requests' }, () => fetchNotifications())

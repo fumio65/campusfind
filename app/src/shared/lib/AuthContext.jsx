@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, readPersistedSession } from '../lib/supabase'
 import { db } from './db'
 import { onSyncTrigger } from './appLifecycle'
+import { uniqueChannelName } from './realtimeChannel'
 const AuthContext = createContext(null)
 // Set right before a forced sign-out that happens away from /login (i.e. the
 // account was deactivated while already in use, not during a login attempt
@@ -47,7 +48,7 @@ export function AuthProvider({ children }) {
     if (existing) supabase.removeChannel(existing)
 
     const channel = supabase
-      .channel(channelName)
+      .channel(uniqueChannelName(channelName))
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'users',
         filter: `id=eq.${session.user.id}`

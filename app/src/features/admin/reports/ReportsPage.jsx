@@ -10,6 +10,7 @@ import { adminFetch, authHeaders, SERVER_URL } from '../../../shared/lib/apiClie
 import Dialog from '../../../shared/components/admin/Dialog'
 import ShareCardDialog from './ShareCardDialog'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
+import { uniqueChannelName } from '../../../shared/lib/realtimeChannel'
 
 const STATUS_TABS = [
   { label: 'All',      value: 'all'      },
@@ -424,7 +425,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('admin-reports-realtime')
+      .channel(uniqueChannelName('admin-reports-realtime'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'claims'  }, load)
       .subscribe()

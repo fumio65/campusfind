@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Sidebar from './Sidebar'
 import { pageTransition } from '../../lib/adminMotion'
 import { warmAdminFunctions } from '../../lib/adminCache'
+import PageErrorBoundary from './PageErrorBoundary'
 
 export default function AdminAppShell() {
   const location = useLocation()
@@ -21,7 +22,9 @@ export default function AdminAppShell() {
         <div className="max-w-[1080px] mx-auto p-8">
           <AnimatePresence mode="wait">
             <motion.div key={location.pathname} {...pageTransition}>
-              <Outlet />
+              <PageErrorBoundary key={location.pathname}>
+                <Outlet />
+              </PageErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </div>

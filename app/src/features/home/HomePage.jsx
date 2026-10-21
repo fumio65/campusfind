@@ -18,6 +18,7 @@ import { timeAgo } from "../../shared/lib/timeAgo";
 import CachedImage from "../../shared/components/CachedImage";
 import SyncStateChip from "../../shared/components/SyncStateChip";
 import CategoryPicker from "../../shared/components/CategoryPicker";
+import { uniqueChannelName } from "../../shared/lib/realtimeChannel";
 
 const STATUS_STYLES = {
   open: "bg-status-open-bg text-status-open-text",
@@ -229,7 +230,7 @@ export default function HomePage() {
     if (existing) supabase.removeChannel(existing);
 
     const channel = supabase
-      .channel(channelName)
+      .channel(uniqueChannelName(channelName))
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "reports" },
