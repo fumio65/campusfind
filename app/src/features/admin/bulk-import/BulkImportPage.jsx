@@ -67,6 +67,8 @@ export default function BulkImportPage() {
 
   const hasBatch = !!batch
   const counts = rows.reduce((acc, row) => ({ ...acc, [row.action]: (acc[row.action] ?? 0) + 1 }), {})
+  // Nothing to commit when every row already matches the current accounts.
+  const hasChanges = (counts.create ?? 0) + (counts.update ?? 0) + (counts.deactivate ?? 0) > 0
   const hasError = rows.some((row) => row.action === 'error')
 
   // Checking on one person shouldn't require scrolling a few hundred rows -
@@ -270,7 +272,9 @@ export default function BulkImportPage() {
 
   async function handleCancel() {
     sessionStorage.removeItem(PENDING_BATCH_KEY)
-    if (batch) {
+    // After a successful confirm this button just clears the screen - the
+    // import is already committed and must not be marked as discarded.
+    if (batch && !isConfirmed) {
       try {
         await cancelBulkImport(batch.id)
       } catch (err) {
@@ -533,8 +537,12 @@ export default function BulkImportPage() {
 
           <div className="sticky bottom-0 -mx-8 px-8 py-3 mt-4 bg-surface-page/95 backdrop-blur-sm border-t border-border flex items-center justify-between gap-3">
             <p className="text-xs text-text-muted">
-              {hasError
+              {isConfirmed
+                ? 'Import confirmed. These changes are already live in Accounts.'
+                : hasError
                 ? 'One or more rows have an error. Click "Fix" to correct inline, or re-upload the source file. Imports are all-or-nothing.'
+                : !hasChanges
+                ? 'Nothing to import: every row already matches the current accounts. Cancel to discard this preview.'
                 : `${rows.length} rows ready. Imports are all-or-nothing.`}
             </p>
             <div className="flex gap-2 shrink-0">
@@ -542,11 +550,11 @@ export default function BulkImportPage() {
                 onClick={handleCancel}
                 className="px-4 py-2 text-sm font-medium rounded-md border border-border-strong bg-surface-card hover:bg-surface-muted transition-colors"
               >
-                Cancel import
+                {isConfirmed ? 'Start a new import' : 'Cancel import'}
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={hasError || confirming || isConfirmed}
+                disabled={hasError || !hasChanges || confirming || isConfirmed}
                 className="px-4 py-2 text-sm font-medium rounded-md bg-brand-600 text-white disabled:bg-surface-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors"
               >
                 {confirming ? 'Confirming...' : 'Confirm import'}

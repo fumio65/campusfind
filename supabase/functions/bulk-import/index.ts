@@ -252,9 +252,13 @@ Deno.serve(async (req) => {
   try {
     // GET /bulk-import  (list recent batches, for the Recent Imports view)
     if (req.method === 'GET' && !batchId) {
+      // Recent imports is the audit trail of account changes, so it lists
+      // only imports that were actually committed - not previews that were
+      // cancelled or never confirmed.
       const { data: batches, error: batchesError } = await supabaseAdmin
         .from('bulk_import_batches')
         .select('*')
+        .eq('status', 'confirmed')
         .order('created_at', { ascending: false })
         .limit(20)
 
@@ -522,6 +526,13 @@ Deno.serve(async (req) => {
 
       if (rowsFetchError) return json({ error: rowsFetchError.message }, 500)
 
+      // A file where every row already matches the current accounts has
+      // nothing to commit; don't record it as an import.
+      const changeCount = (rows ?? []).filter((r: any) => ['create', 'update', 'deactivate'].includes(r.action)).length
+      if (changeCount === 0) {
+        return json({ error: 'Nothing to import: every row already matches the current accounts.' }, 422)
+      }
+
       const errorRows = (rows ?? []).filter((r: any) => r.action === 'error')
       if (errorRows.length > 0) {
         return json({
@@ -659,12 +670,18 @@ Deno.serve(async (req) => {
 
     // POST /bulk-import/:batchId/cancel
     if (req.method === 'POST' && batchId && action === 'cancel') {
-      const { error } = await supabaseAdmin
+      // Only a preview still under review can be discarded. This used to
+      // flip any batch - including one already confirmed - to 'discarded',
+      // so pressing Cancel after a successful import mislabeled it.
+      const { data: discarded, error } = await supabaseAdmin
         .from('bulk_import_batches')
         .update({ status: 'discarded' })
         .eq('id', batchId)
+        .eq('status', 'pending_review')
+        .select('id')
 
       if (error) return json({ error: error.message }, 500)
+      if (!discarded?.length) return json({ error: 'This import is no longer pending, so it cannot be cancelled.' }, 409)
       return json({ ok: true })
     }
 
