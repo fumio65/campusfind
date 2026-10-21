@@ -76,6 +76,14 @@ export default function MessageThreadPage() {
   // the same cache, so sent messages appear here immediately.
   const messages = useMessages(claim?.id) ?? EMPTY_MESSAGES
   const dropOffSent = messages.some((m) => m.body === DROPOFF_CHOSEN_BODY)
+  // Only real chat messages count toward MESSAGE_LIMIT. The ISSC drop-off
+  // suggest / decline / accept actions are stored as marker messages, and
+  // counting them used up the limit and then hid the drop-off button - the
+  // one way left to finish the handoff once the chat is full.
+  const chatCount = messages.filter(
+    (m) => m.body !== DROPOFF_CHOSEN_BODY && m.body !== DROPOFF_REQUESTED_BODY && m.body !== DROPOFF_DECLINED_BODY,
+  ).length
+  const chatFull = chatCount >= MESSAGE_LIMIT
   // Suggest/accept/decline is negotiated as plain messages, not a DB status -
   // only look at these once there's no confirmed drop-off yet. The most
   // recent 🔔/🚫 marker (if any) is the only one still "live"; anything
@@ -144,7 +152,7 @@ export default function MessageThreadPage() {
   async function handleSend(e) {
     e.preventDefault()
     if (!text.trim() || sending) return
-    if (messages.length >= MESSAGE_LIMIT) {
+    if (chatFull) {
       setSendError(`This conversation has reached the ${MESSAGE_LIMIT}-message limit.`)
       return
     }
@@ -338,9 +346,9 @@ export default function MessageThreadPage() {
         </div>
         <span className="text-sm font-semibold text-white truncate">{otherName}</span>
         <span
-          className={`ml-auto text-[10px] font-medium shrink-0 ${messages.length >= MESSAGE_WARNING_THRESHOLD ? 'text-status-rejected-bg' : 'text-brand-200'}`}
+          className={`ml-auto text-[10px] font-medium shrink-0 ${chatCount >= MESSAGE_WARNING_THRESHOLD ? 'text-status-rejected-bg' : 'text-brand-200'}`}
         >
-          {messages.length}/{MESSAGE_LIMIT}
+          {chatCount}/{MESSAGE_LIMIT}
         </span>
       </div>
 
@@ -508,8 +516,9 @@ export default function MessageThreadPage() {
         </div>
       )}
 
-      {/* Suggest ISSC drop-off — either party, once, until accepted/declined */}
-      {!dropOffSent && !otherPartyDeactivated && !hasOpenRequest && messages.length < MESSAGE_LIMIT && (
+      {/* Suggest ISSC drop-off — either party, until accepted/declined. Stays
+          available after the message limit: then it's the only way left. */}
+      {!dropOffSent && !otherPartyDeactivated && !hasOpenRequest && (
         <div className="px-4 pb-2 shrink-0">
           <button
             onClick={handleSuggestDropoff}
@@ -542,9 +551,10 @@ export default function MessageThreadPage() {
         onCancel={() => setShowIsscHelpConfirm(false)}
       />
       <div className="px-4 py-3 border-t border-border bg-surface-card shrink-0">
-        {messages.length >= MESSAGE_LIMIT ? (
+        {chatFull ? (
           <div className="bg-surface-muted rounded-xl px-3 py-2.5 text-xs text-text-secondary text-center">
             This conversation has reached the maximum of {MESSAGE_LIMIT} messages.
+            {!dropOffSent && ' If you can’t meet up as arranged, use the ISSC drop-off above.'}
           </div>
         ) : (
           <div className="flex gap-2">
