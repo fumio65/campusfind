@@ -7,10 +7,17 @@ const MAX_PULL = 100 // px the indicator can be dragged down to, with resistance
 const MIN_SPINNER_MS = 500 // keep the spinner visible long enough to read as "it did something"
 
 // Wraps a scrollable container and adds a native-feeling pull-to-refresh
-// gesture: pulling down while already scrolled to the top drags a spinner
-// into view, and releasing past THRESHOLD calls triggerSync() - the same
-// pub/sub every page's own refresh effect already listens to (resume,
+// gesture: pulling down while already scrolled to the top brings a floating
+// spinner into view, and releasing past THRESHOLD calls triggerSync() - the
+// same pub/sub every page's own refresh effect already listens to (resume,
 // reconnect), so this needs no per-page wiring.
+//
+// FIX: this used to translateY the whole content block (indicator + page),
+// which dragged each page's own sticky header down with it mid-pull -
+// looked broken, not like a pull gesture. The content now never moves; only
+// a small floating spinner, fixed to the viewport above everything
+// (including the header), grows in and spins - the same pattern apps like
+// Twitter/Threads use instead of pushing their nav bar around.
 export default function PullToRefresh({ children }) {
   const containerRef = useRef(null)
   const startY = useRef(null)
@@ -66,41 +73,36 @@ export default function PullToRefresh({ children }) {
 
   const indicatorDistance = refreshing ? THRESHOLD : pullDistance
   const progress = Math.min(indicatorDistance / THRESHOLD, 1)
+  // Settles just under the status bar / notch, not at a fixed pixel count,
+  // so it lands in the same place on every device.
+  const topOffset = 'max(env(safe-area-inset-top), 0.5rem)'
 
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto pb-20 no-scrollbar bg-surface-page relative"
+      className="flex-1 overflow-y-auto pb-20 no-scrollbar bg-surface-page"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       <div
-        className="absolute left-0 right-0 flex justify-center pointer-events-none z-10"
+        className="fixed left-0 right-0 flex justify-center pointer-events-none z-50"
         style={{
-          top: 10,
-          height: 0,
+          top: topOffset,
           opacity: progress,
-          transform: `translateY(${indicatorDistance}px)`,
+          transform: `translateY(${(progress - 1) * 24}px) scale(${0.6 + progress * 0.4})`,
           transition: pulling.current ? 'none' : 'transform 200ms ease, opacity 200ms ease',
         }}
       >
-        <div className="w-8 h-8 rounded-full bg-surface-card shadow-md flex items-center justify-center">
+        <div className="w-9 h-9 rounded-full bg-surface-card shadow-lg flex items-center justify-center">
           <RefreshCw
-            size={16}
+            size={17}
             className={`text-brand-600 ${refreshing ? 'animate-spin' : ''}`}
             style={refreshing ? undefined : { transform: `rotate(${progress * 360}deg)` }}
           />
         </div>
       </div>
-      <div
-        style={{
-          transform: `translateY(${indicatorDistance}px)`,
-          transition: pulling.current ? 'none' : 'transform 200ms ease',
-        }}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   )
 }
