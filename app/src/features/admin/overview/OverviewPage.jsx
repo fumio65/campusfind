@@ -76,6 +76,11 @@ export default function OverviewPage() {
   // Returning with cached data: render it as-is, with no entrance or chart
   // animation, so a revisit doesn't look like a reload.
   const fromCache = useRef(Boolean(cached)).current;
+  // What THIS page instance is currently showing (as JSON), so an unchanged
+  // refresh can be skipped. It must not be compared against the shared
+  // cache: a load started by an earlier visit can fill the cache after this
+  // instance mounted empty, and skipping then left the page blank.
+  const shownRef = useRef(cached ? JSON.stringify(cached) : null);
 
   function fetchAll() {
     Promise.all([
@@ -87,13 +92,15 @@ export default function OverviewPage() {
         if (overviewBody.error) throw new Error(overviewBody.error);
         const dropOffs = Array.isArray(dropoffBody) ? dropoffBody : [];
         const next = { data: overviewBody, analytics: analyticsBody, dropOffReports: dropOffs };
-        // Nothing changed since the cached copy: keep the current objects so
-        // nothing re-renders or re-animates.
-        if (JSON.stringify(next) === JSON.stringify(getAdminCache("overview"))) return;
+        const nextJson = JSON.stringify(next);
+        setAdminCache("overview", next);
+        // Already showing exactly this: keep the current objects so nothing
+        // re-renders or re-animates.
+        if (nextJson === shownRef.current) return;
+        shownRef.current = nextJson;
         setData(overviewBody);
         setAnalytics(analyticsBody);
         setDropOffReports(dropOffs);
-        setAdminCache("overview", { data: overviewBody, analytics: analyticsBody, dropOffReports: dropOffs });
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -147,7 +154,9 @@ export default function OverviewPage() {
       </div>
 
       {/* Loading */}
-      {loading && <OverviewSkeleton />}
+      {/* Also covers the (should-not-happen) gap where loading finished but
+          nothing is shown yet, so the page is never left blank. */}
+      {(loading || (!data && !error)) && <OverviewSkeleton />}
 
       {/* Error */}
       {error && (
