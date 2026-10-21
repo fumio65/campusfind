@@ -11,6 +11,9 @@ import {
   DROPOFF_CHOSEN_BODY,
   DROPOFF_REQUESTED_BODY,
   DROPOFF_DECLINED_BODY,
+  MESSAGE_LIMIT,
+  MESSAGE_WARNING_THRESHOLD,
+  countChatMessages,
 } from '../../shared/lib/operations/messages'
 import SyncStateChip from '../../shared/components/SyncStateChip'
 import {
@@ -26,9 +29,6 @@ import ValidationDialog from '../../shared/components/ValidationDialog'
 import ConfirmDialog from '../../shared/components/ConfirmDialog'
 import { uniqueChannelName } from '../../shared/lib/realtimeChannel'
 
-const MESSAGE_LIMIT = 10
-// Matches Tips' 20/25 (80%) warning threshold, scaled to this limit.
-const MESSAGE_WARNING_THRESHOLD = 8
 
 const EMPTY_MESSAGES = []
 
@@ -80,9 +80,7 @@ export default function MessageThreadPage() {
   // suggest / decline / accept actions are stored as marker messages, and
   // counting them used up the limit and then hid the drop-off button - the
   // one way left to finish the handoff once the chat is full.
-  const chatCount = messages.filter(
-    (m) => m.body !== DROPOFF_CHOSEN_BODY && m.body !== DROPOFF_REQUESTED_BODY && m.body !== DROPOFF_DECLINED_BODY,
-  ).length
+  const chatCount = countChatMessages(messages)
   const chatFull = chatCount >= MESSAGE_LIMIT
   // Suggest/accept/decline is negotiated as plain messages, not a DB status -
   // only look at these once there's no confirmed drop-off yet. The most

@@ -48,6 +48,9 @@ import {
   DROPOFF_CHOSEN_BODY,
   DROPOFF_REQUESTED_BODY,
   DROPOFF_DECLINED_BODY,
+  MESSAGE_LIMIT,
+  MESSAGE_WARNING_THRESHOLD,
+  countChatMessages,
 } from "../../shared/lib/operations/messages";
 import ProxyRequestForm from "./ProxyRequestForm";
 import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
@@ -1615,11 +1618,11 @@ export default function ReportDetailPage() {
                     <p className="text-sm font-semibold text-text-primary">
                       Message thread
                     </p>
-                    {threadMessages.length > 0 && (
+                    {countChatMessages(threadMessages) > 0 && (
                       <span
-                        className={`text-[10px] font-medium shrink-0 ${threadMessages.length >= 8 ? "text-status-rejected-text" : "text-text-muted"}`}
+                        className={`text-[10px] font-medium shrink-0 ${countChatMessages(threadMessages) >= MESSAGE_WARNING_THRESHOLD ? "text-status-rejected-text" : "text-text-muted"}`}
                       >
-                        {threadMessages.length}/10
+                        {countChatMessages(threadMessages)}/{MESSAGE_LIMIT}
                       </span>
                     )}
                   </div>

@@ -65,6 +65,26 @@ export const DROPOFF_CHOSEN_BODY    = '📍 ISSC_DROPOFF'
 export const DROPOFF_REQUESTED_BODY = '🔔 ISSC_DROPOFF_REQUESTED'
 export const DROPOFF_DECLINED_BODY  = '🚫 ISSC_DROPOFF_DECLINED'
 
+// Chat limit per claim thread. Only typed messages count: the ISSC drop-off
+// suggest / decline / accept markers above don't, so they can't use up the
+// limit and the drop-off stays available once the chat is full. Shared by
+// the thread page and the report page's thread preview so both show the
+// same count.
+export const MESSAGE_LIMIT = 10
+export const MESSAGE_WARNING_THRESHOLD = 8
+
+export function isDropoffMarker(message) {
+  return (
+    message?.body === DROPOFF_CHOSEN_BODY ||
+    message?.body === DROPOFF_REQUESTED_BODY ||
+    message?.body === DROPOFF_DECLINED_BODY
+  )
+}
+
+export function countChatMessages(messages) {
+  return (messages ?? []).filter((m) => !isDropoffMarker(m)).length
+}
+
 registerHandler('chooseDropoff', async (payload) => {
   const { message, reportId, claimId, claimantId, reporterId } = payload
   await insertMessage(message)
