@@ -22,7 +22,7 @@ import {
   useDropOffStatus,
   refreshDropOffStatus,
 } from '../../shared/lib/repositories/messages'
-import { getCachedReportDetail } from '../../shared/lib/repositories/reportDetail'
+import { getCachedReportDetail, removeCachedReport } from '../../shared/lib/repositories/reportDetail'
 import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
 import ValidationDialog from '../../shared/components/ValidationDialog'
@@ -591,7 +591,14 @@ async function fetchThreadContext(reportId, sessionUserId) {
     .from('reports')
     .select('*')
     .eq('id', reportId)
-    .single()
+    .maybeSingle()
+
+  // Server answered and the report is gone (deleted): don't resurrect the
+  // thread from the local cache.
+  if (!error && !reportData) {
+    await removeCachedReport(reportId).catch(() => {})
+    return null
+  }
 
   if (error || !reportData) {
     // Offline (or otherwise unreachable) - fall back to whatever was cached

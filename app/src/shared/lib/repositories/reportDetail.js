@@ -32,6 +32,21 @@ export async function signedClaimPhotoUrl(storagePath) {
   }
 }
 
+// Removes a report and everything cached under it (after the server says it
+// no longer exists), so Home, History and this page stop showing it.
+export async function removeCachedReport(reportId) {
+  const claims = await db.claims.where('report_id').equals(reportId).toArray()
+  const claimIds = claims.map((c) => c.id)
+  if (claimIds.length) {
+    await db.claim_photos.where('claim_id').anyOf(claimIds).delete()
+    await db.claim_messages.where('claim_id').anyOf(claimIds).delete()
+    await db.claims.bulkDelete(claimIds)
+  }
+  await db.report_photos.where('report_id').equals(reportId).delete()
+  await db.tips.where('report_id').equals(reportId).delete()
+  await db.reports.delete(reportId)
+}
+
 // Merges onto whatever's already cached rather than overwriting wholesale -
 // fetchAll() caches the report twice (once with the raw row, again once the
 // reporter's name has resolved), and a second concurrent fetchAll (React's

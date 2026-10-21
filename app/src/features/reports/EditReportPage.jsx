@@ -62,7 +62,10 @@ export default function EditReportPage() {
       .select('*')
       .eq('id', id)
       .eq('reporter_id', session.user.id)
-      .single()
+      .maybeSingle()
+
+    // Deleted (or not this student's): nothing to edit.
+    if (!error && !report) { navigate(-1); return }
 
     if (error || !report) {
       // Offline (or otherwise unreachable) - fall back to the cache.

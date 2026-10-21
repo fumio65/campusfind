@@ -40,6 +40,7 @@ import {
   getCachedReportDetail,
   getCachedReportPhotos,
   signedClaimPhotoUrl,
+  removeCachedReport,
 } from "../../shared/lib/repositories/reportDetail";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
@@ -516,11 +517,22 @@ export default function ReportDetailPage() {
     if (!silent) setReporterReady(false);
 
 
+    // maybeSingle: a missing report comes back as data=null (no 406).
     const { data, error } = await supabase
       .from("reports")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
+
+    // The server answered and the report isn't there: it was deleted (or
+    // isn't visible to this student). Drop the stale local copy instead of
+    // showing it as if it still existed.
+    if (!error && !data) {
+      await removeCachedReport(id).catch(() => {});
+      setError("This report is no longer available. It may have been removed.");
+      if (!silent) setLoading(false);
+      return;
+    }
 
     if (error || !data) {
       // Offline (or otherwise unreachable) - fall back to whatever was
