@@ -6,6 +6,7 @@ const STATUS_STYLES = {
   rejected: 'bg-status-rejected-bg text-status-rejected-text',
   pending: 'bg-status-claimed-bg text-status-claimed-text',
   active: 'bg-status-open-bg text-status-open-text',
+  pending_setup: 'bg-status-claimed-bg text-status-claimed-text',
   deactivated: 'bg-surface-muted text-text-secondary',
   create: 'bg-status-open-bg text-status-open-text',
   update: 'bg-status-approved-bg text-status-approved-text',
@@ -22,6 +23,7 @@ const STATUS_LABELS = {
   rejected: 'Rejected',
   pending: 'Pending',
   active: 'Active',
+  pending_setup: 'Pending setup',
   deactivated: 'Deactivated',
   create: 'Create',
   update: 'Update',
@@ -30,12 +32,12 @@ const STATUS_LABELS = {
   error: 'Error',
 }
 
-export default function StatusPill({ status }) {
+export default function StatusPill({ status, title }) {
   const style = STATUS_STYLES[status] ?? 'bg-surface-muted text-text-secondary'
   const label = STATUS_LABELS[status] ?? status
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${style}`}>
+    <span title={title} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${style}`}>
       {label}
     </span>
   )

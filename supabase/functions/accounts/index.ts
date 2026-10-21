@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
       let query = supabaseAdmin
         .from('users')
         .select(
-          'id, student_id, enrollment_number, first_name, last_name, middle_name, program, program_code, department_code, year_level, role, status, trust_score, created_at, programs:program_code ( program_name, department_name )',
+          'id, student_id, enrollment_number, first_name, last_name, middle_name, program, program_code, department_code, year_level, role, status, force_password_change, trust_score, created_at, programs:program_code ( program_name, department_name )',
           { count: 'exact' }
         )
         .order('created_at', { ascending: false })
@@ -68,6 +68,9 @@ Deno.serve(async (req) => {
           year_level: u.year_level,
           role: u.role,
           status: u.status,
+          // true until the student logs in and replaces the initial (or
+          // admin-reset) password, i.e. the account isn't set up yet.
+          force_password_change: u.force_password_change,
           trust_score: u.trust_score,
           created_at: u.created_at,
         })),

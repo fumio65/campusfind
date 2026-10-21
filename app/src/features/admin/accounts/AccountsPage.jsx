@@ -190,6 +190,7 @@ export default function AccountsPage() {
     setResettingId(account.id)
     try {
       await resetAccountPassword(account.id)
+      setAccounts((prev) => prev.map((a) => (a.id === account.id ? { ...a, force_password_change: true } : a)))
       setSuccessMsg(
         `Password for ${account.first_name} ${account.last_name} (${account.student_id}) has been reset to their enrollment number. They'll be asked to change it on next login.`
       )
@@ -486,7 +487,19 @@ export default function AccountsPage() {
                     <td className="py-2 px-3 text-text-secondary">{a.program_code ?? '—'}</td>
                     <td className="py-2 px-3 text-text-secondary">{a.year_level ?? '—'}</td>
                     <td className="py-2 px-3">{a.trust_score}</td>
-                    <td className="py-2 px-3"><StatusPill status={a.status} /></td>
+                    <td className="py-2 px-3">
+                      {/* "Active" only means the account is switched on. Until the
+                          student logs in and sets their own password it's shown as
+                          Pending setup, so admins can see who hasn't started. */}
+                      {a.status === 'active' && a.force_password_change ? (
+                        <StatusPill
+                          status="pending_setup"
+                          title="The student hasn't logged in and set their own password yet. They sign in with their enrollment number."
+                        />
+                      ) : (
+                        <StatusPill status={a.status} />
+                      )}
+                    </td>
                     <td className="py-2 px-3">
                       {a.role !== 'admin' && (
                         <div className="flex items-center gap-1.5">
