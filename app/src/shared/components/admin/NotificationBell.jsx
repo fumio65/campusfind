@@ -98,7 +98,11 @@ export default function NotificationBell() {
   function handleNotificationClick(n) {
     markRead(n.id)
     setOpen(false)
-    if (n.report_id) {
+    if (n.type === 'dropoff_request' || n.type === 'issc_dropoff') {
+      // These are pending drop-offs waiting to be received, so send the
+      // admin to the Incoming tab of ISSC Handoffs rather than Reports.
+      navigate('/admin/dropoff?filter=pending')
+    } else if (n.report_id) {
       navigate(`/admin/reports?highlight=${n.report_id}`)
     } else {
       navigate('/admin/reports')
