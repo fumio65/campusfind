@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { triggerSync } from '../lib/appLifecycle'
 
@@ -12,12 +12,19 @@ const MIN_SPINNER_MS = 500 // keep the spinner visible long enough to read as "i
 // same pub/sub every page's own refresh effect already listens to (resume,
 // reconnect), so this needs no per-page wiring.
 //
-// FIX: this used to translateY the whole content block (indicator + page),
-// which dragged each page's own sticky header down with it mid-pull -
-// looked broken, not like a pull gesture. The content now never moves; only
-// a small floating spinner, fixed to the viewport above everything
-// (including the header), grows in and spins - the same pattern apps like
-// Twitter/Threads use instead of pushing their nav bar around.
+// FIX: the page header (sticky inside this same scroll container) kept
+// visibly moving during the pull even after the content's own transform was
+// removed. The real cause: this container's native touch-scroll "rubber
+// band" bounce was still playing out underneath - dragging everything in
+// it, header included - because nothing told the WebView to suppress it.
+// Two things were needed, and `overscroll-behavior` CSS alone isn't enough:
+//   1. overscroll-behavior-y: contain, so the bounce doesn't happen at all.
+//   2. touchmove's preventDefault() while actively pulling, so the browser
+//      never starts its own scroll/bounce gesture in the first place. React
+//      attaches onTouchMove as a *passive* listener (preventDefault is a
+//      silent no-op there), so this has to be a real addEventListener with
+//      { passive: false } instead of a JSX touch handler.
+// With both in place, nothing in the DOM moves except the floating spinner.
 export default function PullToRefresh({ children }) {
   const containerRef = useRef(null)
   const startY = useRef(null)
@@ -25,41 +32,52 @@ export default function PullToRefresh({ children }) {
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
 
-  function handleTouchStart(e) {
-    if (refreshing) return
-    if (containerRef.current.scrollTop > 0) {
-      pulling.current = false
-      return
-    }
-    startY.current = e.touches[0].clientY
-    pulling.current = true
-  }
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
 
-  function handleTouchMove(e) {
-    if (!pulling.current || startY.current == null) return
-    const delta = e.touches[0].clientY - startY.current
-    if (delta <= 0) {
-      setPullDistance(0)
-      return
+    function onTouchStart(e) {
+      if (refreshing) return
+      if (el.scrollTop > 0) {
+        pulling.current = false
+        return
+      }
+      startY.current = e.touches[0].clientY
+      pulling.current = true
     }
-    // Scrolled away from the top mid-gesture (e.g. content loaded) - bail.
-    if (containerRef.current.scrollTop > 0) {
-      pulling.current = false
-      setPullDistance(0)
-      return
-    }
-    // Resistance past MAX_PULL so it can't be dragged indefinitely.
-    const resisted = delta < MAX_PULL ? delta : MAX_PULL + (delta - MAX_PULL) * 0.2
-    setPullDistance(resisted)
-  }
 
-  async function handleTouchEnd() {
-    if (!pulling.current) return
-    pulling.current = false
-    startY.current = null
-    if (pullDistance >= THRESHOLD) {
+    function onTouchMove(e) {
+      if (!pulling.current || startY.current == null) return
+      const delta = e.touches[0].clientY - startY.current
+      if (delta <= 0) {
+        setPullDistance(0)
+        return
+      }
+      if (el.scrollTop > 0) {
+        // Scrolled away from the top mid-gesture (e.g. content loaded) - bail.
+        pulling.current = false
+        setPullDistance(0)
+        return
+      }
+      // Stop the browser's own scroll/bounce from ever starting, so only
+      // our indicator moves - see the FIX note above.
+      e.preventDefault()
+      const resisted = delta < MAX_PULL ? delta : MAX_PULL + (delta - MAX_PULL) * 0.2
+      setPullDistance(resisted)
+    }
+
+    async function onTouchEnd() {
+      if (!pulling.current) return
+      pulling.current = false
+      startY.current = null
+      setPullDistance((current) => {
+        if (current >= THRESHOLD) doRefresh()
+        return 0
+      })
+    }
+
+    async function doRefresh() {
       setRefreshing(true)
-      setPullDistance(THRESHOLD)
       const start = Date.now()
       triggerSync() // fire-and-forget: each page's own effect refetches its data
       const elapsed = Date.now() - start
@@ -68,8 +86,16 @@ export default function PullToRefresh({ children }) {
       }
       setRefreshing(false)
     }
-    setPullDistance(0)
-  }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [refreshing])
 
   const indicatorDistance = refreshing ? THRESHOLD : pullDistance
   const progress = Math.min(indicatorDistance / THRESHOLD, 1)
@@ -80,10 +106,7 @@ export default function PullToRefresh({ children }) {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto pb-20 no-scrollbar bg-surface-page"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      className="flex-1 overflow-y-auto overscroll-y-contain pb-20 no-scrollbar bg-surface-page"
     >
       <div
         className="fixed left-0 right-0 flex justify-center pointer-events-none z-50"
