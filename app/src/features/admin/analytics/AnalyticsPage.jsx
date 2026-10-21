@@ -361,16 +361,16 @@ export default function AnalyticsPage() {
     const totalReportType = Math.max(reportTypeData.reduce((sum, r) => sum + r.value, 0), 1)
 
     const statusRows = [
-      { status: 'Open', count: stats.open, color: '#2563eb' },
-      { status: 'Under review', count: stats.claimed, color: '#d97706' },
-      { status: 'Claim approved', count: stats.approved, color: '#16a34a' },
+      { status: 'Missing', count: stats.open, color: '#2563eb' },
+      { status: 'In review', count: stats.claimed, color: '#d97706' },
+      { status: 'Approved', count: stats.approved, color: '#16a34a' },
       { status: 'Returned', count: stats.resolved, color: '#06433C' },
     ]
 
     const claimsRows = [
-      { status: 'Waiting for reporter', count: claimsFunnel.pending, color: '#d97706' },
+      { status: 'Waiting', count: claimsFunnel.pending, color: '#d97706' },
       { status: 'Approved', count: claimsFunnel.approved, color: '#16a34a' },
-      { status: 'Not approved', count: claimsFunnel.rejected, color: '#dc2626' },
+      { status: 'Declined', count: claimsFunnel.rejected, color: '#dc2626' },
     ]
 
     const resolutionMethodRows = resolvedViaData
@@ -409,7 +409,7 @@ export default function AnalyticsPage() {
 
     const execSummary = `The system logged ${stats.total} report${stats.total === 1 ? '' : 's'} during this period, of which ${stats.resolved} (${resolutionRate}%) ${stats.resolved === 1 ? 'was' : 'were'} returned to ${stats.resolved === 1 ? 'its owner' : 'their owners'}` +
       (stats.avgResolutionDays !== null ? `, taking an average of ${stats.avgResolutionDays} day${stats.avgResolutionDays === 1 ? '' : 's'}` : '') +
-      `. Claims were approved at a ${claimsFunnel.approvalRate}% rate (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} not approved)` +
+      `. Claims were approved at a ${claimsFunnel.approvalRate}% rate (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} declined)` +
       `. ${accountStatus.active} of ${accountStatus.active + (accountStatus.pendingSetup ?? 0) + accountStatus.deactivated} student accounts have been set up, with an average trust score of ${avgTrustScore ?? '—'} among them` +
       (topLostDept ? `, and ${topLostDept.name} students filed lost reports at the highest rate of any department, at ${topLostDept.rate.toFixed(2)} reports per student` : '') +
       `.`
@@ -462,7 +462,7 @@ export default function AnalyticsPage() {
     }
 
     const claimsNote = claimsReviewed > 0
-      ? `${claimsFunnel.approvalRate}% of reviewed claims were approved (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} not approved).`
+      ? `${claimsFunnel.approvalRate}% of reviewed claims were approved (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} declined).`
       : 'No claims have been reviewed yet.'
     const trustReasonNote = topTrustReason && topTrustReason.value > 0
       ? `"${topTrustReason.name}" is the most common trust-score event this period (${topTrustReason.value} occurrence${topTrustReason.value === 1 ? '' : 's'}).`
@@ -720,7 +720,7 @@ export default function AnalyticsPage() {
                   <div class="stat-card">
                     <div class="stat-label">Claim Approval Rate</div>
                     <div class="stat-value">${claimsFunnel.approvalRate}%</div>
-                    <div class="stat-sub">${claimsFunnel.approved} approved · ${claimsFunnel.rejected} not approved</div>
+                    <div class="stat-sub">${claimsFunnel.approved} approved · ${claimsFunnel.rejected} declined</div>
                   </div>
                   <div class="stat-card">
                     <div class="stat-label">Avg. Trust Score</div>
@@ -1177,7 +1177,7 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label="Claim Approval Rate" value={`${claimsFunnel.approvalRate}%`} sub={`${claimsFunnel.approved} approved · ${claimsFunnel.rejected} not approved`} />
+        <StatCard label="Claim Approval Rate" value={`${claimsFunnel.approvalRate}%`} sub={`${claimsFunnel.approved} approved · ${claimsFunnel.rejected} declined`} />
         <StatCard label="Avg Trust Score" value={avgTrustScore ?? '—'} sub={`across ${accountStatus.active} student${accountStatus.active === 1 ? '' : 's'} using the app`} />
         <StatCard label="Tip Conversion" value={`${tipsStats.rate}%`} sub={`${tipsStats.credited} of ${tipsStats.total} tips credited`} />
         <StatCard
@@ -1195,7 +1195,7 @@ export default function AnalyticsPage() {
               data={[
                 { status: 'Waiting', count: claimsFunnel.pending },
                 { status: 'Approved', count: claimsFunnel.approved },
-                { status: 'Not approved', count: claimsFunnel.rejected },
+                { status: 'Declined', count: claimsFunnel.rejected },
               ]}
               margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
             >
@@ -1426,9 +1426,9 @@ export default function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart
               data={[
-                { status: 'Open', count: stats.open },
-                { status: 'Under review', count: stats.claimed },
-                { status: 'Claim approved', count: stats.approved },
+                { status: 'Missing', count: stats.open },
+                { status: 'In review', count: stats.claimed },
+                { status: 'Approved', count: stats.approved },
                 { status: 'Returned', count: stats.resolved },
               ]}
               margin={{ top: 4, right: 8, left: -20, bottom: 0 }}

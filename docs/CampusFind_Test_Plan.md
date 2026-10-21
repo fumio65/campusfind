@@ -43,7 +43,7 @@ Tick the box when the result matches **Should happen**. If it doesn't, write wha
 | [ ] | 4 | Revin | Open the report, leave tip: "Saw a black wallet near the canteen" | Lhester gets a "New tip" notification | |
 | [ ] | 5 | Lhester | Reply to Revin's tip | Revin gets a "New reply" notification | |
 | [ ] | 6 | Viece | Submit a claim with 1 photo (any photo — this is the wrong claim) | Lhester gets "Someone found your item!" | |
-| [ ] | 7 | Emerson | Home → **Active** tab: the wallet is still listed as **Under review**; open it | Banner says it's under claim review; claim button hidden | |
+| [ ] | 7 | Emerson | Home → **Active** tab: the wallet is still listed as **In review**; open it | Banner says it's under claim review; claim button hidden | |
 | [ ] | 8 | Lhester | Open Viece's claim, check the photo and trust score, **Reject** | Viece is notified; the report reopens | |
 | [ ] | 9 | Emerson | Submit a claim with 2 photos | Lhester is notified | |
 | [ ] | 10 | Lhester | **Approve** Emerson's claim | Emerson is notified; a message thread opens | |

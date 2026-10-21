@@ -10,9 +10,9 @@
 // can still be rejected and the item reopened).
 export const STATUS_TABS = [
   { value: 'active', label: 'Active', statuses: ['open', 'claimed', 'approved'] },
-  { value: 'open', label: 'Open', statuses: ['open'] },
-  { value: 'claimed', label: 'Under review', statuses: ['claimed'] },
-  { value: 'approved', label: 'Claim approved', statuses: ['approved'] },
+  { value: 'open', label: 'Missing', statuses: ['open'] },
+  { value: 'claimed', label: 'In review', statuses: ['claimed'] },
+  { value: 'approved', label: 'Approved', statuses: ['approved'] },
   { value: 'resolved', label: 'Returned', statuses: ['resolved'] },
 ]
 
@@ -31,18 +31,18 @@ export function statusDisplay(report) {
   switch (report?.status) {
     case 'open':
       return walkIn
-        ? { label: 'At ISSC office', hint: null, style: 'bg-status-open-bg text-status-open-text', quiet: false }
-        : { label: 'Still missing', hint: null, style: 'bg-status-open-bg text-status-open-text', quiet: false }
+        ? { label: 'At ISSC', hint: null, style: 'bg-status-open-bg text-status-open-text', quiet: false }
+        : { label: 'Missing', hint: null, style: 'bg-status-open-bg text-status-open-text', quiet: false }
     case 'claimed':
       return {
-        label: 'Under review',
+        label: 'In review',
         hint: 'Someone has claimed this. You can still leave a tip.',
         style: 'bg-status-claimed-bg text-status-claimed-text',
         quiet: true,
       }
     case 'approved':
       return {
-        label: 'Claim approved',
+        label: 'Approved',
         hint: 'The reporter approved a claim and is arranging the handoff.',
         style: 'bg-status-approved-bg text-status-approved-text',
         quiet: true,
@@ -60,13 +60,13 @@ export function statusDisplay(report) {
 export function claimStatusDisplay(claim, reportStatus) {
   switch (claim?.status) {
     case 'pending':
-      return { label: 'Waiting for reporter', style: 'bg-status-claimed-bg text-status-claimed-text' }
+      return { label: 'Waiting', style: 'bg-status-claimed-bg text-status-claimed-text' }
     case 'approved':
       return reportStatus === 'resolved'
-        ? { label: 'Item returned', style: 'bg-status-resolved-bg text-status-resolved-text' }
-        : { label: 'Approved · arrange handoff', style: 'bg-status-approved-bg text-status-approved-text' }
+        ? { label: 'Returned', style: 'bg-status-resolved-bg text-status-resolved-text' }
+        : { label: 'Approved', style: 'bg-status-approved-bg text-status-approved-text' }
     case 'rejected':
-      return { label: 'Not approved', style: 'bg-status-rejected-bg text-status-rejected-text' }
+      return { label: 'Declined', style: 'bg-status-rejected-bg text-status-rejected-text' }
     default:
       return { label: claim?.status ?? '', style: 'bg-surface-muted text-text-secondary' }
   }
@@ -76,7 +76,7 @@ export function claimStatusDisplay(claim, reportStatus) {
 export function ownReportStatusDisplay(report) {
   const d = statusDisplay(report)
   if (report?.status === 'claimed') {
-    return { ...d, label: 'Claim to review', hint: 'Someone claimed your item. Check their photo proof.' }
+    return { ...d, label: 'Review claim', hint: 'Someone claimed your item. Check their photo proof.' }
   }
   if (report?.status === 'approved') {
     return { ...d, hint: 'Arrange the handoff with the finder in the chat.' }

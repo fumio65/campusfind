@@ -17,10 +17,10 @@ import { statusDisplay } from '../../../shared/lib/reportStatus'
 // Same wording as the student app (shared/lib/reportStatus.js).
 const STATUS_TABS = [
   { label: 'All',            value: 'all'      },
-  { label: 'Open',           value: 'open'     },
-  { label: 'Under review',   value: 'claimed'  },
-  { label: 'Claim approved', value: 'approved' },
-  { label: 'Returned',       value: 'resolved' },
+  { label: 'Missing',   value: 'open'     },
+  { label: 'In review', value: 'claimed'  },
+  { label: 'Approved',  value: 'approved' },
+  { label: 'Returned',  value: 'resolved' },
 ]
 
 const CATEGORIES = [
@@ -28,8 +28,8 @@ const CATEGORIES = [
   'Keys', 'Wallet / Purse', 'Bag / Backpack', 'ID / Cards', 'Other',
 ]
 
-// Shows the same plain-language label students see (Still missing / At
-// ISSC office / Under review / Claim approved / Returned) instead of the
+// Shows the same short label students see (Missing / At ISSC / In review /
+// Approved / Returned) instead of the
 // raw database value.
 function StatusBadge({ report }) {
   const d = statusDisplay(report)

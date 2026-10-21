@@ -34,7 +34,7 @@ export function ReportCard({ report, viewerId }) {
   // Plain-language status, plus a hint for items someone is already
   // handling; those cards are slightly quieter so items that still need
   // help stand out. The reporter's own reports are worded for them
-  // ("Claim to review") instead of for other students.
+  // ("Review claim") instead of for other students.
   const isOwn = !!viewerId && report.reporter_id === viewerId;
   const display = isOwn ? ownReportStatusDisplay(report) : statusDisplay(report);
   return (
@@ -297,7 +297,7 @@ export default function HomePage() {
   const EMPTY_TAB_TEXT = {
     open: "Nothing is waiting for a finder right now.",
     claimed: "No claims are being reviewed right now.",
-    approved: "No claims have been approved right now.",
+    approved: "No approved claims right now.",
     resolved: "No items have been returned yet.",
   };
 
