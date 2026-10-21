@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { UserPlus, RefreshCw, UserMinus, Copy, AlertTriangle } from 'lucide-react'
 import { fetchRecentBulkImportBatches } from './api'
+import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 import BatchDetailDialog from './BatchDetailDialog'
 
 const STATUS_STYLES = {
@@ -30,7 +31,9 @@ function formatDate(iso) {
 // existed, a confirmed import left no trace anywhere in the admin UI, so
 // there was no way to answer "who ran the last import, and what did it do?"
 export default function RecentImports() {
-  const [batches, setBatches] = useState(null)
+  // Start from the last list so it doesn't pop in (and push the page down)
+  // every time the tab is opened; the fetch below refreshes it.
+  const [batches, setBatches] = useState(() => getAdminCache('bulk-import:recent') ?? null)
   const [error, setError] = useState(null)
   const [selectedBatch, setSelectedBatch] = useState(null)
 
@@ -38,7 +41,9 @@ export default function RecentImports() {
     let cancelled = false
     fetchRecentBulkImportBatches()
       .then((data) => {
-        if (!cancelled) setBatches(data.batches)
+        if (cancelled) return
+        setBatches(data.batches)
+        setAdminCache('bulk-import:recent', data.batches)
       })
       .catch((err) => {
         if (!cancelled) setError(err.message)

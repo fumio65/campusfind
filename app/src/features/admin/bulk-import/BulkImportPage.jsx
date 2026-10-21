@@ -14,15 +14,37 @@ import ColumnMappingStep from './ColumnMappingStep'
 import { parseCsvHeaderRow, headersAlreadyMatch } from './columnMapping'
 import Dialog from '../../../shared/components/admin/Dialog'
 import { staggerContainer } from '../../../shared/lib/adminMotion'
+import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 
 const SUCCESS_RENDER_CAP = 50
 const ERROR_RENDER_CAP = 100
 const AUTO_EXPAND_THRESHOLD = 15
 
+// What to show before init() has run: the cached preview of the batch still
+// under review (if any), so returning to this tab doesn't show the
+// "Checking for an in-progress import..." screen again.
+function initialPreview() {
+  try {
+    const id = sessionStorage.getItem(PENDING_BATCH_KEY)
+    return id ? getAdminCache(`bulk-import:${id}`) ?? null : null
+  } catch {
+    return null
+  }
+}
+
+function needsInitialCheck() {
+  try {
+    return !!(sessionStorage.getItem(PENDING_BATCH_KEY) || sessionStorage.getItem(UPLOAD_IN_PROGRESS_KEY))
+  } catch {
+    return false
+  }
+}
+
 export default function BulkImportPage() {
-  const [filename, setFilename] = useState(null)
-  const [rows, setRows] = useState([])
-  const [batch, setBatch] = useState(null)
+  const cachedPreview = useRef(initialPreview()).current
+  const [filename, setFilename] = useState(cachedPreview?.batch?.filename ?? null)
+  const [rows, setRows] = useState(cachedPreview?.rows ?? [])
+  const [batch, setBatch] = useState(cachedPreview?.batch ?? null)
   const [uploading, setUploading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState(null)
@@ -30,7 +52,9 @@ export default function BulkImportPage() {
   const [isConfirmed, setIsConfirmed] = useState(false)
   const [editingRowId, setEditingRowId] = useState(null)
   const [successExpanded, setSuccessExpanded] = useState(true)
-  const [loadingBatch, setLoadingBatch] = useState(true)
+  // Only show the "checking" screen when there's something to check and no
+  // cached preview to show meanwhile.
+  const [loadingBatch, setLoadingBatch] = useState(() => !cachedPreview && needsInitialCheck())
   const [resumingUpload, setResumingUpload] = useState(false)
   const [justFixedRowId, setJustFixedRowId] = useState(null)
   const [mappingHeaders, setMappingHeaders] = useState(null)
@@ -62,6 +86,13 @@ export default function BulkImportPage() {
   const successRows = rows.filter((row) => row.action !== 'error' && matchesSearch(row))
   const noSearchMatches = searchQuery && errorRows.length === 0 && successRows.length === 0 && rows.length > 0
 
+  // Keep the in-progress preview (including row edits) cached for revisits.
+  useEffect(() => {
+    if (batch?.id && batch.status === 'pending_review') {
+      setAdminCache(`bulk-import:${batch.id}`, { batch, rows })
+    }
+  }, [batch, rows])
+
   useEffect(() => {
     let cancelled = false
 
@@ -71,6 +102,10 @@ export default function BulkImportPage() {
         if (cancelled) return
         if (loadedBatch.status !== 'pending_review') {
           sessionStorage.removeItem(PENDING_BATCH_KEY)
+          // It was confirmed/cancelled elsewhere: drop the cached preview.
+          setBatch(null)
+          setRows([])
+          setFilename(null)
           return
         }
         setBatch(loadedBatch)
@@ -80,6 +115,11 @@ export default function BulkImportPage() {
         setSuccessExpanded(successCount <= AUTO_EXPAND_THRESHOLD)
       } catch {
         sessionStorage.removeItem(PENDING_BATCH_KEY)
+        if (!cancelled) {
+          setBatch(null)
+          setRows([])
+          setFilename(null)
+        }
       }
     }
 
@@ -340,7 +380,7 @@ export default function BulkImportPage() {
         )
       ) : (
         <>
-          <motion.div className="grid grid-cols-5 gap-4 mb-4" {...staggerContainer}>
+          <motion.div className="grid grid-cols-5 gap-4 mb-4" {...staggerContainer} initial={cachedPreview ? false : staggerContainer.initial}>
             <MetricTile label="New accounts" value={counts.create ?? 0} tone="open" icon={UserPlus} dimmed={hasError} />
             <MetricTile label="Updates" value={counts.update ?? 0} tone="open" icon={RefreshCw} dimmed={hasError} />
             <MetricTile label="Deactivations" value={counts.deactivate ?? 0} tone="claimed" icon={UserMinus} dimmed={hasError} />
