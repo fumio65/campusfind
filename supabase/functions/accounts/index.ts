@@ -29,6 +29,8 @@ Deno.serve(async (req) => {
       const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50'), 200)
       const offset = parseInt(url.searchParams.get('offset') ?? '0')
       const search = (url.searchParams.get('search') ?? '').trim()
+      // all | active (set up) | pending (enabled, not set up yet) | deactivated
+      const filter = url.searchParams.get('filter') ?? 'all'
 
       let query = supabaseAdmin
         .from('users')
@@ -36,8 +38,14 @@ Deno.serve(async (req) => {
           'id, student_id, enrollment_number, first_name, last_name, middle_name, program, program_code, department_code, year_level, role, status, force_password_change, trust_score, created_at, programs:program_code ( program_name, department_name )',
           { count: 'exact' }
         )
+        // Student accounts only - the ISSC admin account isn't managed here.
+        .eq('role', 'student')
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+
+      if (filter === 'active') query = query.eq('status', 'active').eq('force_password_change', false)
+      else if (filter === 'pending') query = query.eq('status', 'active').eq('force_password_change', true)
+      else if (filter === 'deactivated') query = query.eq('status', 'deactivated')
 
       if (search) {
         query = query.or(
@@ -45,7 +53,16 @@ Deno.serve(async (req) => {
         )
       }
 
-      const { data, error, count } = await query
+      // Totals for the filter tabs, across all student accounts.
+      const countOf = (q: any) => q.then((r: any) => r.count ?? 0)
+      const base = () => supabaseAdmin.from('users').select('id', { count: 'exact', head: true }).eq('role', 'student')
+      const [{ data, error, count }, all, active, pending, deactivated] = await Promise.all([
+        query,
+        countOf(base()),
+        countOf(base().eq('status', 'active').eq('force_password_change', false)),
+        countOf(base().eq('status', 'active').eq('force_password_change', true)),
+        countOf(base().eq('status', 'deactivated')),
+      ])
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -75,6 +92,7 @@ Deno.serve(async (req) => {
           created_at: u.created_at,
         })),
         total: count,
+        counts: { all, active, pending, deactivated },
         limit,
         offset,
       }), {

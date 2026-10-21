@@ -27,8 +27,8 @@ export async function fetchPrograms() {
   return departments
 }
 
-export async function fetchAccounts({ limit = 50, offset = 0, search = '' } = {}) {
-  const params = new URLSearchParams({ limit, offset })
+export async function fetchAccounts({ limit = 50, offset = 0, search = '', filter = 'all' } = {}) {
+  const params = new URLSearchParams({ limit, offset, filter })
   if (search) params.set('search', search)
   const res = await adminFetch(`/accounts?${params}`)
   const body = await res.json()

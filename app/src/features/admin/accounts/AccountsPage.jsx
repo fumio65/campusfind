@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Plus, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Search, X, KeyRound, UserX, UserCheck } from 'lucide-react'
 import { fetchAccounts, fetchPrograms, createSingleAccount, toggleAccountStatus, resetAccountPassword } from './api'
 import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
@@ -55,9 +55,12 @@ export default function AccountsPage() {
   const [showAdd, setShowAdd] = useState(false)
   // Start from the cached first page (if any) so a revisit doesn't flash
   // the loading skeleton; load() still refreshes it.
-  const initialCached = getAdminCache('accounts?0&')
+  const initialCached = getAdminCache('accounts?all&0&')
   const [accounts, setAccounts] = useState(initialCached?.accounts ?? [])
   const [total, setTotal] = useState(initialCached?.total ?? 0)
+  // Totals per status for the filter tabs (all student accounts).
+  const [counts, setCounts] = useState(initialCached?.counts ?? null)
+  const [filter, setFilter] = useState('all')
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -96,7 +99,7 @@ export default function AccountsPage() {
 
   useEffect(() => {
     load(offset, debouncedSearch)
-  }, [offset, debouncedSearch])
+  }, [offset, debouncedSearch, filter])
 
   // Loaded once, up front - the Add Account dialog's Department/Program
   // dropdowns need this before the dialog ever opens, and it's a small,
@@ -109,20 +112,22 @@ export default function AccountsPage() {
 
   async function load(currentOffset, currentSearch) {
     // Show the last result for this page/search right away, then refresh.
-    const cacheKey = `accounts?${currentOffset}&${currentSearch ?? ''}`
+    const cacheKey = `accounts?${filter}&${currentOffset}&${currentSearch ?? ''}`
     const cached = getAdminCache(cacheKey)
     if (cached) {
       setAccounts(cached.accounts)
       setTotal(cached.total)
+      if (cached.counts) setCounts(cached.counts)
     } else {
       setLoading(true)
     }
     setError(null)
     try {
-      const result = await fetchAccounts({ limit: PAGE_SIZE, offset: currentOffset, search: currentSearch })
+      const result = await fetchAccounts({ limit: PAGE_SIZE, offset: currentOffset, search: currentSearch, filter })
       setAccounts(result.accounts)
       setTotal(result.total)
-      setAdminCache(cacheKey, { accounts: result.accounts, total: result.total })
+      if (result.counts) setCounts(result.counts)
+      setAdminCache(cacheKey, { accounts: result.accounts, total: result.total, counts: result.counts })
     } catch (err) {
       setError(err.message)
       setAccounts([])
@@ -167,6 +172,7 @@ export default function AccountsPage() {
     try {
       const updated = await toggleAccountStatus(account.id, newStatus)
       setAccounts((prev) => prev.map((a) => (a.id === updated.id ? { ...a, status: updated.status } : a)))
+      load(offset, debouncedSearch) // refresh the tab counts (and the filtered list)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -191,6 +197,7 @@ export default function AccountsPage() {
     try {
       await resetAccountPassword(account.id)
       setAccounts((prev) => prev.map((a) => (a.id === account.id ? { ...a, force_password_change: true } : a)))
+      load(offset, debouncedSearch) // an Active account is now Pending setup
       setSuccessMsg(
         `Password for ${account.first_name} ${account.last_name} (${account.student_id}) has been reset to their enrollment number. They'll be asked to change it on next login.`
       )
@@ -261,6 +268,32 @@ export default function AccountsPage() {
               <X size={14} />
             </button>
           )}
+        </div>
+        <div className="flex items-center gap-2 mt-3 flex-wrap" role="tablist" aria-label="Filter accounts by status">
+          {[
+            { value: 'all', label: 'All', count: counts?.all },
+            { value: 'active', label: 'Active', count: counts?.active, dot: 'bg-status-open-text' },
+            { value: 'pending', label: 'Pending setup', count: counts?.pending, dot: 'bg-status-claimed-text' },
+            { value: 'deactivated', label: 'Deactivated', count: counts?.deactivated, dot: 'bg-text-muted' },
+          ].map((t) => (
+            <button
+              key={t.value}
+              role="tab"
+              aria-selected={filter === t.value}
+              onClick={() => { setFilter(t.value); setOffset(0) }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                filter === t.value
+                  ? 'bg-brand-600 text-white'
+                  : 'text-text-secondary hover:bg-surface-muted border border-border-strong'
+              }`}
+            >
+              {t.dot && <span className={`w-1.5 h-1.5 rounded-full ${filter === t.value ? 'bg-white' : t.dot}`} />}
+              {t.label}
+              <span className={`tabular-nums ${filter === t.value ? 'text-white/80' : 'text-text-muted'}`}>
+                {t.count ?? '–'}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -452,42 +485,53 @@ export default function AccountsPage() {
       ) : accounts.length === 0 ? (
         <div className="bg-surface-card border border-border rounded-xl overflow-hidden py-14 text-center">
           <p className="text-sm font-semibold text-text-primary mb-1">
-            {debouncedSearch ? `No results for "${debouncedSearch}"` : 'No accounts yet'}
+            {debouncedSearch
+              ? `No results for "${debouncedSearch}"`
+              : filter === 'active' ? 'No active accounts yet'
+              : filter === 'pending' ? 'Every account has been set up'
+              : filter === 'deactivated' ? 'No deactivated accounts'
+              : 'No accounts yet'}
           </p>
           <p className="text-xs text-text-muted max-w-xs mx-auto">
             {debouncedSearch
               ? 'Try a different name or student ID.'
-              : 'Run a bulk import from the Registrar CSV, or add a single account above.'}
+              : filter !== 'all'
+                ? 'Choose another tab to see the rest of the accounts.'
+                : 'Run a bulk import from the Registrar CSV, or add a single account above.'}
           </p>
         </div>
       ) : (
         <>
           <div className="bg-surface-card border border-border rounded-xl">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm whitespace-nowrap">
               <thead className="sticky top-[100px] z-10 bg-surface-muted border-b border-border">
                 <tr className="text-left text-xs text-text-secondary font-semibold">
-                  <th className="py-2.5 px-3">Student ID</th>
-                  <th className="py-2.5 px-3">Enrollment no.</th>
-                  <th className="py-2.5 px-3">Name</th>
-                  <th className="py-2.5 px-3">Department</th>
-                  <th className="py-2.5 px-3">Program</th>
-                  <th className="py-2.5 px-3">Year</th>
-                  <th className="py-2.5 px-3">Trust</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3"></th>
+                  <th className="py-2.5 px-2.5">Student ID</th>
+                  <th className="py-2.5 px-2.5">Enrollment no.</th>
+                  <th className="py-2.5 px-2.5">Name</th>
+                  <th className="py-2.5 px-2.5" title="Department">Dept.</th>
+                  <th className="py-2.5 px-2.5">Program</th>
+                  <th className="py-2.5 px-2.5">Year</th>
+                  <th className="py-2.5 px-2.5">Trust</th>
+                  <th className="py-2.5 px-2.5">Status</th>
+                  <th className="py-2.5 px-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {accounts.map((a) => (
                   <tr key={a.id} className="border-b border-border last:border-0">
-                    <td className="py-2 px-3 font-medium">{a.student_id}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.enrollment_number}</td>
-                    <td className="py-2 px-3">{a.name}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.department_code ?? '—'}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.program_code ?? '—'}</td>
-                    <td className="py-2 px-3 text-text-secondary">{a.year_level ?? '—'}</td>
-                    <td className="py-2 px-3">{a.trust_score}</td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-2.5 font-medium">{a.student_id}</td>
+                    <td className="py-2 px-2.5 text-text-secondary">{a.enrollment_number}</td>
+                    <td className="py-2 px-2.5">
+                      <span className="block max-w-[170px] truncate" title={a.name}>{a.name}</span>
+                    </td>
+                    <td className="py-2 px-2.5 text-text-secondary">{a.department_code ?? '—'}</td>
+                    <td className="py-2 px-2.5 text-text-secondary">
+                      <span className="block max-w-[150px] truncate" title={a.program ?? a.program_code ?? ''}>{a.program_code ?? '—'}</span>
+                    </td>
+                    <td className="py-2 px-2.5 text-text-secondary">{a.year_level ?? '—'}</td>
+                    <td className="py-2 px-2.5">{a.trust_score}</td>
+                    <td className="py-2 px-2.5">
                       {/* "Active" only means the account is switched on. Until the
                           student logs in and sets their own password it's shown as
                           Pending setup, so admins can see who hasn't started. */}
@@ -500,30 +544,36 @@ export default function AccountsPage() {
                         <StatusPill status={a.status} />
                       )}
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2 px-2.5">
                       {a.role !== 'admin' && (
-                        <div className="flex items-center gap-1.5">
+                        // Icon buttons keep every row on one line; the tooltip
+                        // and aria-label carry the action's name.
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleResetPassword(a)}
                             disabled={resettingId === a.id}
-                            className="px-2.5 py-1 text-xs font-medium rounded-md border border-border-strong text-text-secondary hover:bg-surface-muted transition-colors disabled:opacity-40"
+                            title="Reset password"
+                            aria-label={`Reset password for ${a.name}`}
+                            className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-border-strong text-text-secondary hover:bg-surface-muted transition-colors disabled:opacity-40"
                           >
-                            {resettingId === a.id ? '...' : 'Reset password'}
+                            {resettingId === a.id ? <span className="text-xs">…</span> : <KeyRound size={14} />}
                           </button>
                           <button
                             onClick={() => handleToggleStatus(a)}
                             disabled={togglingId === a.id}
-                            className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors disabled:opacity-40 ${
+                            title={a.status === 'active' ? 'Deactivate' : 'Reactivate'}
+                            aria-label={`${a.status === 'active' ? 'Deactivate' : 'Reactivate'} ${a.name}`}
+                            className={`w-8 h-8 inline-flex items-center justify-center rounded-md border transition-colors disabled:opacity-40 ${
                               a.status === 'active'
                                 ? 'border-status-rejected-text/30 text-status-rejected-text hover:bg-status-rejected-bg'
                                 : 'border-status-open-text/30 text-status-open-text hover:bg-status-open-bg'
                             }`}
                           >
                             {togglingId === a.id
-                              ? '...'
+                              ? <span className="text-xs">…</span>
                               : a.status === 'active'
-                                ? 'Deactivate'
-                                : 'Reactivate'}
+                                ? <UserX size={14} />
+                                : <UserCheck size={14} />}
                           </button>
                         </div>
                       )}
@@ -538,7 +588,9 @@ export default function AccountsPage() {
             <p className="text-xs text-text-muted">
               {debouncedSearch
                 ? `${total} result${total === 1 ? '' : 's'} for "${debouncedSearch}"`
-                : `${total} account${total === 1 ? '' : 's'} total`}
+                : filter === 'all'
+                  ? `${total} student account${total === 1 ? '' : 's'}`
+                  : `${total} of ${counts?.all ?? total} student accounts`}
             </p>
             {totalPages > 1 && (
               <div className="flex items-center gap-1.5">
