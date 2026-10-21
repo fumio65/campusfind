@@ -12,7 +12,7 @@ export const STATUS_TABS = [
   { value: 'active', label: 'Active', statuses: ['open', 'claimed', 'approved'] },
   { value: 'open', label: 'Open', statuses: ['open'] },
   { value: 'claimed', label: 'Under review', statuses: ['claimed'] },
-  { value: 'approved', label: 'Being returned', statuses: ['approved'] },
+  { value: 'approved', label: 'Claim approved', statuses: ['approved'] },
   { value: 'resolved', label: 'Returned', statuses: ['resolved'] },
 ]
 
@@ -42,8 +42,8 @@ export function statusDisplay(report) {
       }
     case 'approved':
       return {
-        label: 'Being returned',
-        hint: 'The owner is arranging the handoff.',
+        label: 'Claim approved',
+        hint: 'The reporter approved a claim and is arranging the handoff.',
         style: 'bg-status-approved-bg text-status-approved-text',
         quiet: true,
       }

@@ -110,8 +110,8 @@ export default function HomePage() {
   const [locationFilter, setLocationFilter] = useState("");
   const [debouncedLocation, setDebouncedLocation] = useState("");
   const [availableLocations, setAvailableLocations] = useState([]);
-  // Status tab. Defaults to "Active" (open + under review + being
-  // returned): previously the feed showed only Open, so a report vanished
+  // Status tab. Defaults to "Active" (open + under review + claim
+  // approved): previously the feed showed only Open, so a report vanished
   // the moment someone claimed it and nobody knew a claim was in progress.
   // Returned items have their own tab.
   const DEFAULT_STATUS = "active";
@@ -295,7 +295,7 @@ export default function HomePage() {
   const EMPTY_TAB_TEXT = {
     open: "Nothing is waiting for a finder right now.",
     claimed: "No claims are being reviewed right now.",
-    approved: "No items are being returned right now.",
+    approved: "No claims have been approved right now.",
     resolved: "No items have been returned yet.",
   };
 
@@ -431,7 +431,7 @@ export default function HomePage() {
       </div>
 
       {/* Status tabs - always visible, with counts, so students can see at a
-          glance what's still missing, under review, or being returned. */}
+          glance what's still missing, under review, or has an approved claim. */}
       <div className="px-4 pt-4 -mb-1">
         <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1" role="tablist" aria-label="Report status">
           {STATUS_TABS.map((t) => {
