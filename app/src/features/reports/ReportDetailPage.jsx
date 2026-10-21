@@ -329,7 +329,8 @@ export default function ReportDetailPage() {
   const tipSyncSubsRef = useRef([]);
 
   useEffect(() => {
-    claimantIdRef.current = claim?.claimant_id ?? null;
+    claimantIdRef.current =
+      claim && ["pending", "approved"].includes(claim.status) ? claim.claimant_id : null;
   }, [claim]);
 
   // Unsubscribe any still-pending tip-sync watchers (see handleTipSubmit) on
@@ -1096,10 +1097,15 @@ export default function ReportDetailPage() {
   // Once a claim is approved the item is found, so tips are closed.
   const tipsClosed = isApproved || isResolved;
   const canShare = isOpen || isResolved;
-  // "claimant" is only ever populated once an active (pending/approved) claim
-  // exists on this report, so this is naturally falsy until there's actually
-  // another party to check.
-  const isTheClaimant = claim?.claimant_id === session?.user?.id;
+  // True only when the viewer's OWN claim is the active one (pending or
+  // approved). `claim` can also hold the viewer's earlier REJECTED claim
+  // (loaded to show "Your claim was not approved"), so matching the
+  // claimant id alone wrongly told a previously-rejected student "Your
+  // claim is under review" / "approved" while someone else's claim was.
+  const isTheClaimant =
+    !!claim &&
+    ["pending", "approved"].includes(claim.status) &&
+    claim.claimant_id === session?.user?.id;
   const otherPartyDeactivated = isOwner
     ? claimant?.status === "deactivated"
     : isTheClaimant && reporter?.status === "deactivated";
@@ -1434,7 +1440,7 @@ export default function ReportDetailPage() {
               // Only the reporter themselves, or the claimant once their
               // claim has actually been approved, gets to see who reported
               // it - not every student browsing the list.
-              (isOwner || (isApproved && claim?.claimant_id === session?.user?.id)) &&
+              (isOwner || (isApproved && isTheClaimant)) &&
               report.reporter_id &&
               (reporterReady ? (
                 reporter && (
@@ -1596,9 +1602,9 @@ export default function ReportDetailPage() {
         {/* Approved: messaging thread + claimant notice */}
         {isApproved &&
           claim &&
-          (isOwner || claim?.claimant_id === session?.user.id) && (
+          (isOwner || isTheClaimant) && (
             <div id="messages" className="flex flex-col gap-4">
-              {!isOwner && claim?.claimant_id === session?.user.id && (
+              {!isOwner && isTheClaimant && (
                 <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
                   <p className="font-semibold mb-0.5">
                     Your claim was approved!
@@ -1705,7 +1711,7 @@ export default function ReportDetailPage() {
         {!isOwner &&
           isClaimed &&
           claimReady &&
-          (claim?.claimant_id === session?.user.id ? (
+          (isTheClaimant ? (
             <div className="bg-status-approved-bg border border-status-approved-text/20 rounded-xl px-4 py-3 text-xs text-status-approved-text">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <p className="font-semibold">Your claim is under review.</p>
