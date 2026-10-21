@@ -102,6 +102,14 @@ export default function PullToRefresh({ children }) {
   // Settles just under the status bar / notch, not at a fixed pixel count,
   // so it lands in the same place on every device.
   const topOffset = 'max(env(safe-area-inset-top), 0.5rem)'
+  const CIRCLE = 36 // indicator's own height - how far above topOffset it starts, fully hidden
+  // FIX: the circle used to only wiggle in a fixed ~24px band near the top,
+  // so it never actually looked like it was being pulled down. It now
+  // starts hidden just above the top and travels down with indicatorDistance
+  // itself - following the finger 1:1 while dragging, the way a native
+  // pull-to-refresh spinner does - instead of a position mostly independent
+  // of how far you've actually pulled.
+  const translateY = -CIRCLE + indicatorDistance
 
   return (
     <div
@@ -113,7 +121,7 @@ export default function PullToRefresh({ children }) {
         style={{
           top: topOffset,
           opacity: progress,
-          transform: `translateY(${(progress - 1) * 24}px) scale(${0.6 + progress * 0.4})`,
+          transform: `translateY(${translateY}px) scale(${0.6 + progress * 0.4})`,
           transition: pulling.current ? 'none' : 'transform 200ms ease, opacity 200ms ease',
         }}
       >
