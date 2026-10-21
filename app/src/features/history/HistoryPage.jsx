@@ -11,6 +11,7 @@ import { onSyncTrigger } from '../../shared/lib/appLifecycle'
 import { timeAgo } from '../../shared/lib/timeAgo'
 import SyncStateChip from '../../shared/components/SyncStateChip'
 import { ReportCard } from '../home/HomePage'
+import { claimStatusDisplay, ownReportStatusDisplay } from '../../shared/lib/reportStatus'
 
 const TABS = ['All', 'My Reports', 'My Claims', 'My Tips']
 
@@ -103,11 +104,19 @@ function ActivityRow({ item }) {
           {item._syncStatus ? (
             <SyncStateChip status={item._syncStatus} />
           ) : (
-            item.status && (
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status] ?? ''}`}>
-                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-              </span>
-            )
+            item.status && (() => {
+              // Claims are worded from the claimant's side (and use the
+              // report's status to tell an approved claim from a returned
+              // item); the student's own reports from the reporter's side.
+              const d = isClaim || isRejected
+                ? claimStatusDisplay(item, item.report_status)
+                : ownReportStatusDisplay(item)
+              return (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${d.style}`}>
+                  {d.label}
+                </span>
+              )
+            })()
           )}
           <span className="text-[10px] text-text-muted">{timeAgo(item.created_at)}</span>
         </div>
@@ -398,7 +407,7 @@ export default function HistoryPage() {
               <div className="flex flex-col gap-2">
                 {items.map((item) =>
                   item._type === 'report' ? (
-                    <ReportCard key={item.id} report={item} />
+                    <ReportCard key={item.id} report={item} viewerId={session?.user?.id} />
                   ) : (
                     <ActivityRow key={`${item._type}-${item.id}`} item={item} />
                   )

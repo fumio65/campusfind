@@ -13,7 +13,7 @@ import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { staggerContainer, staggerItem } from "../../shared/lib/motion";
 import { useReports, refreshReports, fetchAvailableLocations, fetchStatusCounts } from "../../shared/lib/repositories/reports";
-import { STATUS_TABS, statusDisplay } from "../../shared/lib/reportStatus";
+import { STATUS_TABS, statusDisplay, ownReportStatusDisplay } from "../../shared/lib/reportStatus";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
 import CachedImage from "../../shared/components/CachedImage";
@@ -29,12 +29,14 @@ import { uniqueChannelName } from "../../shared/lib/realtimeChannel";
 // as if the report they'd been looking at had vanished.
 let savedHomeScrollTop = 0;
 
-export function ReportCard({ report }) {
+export function ReportCard({ report, viewerId }) {
   const thumbnail = report.thumbnail;
   // Plain-language status, plus a hint for items someone is already
   // handling; those cards are slightly quieter so items that still need
-  // help stand out.
-  const display = statusDisplay(report);
+  // help stand out. The reporter's own reports are worded for them
+  // ("Claim to review") instead of for other students.
+  const isOwn = !!viewerId && report.reporter_id === viewerId;
+  const display = isOwn ? ownReportStatusDisplay(report) : statusDisplay(report);
   return (
     <motion.div {...staggerItem}>
       <Link
@@ -102,7 +104,7 @@ export function ReportCard({ report }) {
 }
 
 export default function HomePage() {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -531,7 +533,7 @@ export default function HomePage() {
               animate="animate"
             >
               {reports.map((report) => (
-                <ReportCard key={report.id} report={report} />
+                <ReportCard key={report.id} report={report} viewerId={session?.user?.id} />
               ))}
             </motion.div>
           </>

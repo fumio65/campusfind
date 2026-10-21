@@ -36,7 +36,7 @@ async function doRefreshHistory(userId) {
       .order('created_at', { ascending: false }),
     supabase
       .from('claims')
-      .select('id, status, created_at, report_id, claimant_id, reports(title)')
+      .select('id, status, created_at, report_id, claimant_id, reports(title, status)')
       .eq('claimant_id', userId)
       .order('created_at', { ascending: false }),
     supabase
@@ -105,7 +105,10 @@ async function doRefreshHistory(userId) {
   // read time from the shared `reports` cache (see useHistory below), which
   // stays correct even if the report is later renamed.
   if (c) {
-    const claims = c.map(({ reports: _reports, ...claim }) => claim)
+    // Keep the report's status on the claim: an approved claim stays
+    // 'approved' after the handoff, so History needs the report's status to
+    // say whether the item was actually returned.
+    const claims = c.map(({ reports, ...claim }) => ({ ...claim, report_status: reports?.status ?? null }))
     await db.claims.bulkPut(claims)
     await pruneMissing('claims', claims, 'claimant_id', userId, { skipPending: true })
   }
@@ -155,8 +158,14 @@ export function useHistory(userId) {
     ])
 
     const titleByReportId = Object.fromEntries(allReports.map((r) => [r.id, r.title]))
-    const withTitle = (row) =>
-      titleByReportId[row.report_id] ? { ...row, reports: { title: titleByReportId[row.report_id] } } : row
+    const statusByReportId = Object.fromEntries(allReports.map((r) => [r.id, r.status]))
+    const withTitle = (row) => {
+      const withName = titleByReportId[row.report_id] ? { ...row, reports: { title: titleByReportId[row.report_id] } } : row
+      // Prefer the cached report's status (refreshed by Home and the report
+      // page); fall back to the one stored with the claim.
+      const reportStatus = statusByReportId[row.report_id] ?? row.report_status ?? null
+      return reportStatus ? { ...withName, report_status: reportStatus } : withName
+    }
     const byNewest = (a, b) => new Date(b.created_at) - new Date(a.created_at)
 
     // Same "first photo by report" pattern as useReports (Home) - reuses

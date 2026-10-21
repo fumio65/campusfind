@@ -53,3 +53,33 @@ export function statusDisplay(report) {
       return { label: report?.status ?? '', hint: null, style: 'bg-surface-muted text-text-secondary', quiet: false }
   }
 }
+
+// A student's own claim, worded from the claimant's side. Claims never get a
+// 'returned' status of their own - an approved claim stays 'approved' after
+// the handoff - so the report's status decides whether it's finished.
+export function claimStatusDisplay(claim, reportStatus) {
+  switch (claim?.status) {
+    case 'pending':
+      return { label: 'Waiting for reporter', style: 'bg-status-claimed-bg text-status-claimed-text' }
+    case 'approved':
+      return reportStatus === 'resolved'
+        ? { label: 'Item returned', style: 'bg-status-resolved-bg text-status-resolved-text' }
+        : { label: 'Approved · arrange handoff', style: 'bg-status-approved-bg text-status-approved-text' }
+    case 'rejected':
+      return { label: 'Not approved', style: 'bg-status-rejected-bg text-status-rejected-text' }
+    default:
+      return { label: claim?.status ?? '', style: 'bg-surface-muted text-text-secondary' }
+  }
+}
+
+// The student's own report, worded from the reporter's side.
+export function ownReportStatusDisplay(report) {
+  const d = statusDisplay(report)
+  if (report?.status === 'claimed') {
+    return { ...d, label: 'Claim to review', hint: 'Someone claimed your item. Check their photo proof.' }
+  }
+  if (report?.status === 'approved') {
+    return { ...d, hint: 'Arrange the handoff with the finder in the chat.' }
+  }
+  return d
+}
