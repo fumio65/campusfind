@@ -6,6 +6,8 @@ import Dialog from '../../../shared/components/admin/Dialog'
 import Dropdown from '../../../shared/components/Dropdown'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 import { SkeletonTable } from '../../../shared/components/admin/Skeleton'
+import { supabase } from '../../../shared/lib/supabase'
+import { uniqueChannelName } from '../../../shared/lib/realtimeChannel'
 
 // Program/department names are stored in ALL CAPS (the official NWSSU list
 // uses that style) - fine for a database column, not for a UI label.
@@ -101,6 +103,31 @@ export default function AccountsPage() {
     load(offset, debouncedSearch)
   }, [offset, debouncedSearch, filter])
 
+  // Keep refs of what's currently shown so the realtime callback below (set
+  // up once) always re-fetches the page/filter the admin is actually on,
+  // not whatever was current when the subscription was created.
+  const offsetRef = useRef(offset)
+  const searchRef = useRef(debouncedSearch)
+  const filterRef = useRef(filter)
+  useEffect(() => { offsetRef.current = offset }, [offset])
+  useEffect(() => { searchRef.current = debouncedSearch }, [debouncedSearch])
+  useEffect(() => { filterRef.current = filter }, [filter])
+
+  // Another admin (or this admin in another tab) changing an account's
+  // status, resetting a password, or creating an account should show up
+  // here without a manual refresh.
+  useEffect(() => {
+    const channel = supabase
+      .channel(uniqueChannelName('accounts-admin'))
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        () => load(offsetRef.current, searchRef.current, filterRef.current, { silent: true }),
+      )
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [])
+
   // Loaded once, up front - the Add Account dialog's Department/Program
   // dropdowns need this before the dialog ever opens, and it's a small,
   // rarely-changing reference list (not worth refetching per dialog open).
@@ -110,20 +137,20 @@ export default function AccountsPage() {
       .catch((err) => setDepartmentsError(err.message))
   }, [])
 
-  async function load(currentOffset, currentSearch) {
+  async function load(currentOffset, currentSearch, currentFilter = filter, { silent = false } = {}) {
     // Show the last result for this page/search right away, then refresh.
-    const cacheKey = `accounts?${filter}&${currentOffset}&${currentSearch ?? ''}`
+    const cacheKey = `accounts?${currentFilter}&${currentOffset}&${currentSearch ?? ''}`
     const cached = getAdminCache(cacheKey)
     if (cached) {
       setAccounts(cached.accounts)
       setTotal(cached.total)
       if (cached.counts) setCounts(cached.counts)
-    } else {
+    } else if (!silent) {
       setLoading(true)
     }
     setError(null)
     try {
-      const result = await fetchAccounts({ limit: PAGE_SIZE, offset: currentOffset, search: currentSearch, filter })
+      const result = await fetchAccounts({ limit: PAGE_SIZE, offset: currentOffset, search: currentSearch, filter: currentFilter })
       setAccounts(result.accounts)
       setTotal(result.total)
       if (result.counts) setCounts(result.counts)
