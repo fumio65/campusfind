@@ -12,13 +12,15 @@ import ShareCardDialog from './ShareCardDialog'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 import { uniqueChannelName } from '../../../shared/lib/realtimeChannel'
 import { SkeletonTable } from '../../../shared/components/admin/Skeleton'
+import { statusDisplay } from '../../../shared/lib/reportStatus'
 
+// Same wording as the student app (shared/lib/reportStatus.js).
 const STATUS_TABS = [
-  { label: 'All',      value: 'all'      },
-  { label: 'Open',     value: 'open'     },
-  { label: 'Claimed',  value: 'claimed'  },
-  { label: 'Approved', value: 'approved' },
-  { label: 'Resolved', value: 'resolved' },
+  { label: 'All',            value: 'all'      },
+  { label: 'Open',           value: 'open'     },
+  { label: 'Under review',   value: 'claimed'  },
+  { label: 'Claim approved', value: 'approved' },
+  { label: 'Returned',       value: 'resolved' },
 ]
 
 const CATEGORIES = [
@@ -26,16 +28,14 @@ const CATEGORIES = [
   'Keys', 'Wallet / Purse', 'Bag / Backpack', 'ID / Cards', 'Other',
 ]
 
-function StatusBadge({ status }) {
-  const map = {
-    open:     'bg-status-open-bg text-status-open-text',
-    claimed:  'bg-status-claimed-bg text-status-claimed-text',
-    approved: 'bg-status-approved-bg text-status-approved-text',
-    resolved: 'bg-status-resolved-bg text-status-resolved-text',
-  }
+// Shows the same plain-language label students see (Still missing / At
+// ISSC office / Under review / Claim approved / Returned) instead of the
+// raw database value.
+function StatusBadge({ report }) {
+  const d = statusDisplay(report)
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${map[status] ?? 'bg-surface-muted text-text-muted'}`}>
-      {status}
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${d.style}`}>
+      {d.label}
     </span>
   )
 }
@@ -148,7 +148,7 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, reso
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-sm font-bold text-text-primary">{report.title}</h2>
-                  <StatusBadge status={report.status} />
+                  <StatusBadge report={report} />
                   {isWalkIn && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-approved-bg text-status-approved-text">
                       Walk-in
@@ -498,8 +498,8 @@ export default function ReportsPage() {
       const body = await res.json()
       if (!res.ok) throw new Error(body.error)
       setSuccessMsg(confirmResolve?.isWalkIn
-        ? 'Owner identity verified and item released. Report marked as resolved.'
-        : 'Report marked as resolved and handoff recorded.')
+        ? 'Owner identity verified and item released. Report marked as returned.'
+        : 'Report marked as returned and handoff recorded.')
       load()
     } catch (err) {
       setError(err.message)
@@ -866,7 +866,7 @@ export default function ReportsPage() {
                       <p className="text-[11px] text-text-muted mt-0.5">{r.category}</p>
                     </td>
                     <td className="py-2 px-3 text-text-secondary text-xs">{r.reporter_name ?? '—'}</td>
-                    <td className="py-2 px-3"><StatusBadge status={r.status} /></td>
+                    <td className="py-2 px-3"><StatusBadge report={r} /></td>
                     <td className="py-2 px-3 text-text-muted text-xs whitespace-nowrap">
                       {new Date(r.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>

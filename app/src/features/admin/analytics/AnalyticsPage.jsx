@@ -362,15 +362,15 @@ export default function AnalyticsPage() {
 
     const statusRows = [
       { status: 'Open', count: stats.open, color: '#2563eb' },
-      { status: 'Claimed', count: stats.claimed, color: '#d97706' },
-      { status: 'Approved', count: stats.approved, color: '#16a34a' },
-      { status: 'Resolved', count: stats.resolved, color: '#06433C' },
+      { status: 'Under review', count: stats.claimed, color: '#d97706' },
+      { status: 'Claim approved', count: stats.approved, color: '#16a34a' },
+      { status: 'Returned', count: stats.resolved, color: '#06433C' },
     ]
 
     const claimsRows = [
-      { status: 'Pending', count: claimsFunnel.pending, color: '#d97706' },
+      { status: 'Waiting for reporter', count: claimsFunnel.pending, color: '#d97706' },
       { status: 'Approved', count: claimsFunnel.approved, color: '#16a34a' },
-      { status: 'Rejected', count: claimsFunnel.rejected, color: '#dc2626' },
+      { status: 'Not approved', count: claimsFunnel.rejected, color: '#dc2626' },
     ]
 
     const resolutionMethodRows = resolvedViaData
@@ -407,9 +407,9 @@ export default function AnalyticsPage() {
 
     const openingNarrative = `This report summarizes Lost &amp; Found activity handled through the CampusFind system by the ISSC Office over ${periodLabel}. It covers report volume and resolution outcomes, claim integrity, trust-score activity, and which departments and programs are most affected, to support decisions on awareness and prevention efforts.`
 
-    const execSummary = `The system logged ${stats.total} report${stats.total === 1 ? '' : 's'} during this period, of which ${stats.resolved} (${resolutionRate}%) ${stats.resolved === 1 ? 'was' : 'were'} resolved` +
-      (stats.avgResolutionDays !== null ? `, with an average resolution time of ${stats.avgResolutionDays} day${stats.avgResolutionDays === 1 ? '' : 's'}` : '') +
-      `. Claims were approved at a ${claimsFunnel.approvalRate}% rate (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} rejected)` +
+    const execSummary = `The system logged ${stats.total} report${stats.total === 1 ? '' : 's'} during this period, of which ${stats.resolved} (${resolutionRate}%) ${stats.resolved === 1 ? 'was' : 'were'} returned to ${stats.resolved === 1 ? 'its owner' : 'their owners'}` +
+      (stats.avgResolutionDays !== null ? `, taking an average of ${stats.avgResolutionDays} day${stats.avgResolutionDays === 1 ? '' : 's'}` : '') +
+      `. Claims were approved at a ${claimsFunnel.approvalRate}% rate (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} not approved)` +
       `. ${accountStatus.active} of ${accountStatus.active + (accountStatus.pendingSetup ?? 0) + accountStatus.deactivated} student accounts have been set up, with an average trust score of ${avgTrustScore ?? '—'} among them` +
       (topLostDept ? `, and ${topLostDept.name} students filed lost reports at the highest rate of any department, at ${topLostDept.rate.toFixed(2)} reports per student` : '') +
       `.`
@@ -435,7 +435,7 @@ export default function AnalyticsPage() {
       keyFindings.push(`${rejectionShare}% of reviewed claims were rejected, which may be worth reviewing for recurring causes.`)
     }
     if (topResolutionMethod && resolutionMethodShare !== null) {
-      keyFindings.push(`Most resolved items (${resolutionMethodShare}%) were recovered via ${topResolutionMethod.name.toLowerCase()}.`)
+      keyFindings.push(`Most returned items (${resolutionMethodShare}%) were returned via ${topResolutionMethod.name.toLowerCase()}.`)
     }
     if (keyFindings.length === 0) {
       keyFindings.push('Not enough data has been recorded yet to surface meaningful patterns. Findings will populate here as more reports are filed.')
@@ -455,21 +455,21 @@ export default function AnalyticsPage() {
       recommendations.push('A large share of items arrive via ISSC walk-in drop-off rather than direct student-to-student handoff; continuing to promote the in-app handoff flow may speed up recovery times.')
     }
     if (stats.total > 0 && resolutionRate < 50) {
-      recommendations.push(`The overall resolution rate (${resolutionRate}%) has room to improve; closer follow-up on reports still open past the average resolution time may help.`)
+      recommendations.push(`The overall return rate (${resolutionRate}%) has room to improve; closer follow-up on reports still open past the average time to return may help.`)
     }
     if (recommendations.length === 0) {
       recommendations.push('Continue monitoring monthly trends as more data accumulates; no urgent action items are indicated by the current dataset.')
     }
 
     const claimsNote = claimsReviewed > 0
-      ? `${claimsFunnel.approvalRate}% of reviewed claims were approved (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} rejected).`
+      ? `${claimsFunnel.approvalRate}% of reviewed claims were approved (${claimsFunnel.approved} approved, ${claimsFunnel.rejected} not approved).`
       : 'No claims have been reviewed yet.'
     const trustReasonNote = topTrustReason && topTrustReason.value > 0
       ? `"${topTrustReason.name}" is the most common trust-score event this period (${topTrustReason.value} occurrence${topTrustReason.value === 1 ? '' : 's'}).`
       : 'No trust-score activity has been recorded yet.'
     const resolutionMethodNote = topResolutionMethod && resolutionMethodShare !== null
-      ? `${topResolutionMethod.name} accounts for ${resolutionMethodShare}% of resolved items.`
-      : 'No items have been resolved yet.'
+      ? `${topResolutionMethod.name} accounts for ${resolutionMethodShare}% of returned items.`
+      : 'No items have been returned yet.'
     const trustDistNote = topTrustBand && topTrustBand.value > 0
       ? `Among the ${accountStatus.active} student${accountStatus.active === 1 ? '' : 's'} using the app, most fall in the "${topTrustBand.band}" trust band (average ${avgTrustScore}). Accounts that have not been set up yet are excluded, since every account starts at 100.`
       : 'No trust score data is available yet.'
@@ -684,9 +684,9 @@ export default function AnalyticsPage() {
                     <div class="stat-sub">All time</div>
                   </div>
                   <div class="stat-card highlight">
-                    <div class="stat-label">Resolved</div>
+                    <div class="stat-label">Returned</div>
                     <div class="stat-value">${stats.resolved}</div>
-                    <div class="stat-sub">${resolutionRate}% resolution rate</div>
+                    <div class="stat-sub">${resolutionRate}% returned to owners</div>
                   </div>
                   <div class="stat-card">
                     <div class="stat-label">Currently Open</div>
@@ -694,9 +694,9 @@ export default function AnalyticsPage() {
                     <div class="stat-sub">Awaiting finder</div>
                   </div>
                   <div class="stat-card">
-                    <div class="stat-label">Avg. Resolution</div>
+                    <div class="stat-label">Avg. Time to Return</div>
                     <div class="stat-value">${stats.avgResolutionDays !== null ? `${stats.avgResolutionDays}d` : '—'}</div>
-                    <div class="stat-sub">Days to resolve</div>
+                    <div class="stat-sub">From report to return</div>
                   </div>
                 </div>
               </div>
@@ -720,7 +720,7 @@ export default function AnalyticsPage() {
                   <div class="stat-card">
                     <div class="stat-label">Claim Approval Rate</div>
                     <div class="stat-value">${claimsFunnel.approvalRate}%</div>
-                    <div class="stat-sub">${claimsFunnel.approved} approved · ${claimsFunnel.rejected} rejected</div>
+                    <div class="stat-sub">${claimsFunnel.approved} approved · ${claimsFunnel.rejected} not approved</div>
                   </div>
                   <div class="stat-card">
                     <div class="stat-label">Avg. Trust Score</div>
@@ -797,11 +797,11 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
                 <div>
-                  <div class="section-title">How Items Get Resolved</div>
+                  <div class="section-title">How Items Get Returned</div>
                   <div class="section-note">${resolutionMethodNote}</div>
                   <div class="bar-chart">
                     ${resolutionMethodRows.length === 0
-                      ? '<p style="font-size:10px;color:#9ca3af;">No resolved items yet.</p>'
+                      ? '<p style="font-size:10px;color:#9ca3af;">No returned items yet.</p>'
                       : resolutionMethodRows.map((r) => `
                         <div class="bar-row">
                           <div class="bar-row-top">
@@ -1111,7 +1111,7 @@ export default function AnalyticsPage() {
               <div>
                 <div class="section-title">Conclusion</div>
                 <div class="conclusion-box">
-                  This report reflects CampusFind activity for ${periodLabel}. Overall, ${resolutionRate}% of reports were resolved
+                  This report reflects CampusFind activity for ${periodLabel}. Overall, ${resolutionRate}% of reported items were returned to their owners
                   with a ${claimsFunnel.approvalRate}% claim approval rate. The findings and recommendations above are generated
                   directly from the current dataset and will update automatically as new reports, claims, and accounts are recorded.
                 </div>
@@ -1171,13 +1171,13 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <StatCard label="Total Reports" value={stats.total} />
-        <StatCard label="Resolved" value={stats.resolved} sub={`${resolutionRate}% resolution rate`} color="text-status-open-text" />
+        <StatCard label="Returned" value={stats.resolved} sub={`${resolutionRate}% returned to owners`} color="text-status-open-text" />
         <StatCard label="Open" value={stats.open} color="text-brand-600" />
-        <StatCard label="Avg Resolution" value={stats.avgResolutionDays !== null ? `${stats.avgResolutionDays}d` : '—'} sub="days to resolve" />
+        <StatCard label="Avg Time to Return" value={stats.avgResolutionDays !== null ? `${stats.avgResolutionDays}d` : '—'} sub="from report to return" />
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label="Claim Approval Rate" value={`${claimsFunnel.approvalRate}%`} sub={`${claimsFunnel.approved} approved · ${claimsFunnel.rejected} rejected`} />
+        <StatCard label="Claim Approval Rate" value={`${claimsFunnel.approvalRate}%`} sub={`${claimsFunnel.approved} approved · ${claimsFunnel.rejected} not approved`} />
         <StatCard label="Avg Trust Score" value={avgTrustScore ?? '—'} sub={`across ${accountStatus.active} student${accountStatus.active === 1 ? '' : 's'} using the app`} />
         <StatCard label="Tip Conversion" value={`${tipsStats.rate}%`} sub={`${tipsStats.credited} of ${tipsStats.total} tips credited`} />
         <StatCard
@@ -1193,9 +1193,9 @@ export default function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart
               data={[
-                { status: 'Pending', count: claimsFunnel.pending },
+                { status: 'Waiting', count: claimsFunnel.pending },
                 { status: 'Approved', count: claimsFunnel.approved },
-                { status: 'Rejected', count: claimsFunnel.rejected },
+                { status: 'Not approved', count: claimsFunnel.rejected },
               ]}
               margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
             >
@@ -1236,9 +1236,9 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="bg-surface-card border border-border rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-text-primary mb-4">How items actually get resolved</h3>
+          <h3 className="text-sm font-semibold text-text-primary mb-4">How items actually get returned</h3>
           {resolvedViaData.length === 0 ? (
-            <p className="text-xs text-text-muted">No resolved items yet.</p>
+            <p className="text-xs text-text-muted">No returned items yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -1427,9 +1427,9 @@ export default function AnalyticsPage() {
             <BarChart
               data={[
                 { status: 'Open', count: stats.open },
-                { status: 'Claimed', count: stats.claimed },
-                { status: 'Approved', count: stats.approved },
-                { status: 'Resolved', count: stats.resolved },
+                { status: 'Under review', count: stats.claimed },
+                { status: 'Claim approved', count: stats.approved },
+                { status: 'Returned', count: stats.resolved },
               ]}
               margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
             >

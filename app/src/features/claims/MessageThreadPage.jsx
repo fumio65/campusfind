@@ -246,7 +246,7 @@ export default function MessageThreadPage() {
         case 'resolved':
           return {
             title: 'Item collected',
-            message: 'You have collected your item from the ISSC office. This report is now resolved.',
+            message: 'You have collected your item from the ISSC office. It is now marked as returned.',
           }
         default:
           return {
@@ -271,7 +271,7 @@ export default function MessageThreadPage() {
       case 'resolved':
         return {
           title: 'Drop-off complete',
-          message: 'The reporter has collected the item. This report is now resolved. Thank you for your honesty!',
+          message: 'The reporter has collected the item, so it is now marked as returned. Thank you for your honesty!',
         }
       default:
         return {

@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
         user_id: request.reporter_id,
         type: 'report_resolved',
         title: 'Item recovered!',
-        body: `"${(request.reports as any)?.title ?? 'Your item'}" has been marked as resolved. Thank you for using CampusFind!`,
+        body: `You collected "${(request.reports as any)?.title ?? 'your item'}" from the ISSC office, so it's now marked as returned. Thank you for using CampusFind!`,
         report_id: request.report_id,
         claim_id: request.claim_id,
         read: false,

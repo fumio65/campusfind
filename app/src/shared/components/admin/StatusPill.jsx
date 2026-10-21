@@ -16,10 +16,11 @@ const STATUS_STYLES = {
 }
 
 const STATUS_LABELS = {
+  // Report statuses, worded as in the student app.
   open: 'Open',
-  claimed: 'Claimed',
-  approved: 'Approved',
-  resolved: 'Resolved',
+  claimed: 'Under review',
+  approved: 'Claim approved',
+  resolved: 'Returned',
   rejected: 'Rejected',
   pending: 'Pending',
   active: 'Active',

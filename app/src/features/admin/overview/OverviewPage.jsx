@@ -188,7 +188,7 @@ export default function OverviewPage() {
               icon={FileText}
             />
             <StatCard
-              label="Resolved"
+              label="Returned"
               value={data.resolvedReports}
               sub={
                 data.totalReports > 0

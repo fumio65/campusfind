@@ -1197,12 +1197,12 @@ export default function ReportDetailPage() {
               <CheckCircle2 size={20} className="text-status-open-text" />
             </div>
             <h3 className="text-sm font-bold text-text-primary mb-1">
-              Mark as resolved
+              Confirm you got your item back
             </h3>
             <p className="text-xs text-text-secondary mb-4">
               {resolveTip
                 ? "Please take a photo of the recovered item as proof. This will also credit the tip with +2 trust score."
-                : "Please take a photo of the recovered item as proof before marking this report as resolved."}
+                : "Please take a photo of the recovered item as proof before marking it as returned."}
             </p>
 
             <input
@@ -1576,14 +1576,14 @@ export default function ReportDetailPage() {
             </p>
             <p className="text-xs text-status-open-text/80 mb-3">
               Once you've received your item, take a photo as proof and mark it
-              as resolved.
+              as returned.
             </p>
             <button
               onClick={handleResolveClick}
               disabled={actioning}
               className="w-full h-11 rounded-xl bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              <Camera size={16} /> Mark as resolved
+              <Camera size={16} /> I got my item back
             </button>
           </motion.div>
         )}
@@ -1657,7 +1657,7 @@ export default function ReportDetailPage() {
               Item recovered!
             </p>
             <p className="text-xs text-text-muted mt-0.5">
-              This report has been resolved.
+              This item has been returned to its owner.
             </p>
           </div>
         )}
