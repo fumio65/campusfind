@@ -6,7 +6,9 @@ import { makeDisplayImage } from '../imageThumbnail'
 import { SERVER_URL, authFetch } from '../apiClient'
 
 registerHandler('submitClaim', async (payload) => {
-  const { claim, photos, message, originalTipId } = payload
+  // originalTipId may still appear in claims queued by an older app build;
+  // it's ignored (the "I can prove this" tip-to-claim shortcut was removed).
+  const { claim, photos, message } = payload
 
   const { error: claimError } = await supabase.from('claims').insert({
     id: claim.id,
@@ -53,12 +55,6 @@ registerHandler('submitClaim', async (payload) => {
   })
   if (messageError && !isPrimaryKeyConflict(messageError)) throw messageError
 
-  if (originalTipId) {
-    // Note: `tips` has no UPDATE RLS policy, so this currently has no effect -
-    // matches existing (pre-offline) app behavior, not something introduced here.
-    await supabase.from('tips').update({ converted_to_claim_id: claim.id }).eq('id', originalTipId)
-  }
-
   notifyClaimServer(claim).catch(() => {})
 })
 
@@ -75,7 +71,7 @@ async function notifyClaimServer(claim) {
 // Writes optimistically to the local cache and queues the compound insert
 // (claim + photo uploads + report status + initial message + tip link).
 // Used for both the online-immediate and offline-queued paths.
-export async function submitClaim({ reportId, claimantId, photoFiles, messageText, originalTipId }) {
+export async function submitClaim({ reportId, claimantId, photoFiles, messageText }) {
   const claim = {
     id: crypto.randomUUID(),
     report_id: reportId,
@@ -117,7 +113,7 @@ export async function submitClaim({ reportId, claimantId, photoFiles, messageTex
     id: claim.id,
     opType: 'submitClaim',
     entity: 'claims',
-    payload: { claim, photos, message, originalTipId: originalTipId ?? null },
+    payload: { claim, photos, message },
     rows: [
       { table: 'claims', id: claim.id },
       { table: 'claim_messages', id: message.id },

@@ -119,7 +119,6 @@ function TipCard({
   onReply,
   isReply,
   credited,
-  onConvert,
   onCredit,
   isHighlighted,
 }) {
@@ -180,11 +179,6 @@ function TipCard({
                     <CheckCircle2 size={9} /> Helped recovery
                   </span>
                 )}
-                {tip.converted_to_claim_id && (
-                  <span className="flex items-center gap-0.5 text-[10px] text-brand-600 font-medium">
-                    <Camera size={9} /> Converted to claim
-                  </span>
-                )}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {onCredit && !credited && (
@@ -195,15 +189,6 @@ function TipCard({
                   >
                     <CheckCircle2 size={10} />
                     This helped
-                  </button>
-                )}
-                {onConvert && !credited && !tip.converted_to_claim_id && (
-                  <button
-                    type="button"
-                    onClick={onConvert}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-brand-400 bg-surface-page text-[10px] font-semibold text-brand-600 hover:bg-brand-50 transition-colors"
-                  >
-                    <Camera size={10} />I can prove this
                   </button>
                 )}
                 {!isReply && !credited && onReply && (
@@ -1027,10 +1012,6 @@ export default function ReportDetailPage() {
     }
   }
 
-  function handleConvertTip(tip) {
-    navigate(`/reports/${id}/claim?fromTip=${tip.id}`);
-  }
-
   async function handleTipSubmit(e) {
     e.preventDefault();
     if (!tipText.trim()) return;
@@ -1800,18 +1781,6 @@ export default function ReportDetailPage() {
                       isReply={false}
                       isHighlighted={highlightedTipId === parent.id}
                       credited={parent.credited_for_recovery}
-                      onConvert={
-                        // The reporter can't claim their own lost item, so
-                        // their own tips/replies never get "I can prove this".
-                        !isOwner &&
-                        parent.user_id === session?.user.id &&
-                        isOpen &&
-                        claim?.status !== "pending" &&
-                        claim?.status !== "approved" &&
-                        !parent.converted_to_claim_id
-                          ? () => handleConvertTip(parent)
-                          : null
-                      }
                       onCredit={
                         isOwner && isOpen && parent.user_id !== session?.user.id
                           ? () => handleCreditAndResolveClick(parent)
@@ -1834,16 +1803,6 @@ export default function ReportDetailPage() {
                         isReply={true}
                         isHighlighted={highlightedTipId === reply.id}
                         credited={reply.credited_for_recovery}
-                        onConvert={
-                          !isOwner &&
-                          reply.user_id === session?.user.id &&
-                          isOpen &&
-                          claim?.status !== "pending" &&
-                          claim?.status !== "approved" &&
-                          !reply.converted_to_claim_id
-                            ? () => handleConvertTip(reply)
-                            : null
-                        }
                         onCredit={
                           isOwner && isOpen && reply.user_id !== session?.user.id
                             ? () => handleCreditAndResolveClick(reply)

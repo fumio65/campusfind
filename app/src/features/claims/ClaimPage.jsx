@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useState, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Camera, ImagePlus, X, AlertCircle, CheckCircle2, Info, Lightbulb } from 'lucide-react'
-import { supabase } from '../../shared/lib/supabase'
+import { ArrowLeft, Camera, ImagePlus, X, AlertCircle, CheckCircle2, Info } from 'lucide-react'
 import { useAuth } from '../../shared/lib/AuthContext'
 import { submitClaim } from '../../shared/lib/operations/claims'
 import { scrollFieldIntoView } from '../../shared/lib/scrollFieldIntoView'
@@ -13,33 +12,14 @@ export default function ClaimPage() {
   const { id: reportId } = useParams()
   const navigate = useNavigate()
   const { session } = useAuth()
-  const [searchParams] = useSearchParams()
-  const fromTipId = searchParams.get('fromTip')
 
   const [message, setMessage] = useState('')
   const [photos, setPhotos] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
-  const [originalTip, setOriginalTip] = useState(null)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
-
-  useEffect(() => {
-    if (!fromTipId) return
-    async function fetchTip() {
-      const { data } = await supabase
-        .from('tips')
-        .select('id, text, user_id')
-        .eq('id', fromTipId)
-        .single()
-      if (data && data.user_id === session?.user?.id) {
-        setOriginalTip(data)
-        setMessage(data.text)
-      }
-    }
-    fetchTip()
-  }, [fromTipId, session?.user?.id])
 
   function handlePhotoChange(e) {
     const files = Array.from(e.target.files ?? [])
@@ -81,7 +61,6 @@ export default function ClaimPage() {
         claimantId: session.user.id,
         photoFiles: photos.map((photo) => photo.file),
         messageText: message,
-        originalTipId: originalTip?.id ?? null,
       })
 
       setDone(true)
@@ -122,21 +101,11 @@ export default function ClaimPage() {
           <ArrowLeft size={20} className="text-text-primary" />
         </button>
         <h1 className="text-base font-bold text-text-primary">
-          {originalTip ? 'Convert tip to claim' : 'Submit a claim'}
+          Submit a claim
         </h1>
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 py-5 flex flex-col gap-5 pb-10">
-
-        {/* Tip conversion banner */}
-        {originalTip && (
-          <div className="flex items-start gap-2.5 bg-brand-50 text-brand-700 text-xs rounded-xl px-3 py-3">
-            <Lightbulb size={14} className="shrink-0 mt-0.5" aria-hidden="true" />
-            <span>
-              You're converting your earlier tip into a formal claim. Your original note has been carried over below — add photo proof to complete it.
-            </span>
-          </div>
-        )}
 
         {/* Info banner */}
         <div className="flex items-start gap-2.5 bg-status-approved-bg text-status-approved-text text-xs rounded-xl px-3 py-3">
