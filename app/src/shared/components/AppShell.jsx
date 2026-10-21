@@ -10,6 +10,7 @@ import { onSyncTrigger } from '../lib/appLifecycle'
 import { trustReasonText } from '../lib/trustScoreReasons'
 import SyncStatusBadge from './SyncStatusBadge'
 import TrustScoreDialog from './TrustScoreDialog'
+import PullToRefresh from './PullToRefresh'
 import { uniqueChannelName } from '../lib/realtimeChannel'
 
 export default function AppShell() {
@@ -170,9 +171,9 @@ export default function AppShell() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page">
-      <main className="flex-1 overflow-y-auto pb-20 no-scrollbar bg-surface-page">
+      <PullToRefresh>
         <Outlet />
-      </main>
+      </PullToRefresh>
 
       <SyncStatusBadge />
 
