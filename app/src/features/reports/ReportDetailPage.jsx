@@ -1157,7 +1157,12 @@ export default function ReportDetailPage() {
       {/* Lightbox */}
       {lightboxUrl && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          // FIX: this overlay is `fixed`, but it's still a DOM descendant of
+          // the page's scrollable container - without touch-none, a drag
+          // here was being handed to that container as a scroll gesture
+          // instead of staying put, so the photo preview could be dragged
+          // up/down like the list behind it.
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 touch-none overscroll-none"
           onClick={closeLightbox}
         >
           {lightboxThumbUrl && (
