@@ -3,8 +3,9 @@ import { supabase } from '../supabase'
 import { db } from '../db'
 import { isOnline } from '../network'
 import { ensureCachedInOrder } from '../imageCache'
+import { ALL_VISIBLE_STATUSES, STATUS_TABS, statusesFor } from '../reportStatus'
 
-const VISIBLE_STATUSES = ['open', 'claimed', 'approved', 'resolved']
+const VISIBLE_STATUSES = ALL_VISIBLE_STATUSES
 
 export function thumbnailUrl(storagePath) {
   if (!storagePath) return null
@@ -86,7 +87,7 @@ async function doRefreshReports({ search, category, location, status } = {}) {
   let query = supabase
     .from('reports')
     .select('id, title, description, location, category, status, created_at, type, reporter_id')
-    .in('status', status ? [status] : VISIBLE_STATUSES)
+    .in('status', statusesFor(status))
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -151,8 +152,7 @@ export async function fetchAvailableLocations() {
 }
 
 function matchesFilters(report, { search, category, location, status }) {
-  const statuses = status ? [status] : VISIBLE_STATUSES
-  if (!statuses.includes(report.status)) return false
+  if (!statusesFor(status).includes(report.status)) return false
   if (category && report.category !== category) return false
   if (location?.trim() && !report.location?.toLowerCase().includes(location.trim().toLowerCase())) {
     return false
@@ -185,4 +185,29 @@ export function useReports({ search, category, location, status } = {}) {
         return { ...r, thumbnail: thumbnailUrl(photo?.thumbnail_path ?? photo?.storage_path) }
       })
   }, [search, category, location, status])
+}
+
+// Counts for the Home status tabs, for the current search/category/location
+// (but every status). Asks the server when online - the local cache only
+// holds the pages already viewed - and falls back to the cache offline.
+export async function fetchStatusCounts({ search, category, location } = {}) {
+  let rows = null
+  if (isOnline()) {
+    let query = supabase.from('reports').select('status').in('status', VISIBLE_STATUSES)
+    if (search?.trim()) {
+      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,location.ilike.%${search}%`)
+    }
+    if (category) query = query.eq('category', category)
+    if (location?.trim()) query = query.ilike('location', `%${location}%`)
+    const { data } = await query
+    rows = data
+  }
+  if (!rows) {
+    rows = (await db.reports.toArray()).filter((r) => matchesFilters(r, { search, category, location, status: null }))
+  }
+  const counts = {}
+  for (const tab of STATUS_TABS) {
+    counts[tab.value] = rows.filter((r) => tab.statuses.includes(r.status)).length
+  }
+  return counts
 }

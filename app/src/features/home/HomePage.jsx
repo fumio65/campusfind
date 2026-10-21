@@ -12,20 +12,14 @@ import {
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../shared/lib/AuthContext";
 import { staggerContainer, staggerItem } from "../../shared/lib/motion";
-import { useReports, refreshReports, fetchAvailableLocations } from "../../shared/lib/repositories/reports";
+import { useReports, refreshReports, fetchAvailableLocations, fetchStatusCounts } from "../../shared/lib/repositories/reports";
+import { STATUS_TABS, statusDisplay } from "../../shared/lib/reportStatus";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
 import CachedImage from "../../shared/components/CachedImage";
 import SyncStateChip from "../../shared/components/SyncStateChip";
 import CategoryPicker from "../../shared/components/CategoryPicker";
 import { uniqueChannelName } from "../../shared/lib/realtimeChannel";
-
-const STATUS_STYLES = {
-  open: "bg-status-open-bg text-status-open-text",
-  claimed: "bg-status-claimed-bg text-status-claimed-text",
-  approved: "bg-status-approved-bg text-status-approved-text",
-  resolved: "bg-status-resolved-bg text-status-resolved-text",
-};
 
 // Module-level, not component state, so it survives HomePage unmounting -
 // AppShell's <main> is shared across routes and forces scrollTop back to 0
@@ -37,11 +31,17 @@ let savedHomeScrollTop = 0;
 
 export function ReportCard({ report }) {
   const thumbnail = report.thumbnail;
+  // Plain-language status, plus a hint for items someone is already
+  // handling; those cards are slightly quieter so items that still need
+  // help stand out.
+  const display = statusDisplay(report);
   return (
     <motion.div {...staggerItem}>
       <Link
         to={`/reports/${report.id}`}
-        className="flex gap-3 bg-surface-card rounded-2xl border border-border p-3.5 active:scale-[0.98] transition-transform"
+        className={`flex gap-3 bg-surface-card rounded-2xl border border-border p-3.5 active:scale-[0.98] transition-transform ${
+          display.quiet ? "opacity-75" : ""
+        }`}
       >
         {/* Thumbnail */}
         <div className="w-16 h-16 rounded-xl shrink-0 overflow-hidden bg-surface-muted flex items-center justify-center border border-border">
@@ -69,9 +69,9 @@ export function ReportCard({ report }) {
               <SyncStateChip status={report._syncStatus} />
             ) : (
               <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLES[report.status] ?? ""}`}
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap ${display.style}`}
               >
-                {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                {display.label}
               </span>
             )}
           </div>
@@ -87,6 +87,9 @@ export function ReportCard({ report }) {
               {timeAgo(report.created_at)}
             </span>
           </div>
+          {display.hint && (
+            <p className="text-[11px] text-text-secondary mt-1 leading-snug">{display.hint}</p>
+          )}
           {report.category && (
             <span className="inline-block mt-1.5 text-[10px] text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
               {report.category}
@@ -107,14 +110,13 @@ export default function HomePage() {
   const [locationFilter, setLocationFilter] = useState("");
   const [debouncedLocation, setDebouncedLocation] = useState("");
   const [availableLocations, setAvailableLocations] = useState([]);
-  // Defaults to "Open" - that's what a student lands on Home to check
-  // (did my lost item turn up / is there anything new to claim), not the
-  // full history including already-resolved reports. Toggling the Open
-  // pill off (or picking another status) drops back to all statuses, same
-  // as before; this only changes what's shown before anyone touches the
-  // filter.
-  const DEFAULT_STATUS = "open";
+  // Status tab. Defaults to "Active" (open + under review + being
+  // returned): previously the feed showed only Open, so a report vanished
+  // the moment someone claimed it and nobody knew a claim was in progress.
+  // Returned items have their own tab.
+  const DEFAULT_STATUS = "active";
   const [selectedStatus, setSelectedStatus] = useState(DEFAULT_STATUS);
+  const [statusCounts, setStatusCounts] = useState(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 600);
@@ -220,7 +222,13 @@ export default function HomePage() {
       location: debouncedLocation,
       status: selectedStatus,
     };
-    refreshReports(filters);
+    let cancelled = false;
+    // The list for the current tab, plus the counts shown on every tab.
+    const refreshAll = () => {
+      refreshReports(filters);
+      fetchStatusCounts(filters).then((c) => { if (!cancelled) setStatusCounts(c); });
+    };
+    refreshAll();
     fetchAvailableLocations().then(setAvailableLocations);
 
     const channelName = "home-reports";
@@ -235,53 +243,61 @@ export default function HomePage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "reports" },
         () => {
-          setTimeout(() => refreshReports(filters), 2000);
-          setTimeout(() => refreshReports(filters), 5000);
+          setTimeout(() => refreshAll(), 2000);
+          setTimeout(() => refreshAll(), 5000);
         },
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "reports" },
-        () => { refreshReports(filters); },
+        () => { refreshAll(); },
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "reports" },
-        () => { refreshReports(filters); },
+        () => { refreshAll(); },
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "report_photos" },
-        () => { setTimeout(() => refreshReports(filters), 800); },
+        () => { setTimeout(() => refreshAll(), 800); },
       )
       .subscribe();
 
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        refreshReports(filters);
+        refreshAll();
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    const unsubscribeSync = onSyncTrigger(() => refreshReports(filters));
+    const unsubscribeSync = onSyncTrigger(() => refreshAll());
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unsubscribeSync();
     };
   }, [debouncedSearch, selectedCategory, debouncedLocation, selectedStatus]);
 
+  // The status tabs live on the feed itself, so the filter panel (and its
+  // count badge) only covers category and location.
   function clearFilters() {
     setSelectedCategory(null);
     setLocationFilter("");
-    setSelectedStatus(DEFAULT_STATUS);
   }
 
   const activeFilterCount =
     (selectedCategory ? 1 : 0) +
-    (debouncedLocation.trim() ? 1 : 0) +
-    (selectedStatus !== DEFAULT_STATUS ? 1 : 0);
+    (debouncedLocation.trim() ? 1 : 0);
   const hasActiveQuery = debouncedSearch || activeFilterCount > 0;
+  const currentTab = STATUS_TABS.find((t) => t.value === selectedStatus) ?? STATUS_TABS[0];
+  const EMPTY_TAB_TEXT = {
+    open: "Nothing is waiting for a finder right now.",
+    claimed: "No claims are being reviewed right now.",
+    approved: "No items are being returned right now.",
+    resolved: "No items have been returned yet.",
+  };
 
   const firstName = profile?.first_name ?? "there";
   const hour = new Date().getHours();
@@ -373,33 +389,6 @@ export default function HomePage() {
                   />
                 </div>
 
-                {/* Status filter */}
-                <div>
-                  <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
-                    Status
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { value: "open", label: "Open", style: "bg-status-open-bg text-status-open-text border-status-open-text/30" },
-                      { value: "claimed", label: "Claimed", style: "bg-status-claimed-bg text-status-claimed-text border-status-claimed-text/30" },
-                      { value: "approved", label: "Approved", style: "bg-status-approved-bg text-status-approved-text border-status-approved-text/30" },
-                      { value: "resolved", label: "Resolved", style: "bg-status-resolved-bg text-status-resolved-text border-status-resolved-text/30" },
-                    ].map(({ value, label, style }) => (
-                      <button
-                        key={value}
-                        onClick={() => setSelectedStatus((s) => s === value ? null : value)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                          selectedStatus === value
-                            ? style + " ring-2 ring-offset-1 ring-current"
-                            : "border-border-strong text-text-secondary hover:border-brand-400"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div>
                   <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1.5">
                     Location
@@ -441,6 +430,35 @@ export default function HomePage() {
         </AnimatePresence>
       </div>
 
+      {/* Status tabs - always visible, with counts, so students can see at a
+          glance what's still missing, under review, or being returned. */}
+      <div className="px-4 pt-4 -mb-1">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1" role="tablist" aria-label="Report status">
+          {STATUS_TABS.map((t) => {
+            const selected = selectedStatus === t.value;
+            const count = statusCounts?.[t.value];
+            return (
+              <button
+                key={t.value}
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setSelectedStatus(t.value)}
+                className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                  selected
+                    ? "bg-brand-600 text-white"
+                    : "bg-surface-card text-text-secondary border border-border-strong"
+                }`}
+              >
+                {t.label}
+                {count !== undefined && (
+                  <span className={`tabular-nums ${selected ? "text-white/80" : "text-text-muted"}`}>{count}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Content */}
       <div className="flex-1 px-4 py-5">
         {loading ? (
@@ -466,16 +484,22 @@ export default function HomePage() {
               <Search size={24} className="text-text-muted" aria-hidden="true" />
             </div>
             <p className="text-sm font-semibold text-text-primary mb-1">
-              {hasActiveQuery ? "No results found" : "No reports yet"}
+              {hasActiveQuery
+                ? "No results found"
+                : selectedStatus !== DEFAULT_STATUS
+                  ? `Nothing in ${currentTab.label}`
+                  : "No reports yet"}
             </p>
             <p className="text-xs text-text-muted max-w-xs mb-6">
               {hasActiveQuery
                 ? "Try different keywords, or adjust your filters."
-                : "Lost something? File a report and let the campus help you find it."}
+                : selectedStatus !== DEFAULT_STATUS
+                  ? EMPTY_TAB_TEXT[selectedStatus]
+                  : "Lost something? File a report and let the campus help you find it."}
             </p>
-            {hasActiveQuery ? (
+            {hasActiveQuery || selectedStatus !== DEFAULT_STATUS ? (
               <button
-                onClick={() => { setSearch(""); clearFilters(); }}
+                onClick={() => { setSearch(""); clearFilters(); setSelectedStatus(DEFAULT_STATUS); }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-strong text-text-secondary text-sm font-semibold"
               >
                 Clear search & filters
@@ -495,7 +519,9 @@ export default function HomePage() {
               <p className="text-xs font-semibold text-text-secondary">
                 {hasActiveQuery
                   ? `${reports.length} result${reports.length === 1 ? "" : "s"}`
-                  : "Recent reports"}
+                  : selectedStatus === DEFAULT_STATUS
+                    ? "Recent reports"
+                    : currentTab.label}
               </p>
             </div>
             <motion.div

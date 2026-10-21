@@ -53,6 +53,7 @@ import ConfirmationRequestBanner from "./ConfirmationRequestBanner";
 import ShareSheet from "./ShareSheet";
 import ValidationDialog from "../../shared/components/ValidationDialog";
 import { uniqueChannelName } from "../../shared/lib/realtimeChannel";
+import { statusDisplay } from "../../shared/lib/reportStatus";
 
 // FIX: claim actions and resolve were hitting dead Express server
 // Now correctly call Supabase Edge Functions
@@ -1333,9 +1334,9 @@ export default function ReportDetailPage() {
           </button>
           <div className="flex items-center gap-2">
             <span
-              className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLES[report.status] ?? ""}`}
+              className={`text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${statusDisplay(report).style}`}
             >
-              {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+              {statusDisplay(report).label}
             </span>
 
             {canShare && (
