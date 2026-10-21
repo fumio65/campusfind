@@ -67,7 +67,9 @@ export function ReportCard({ report, viewerId }) {
             <h3 className="text-sm font-semibold text-text-primary leading-snug flex-1 truncate">
               {report.title}
             </h3>
-            {report._syncStatus ? (
+            {/* A synced row keeps _syncStatus 'synced' - only an upload in
+                progress or a failed one replaces the status badge. */}
+            {report._syncStatus === "pending" || report._syncStatus === "failed" ? (
               <SyncStateChip status={report._syncStatus} />
             ) : (
               <span

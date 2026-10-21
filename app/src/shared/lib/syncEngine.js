@@ -72,6 +72,15 @@ export async function flush() {
           })
           return
         }
+        // 23503 (foreign_key_violation): the report/claim this change
+        // belongs to no longer exists (e.g. it was deleted), so the change
+        // can never succeed. Drop it and its unsent local copy instead of
+        // leaving a permanent "couldn't sync" behind.
+        if (error?.code === '23503') {
+          await db.sync_queue.delete(next.seq)
+          await removeLocalRows(next.rows)
+          continue
+        }
         await db.sync_queue.update(next.seq, { status: 'failed', lastError: message })
         await markRowsSyncStatus(next.rows, 'failed')
       }
@@ -87,6 +96,33 @@ export async function flush() {
 async function markRowsSyncStatus(rows, status) {
   for (const row of rows ?? []) {
     await db[row.table].update(row.id, { _syncStatus: status }).catch(() => {})
+  }
+}
+
+async function removeLocalRows(rows) {
+  for (const row of rows ?? []) {
+    await db[row.table]?.delete(row.id).catch(() => {})
+  }
+}
+
+// Puts every failed change back in the queue and tries again (from the
+// "couldn't sync" badge).
+export async function retryFailed() {
+  const failed = await db.sync_queue.where('status').equals('failed').toArray()
+  for (const row of failed) {
+    await db.sync_queue.update(row.seq, { status: 'pending', retryCount: 0, nextRetryAt: null })
+    await markRowsSyncStatus(row.rows, 'pending')
+  }
+  await flush()
+}
+
+// Gives up on failed changes: removes them from the queue and removes their
+// unsent local copies, which never reached the server.
+export async function discardFailed() {
+  const failed = await db.sync_queue.where('status').equals('failed').toArray()
+  for (const row of failed) {
+    await db.sync_queue.delete(row.seq)
+    await removeLocalRows(row.rows)
   }
 }
 

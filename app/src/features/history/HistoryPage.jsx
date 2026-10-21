@@ -101,7 +101,7 @@ function ActivityRow({ item }) {
         )}
         <p className="text-xs font-medium text-text-primary truncate">{title}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          {item._syncStatus ? (
+          {item._syncStatus === 'pending' || item._syncStatus === 'failed' ? (
             <SyncStateChip status={item._syncStatus} />
           ) : (
             item.status && (() => {
