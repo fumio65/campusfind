@@ -4,6 +4,7 @@ import { Bell, X, MapPin, CheckCircle2, UserCheck, XCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { authHeaders } from '../../lib/apiClient'
 import { uniqueChannelName } from '../../lib/realtimeChannel'
+import { SkeletonLine } from './Skeleton'
 
 const EDGE_URL = import.meta.env.VITE_SUPABASE_URL
   ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
@@ -142,7 +143,17 @@ export default function NotificationBell() {
 
           <div className="max-h-80 overflow-y-auto">
             {loading && (
-              <p className="text-xs text-text-muted text-center py-6">Loading…</p>
+              <div className="px-4 py-3 flex flex-col gap-3" aria-busy="true" aria-label="Loading">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex gap-3 items-start">
+                    <div className="w-7 h-7 rounded-full bg-surface-muted animate-pulse shrink-0" />
+                    <div className="flex-1 flex flex-col gap-1.5 pt-0.5">
+                      <SkeletonLine className="w-2/3" />
+                      <SkeletonLine className="w-5/6 h-2.5" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
 
             {!loading && notifications.length === 0 && (

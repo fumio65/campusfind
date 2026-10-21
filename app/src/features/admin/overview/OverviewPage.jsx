@@ -26,6 +26,7 @@ import { supabase } from "../../../shared/lib/supabase";
 import { adminFetch, SERVER_URL } from "../../../shared/lib/apiClient";
 import { getAdminCache, setAdminCache } from "../../../shared/lib/adminCache";
 import { uniqueChannelName } from "../../../shared/lib/realtimeChannel";
+import { OverviewSkeleton } from "../../../shared/components/admin/Skeleton";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -146,11 +147,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Loading */}
-      {loading && (
-        <div className="text-sm text-text-muted py-8 text-center">
-          Loading...
-        </div>
-      )}
+      {loading && <OverviewSkeleton />}
 
       {/* Error */}
       {error && (

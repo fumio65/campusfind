@@ -6,6 +6,7 @@ import { supabase } from '../../../shared/lib/supabase'
 import { authHeaders } from '../../../shared/lib/apiClient'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 import { uniqueChannelName } from '../../../shared/lib/realtimeChannel'
+import { SkeletonBlock } from '../../../shared/components/admin/Skeleton'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -625,7 +626,7 @@ export default function DropoffRequestsPage() {
         {/* Loading skeletons */}
         {loading && !error && (
           [...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 bg-surface-card rounded-2xl animate-pulse border border-border" />
+            <SkeletonBlock key={i} className="h-24 rounded-2xl" />
           ))
         )}
 

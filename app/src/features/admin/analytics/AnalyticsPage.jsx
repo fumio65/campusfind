@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { FileText } from 'lucide-react'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
+import { SkeletonBlock } from '../../../shared/components/admin/Skeleton'
 
 const TRUST_REASON_LABELS = {
   claim_rejected: 'Claim rejected',
@@ -1125,12 +1126,12 @@ export default function AnalyticsPage() {
         </div>
         <div className="grid grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-surface-card border border-border rounded-xl p-4 animate-pulse h-20" />
+            <SkeletonBlock key={i} className="rounded-xl h-20" />
           ))}
         </div>
         <div className="grid grid-cols-2 gap-4">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="bg-surface-card border border-border rounded-xl p-4 animate-pulse h-64" />
+            <SkeletonBlock key={i} className="rounded-xl h-64" />
           ))}
         </div>
       </div>

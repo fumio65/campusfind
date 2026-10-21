@@ -15,6 +15,7 @@ import { parseCsvHeaderRow, headersAlreadyMatch } from './columnMapping'
 import Dialog from '../../../shared/components/admin/Dialog'
 import { staggerContainer } from '../../../shared/lib/adminMotion'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
+import { SkeletonBlock, SkeletonCards } from '../../../shared/components/admin/Skeleton'
 
 const SUCCESS_RENDER_CAP = 50
 const ERROR_RENDER_CAP = 100
@@ -298,7 +299,11 @@ export default function BulkImportPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-text-primary">Bulk import preview</h2>
         </div>
-        <div className="text-sm text-text-muted py-8 text-center">Checking for an in-progress import...</div>
+        <div className="flex flex-col gap-4" aria-busy="true" aria-label="Checking for an in-progress import">
+          <SkeletonBlock className="h-24 rounded-xl" />
+          <SkeletonBlock className="h-40 rounded-xl border-dashed" />
+          <SkeletonCards count={2} className="h-14 rounded-xl" />
+        </div>
       </div>
     )
   }

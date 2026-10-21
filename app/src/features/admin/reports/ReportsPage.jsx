@@ -11,6 +11,7 @@ import Dialog from '../../../shared/components/admin/Dialog'
 import ShareCardDialog from './ShareCardDialog'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
 import { uniqueChannelName } from '../../../shared/lib/realtimeChannel'
+import { SkeletonTable } from '../../../shared/components/admin/Skeleton'
 
 const STATUS_TABS = [
   { label: 'All',      value: 'all'      },
@@ -833,9 +834,7 @@ export default function ReportsPage() {
       {/* Table */}
       <div className="px-6 py-4 flex-1 overflow-auto">
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <SkeletonTable columns={5} rows={8} />
         ) : reports.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-sm font-semibold text-text-primary mb-1">No reports found</p>

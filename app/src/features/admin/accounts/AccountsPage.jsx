@@ -5,6 +5,7 @@ import StatusPill from '../../../shared/components/admin/StatusPill'
 import Dialog from '../../../shared/components/admin/Dialog'
 import Dropdown from '../../../shared/components/Dropdown'
 import { getAdminCache, setAdminCache } from '../../../shared/lib/adminCache'
+import { SkeletonTable } from '../../../shared/components/admin/Skeleton'
 
 // Program/department names are stored in ALL CAPS (the official NWSSU list
 // uses that style) - fine for a database column, not for a UI label.
@@ -446,7 +447,7 @@ export default function AccountsPage() {
       </Dialog>
 
       {loading ? (
-        <div className="text-sm text-text-muted py-8 text-center">Loading...</div>
+        <SkeletonTable columns={8} rows={10} />
       ) : accounts.length === 0 ? (
         <div className="bg-surface-card border border-border rounded-xl overflow-hidden py-14 text-center">
           <p className="text-sm font-semibold text-text-primary mb-1">

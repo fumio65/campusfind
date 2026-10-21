@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Search } from 'lucide-react'
 import { fetchBulkImportBatch } from './api'
 import DataRow from './DataRow'
+import { SkeletonLine, SkeletonTable } from '../../../shared/components/admin/Skeleton'
 
 // Read-only replay of a past batch's review table, reusing the same DataRow
 // used during an active import - canEdit is false here since a confirmed,
@@ -58,13 +59,15 @@ export default function BatchDetailDialog({ batchId, filename, onClose }) {
         <div className="flex items-start justify-between gap-3 mb-4 shrink-0">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-text-primary truncate">{filename ?? 'Import batch'}</h3>
-            <p className="text-xs text-text-muted mt-0.5">
-              {rows
-                ? query
+            {rows ? (
+              <p className="text-xs text-text-muted mt-0.5">
+                {query
                   ? `${visibleRows.length} of ${rows.length} row${rows.length === 1 ? '' : 's'}`
-                  : `${rows.length} row${rows.length === 1 ? '' : 's'}`
-                : 'Loading…'}
-            </p>
+                  : `${rows.length} row${rows.length === 1 ? '' : 's'}`}
+              </p>
+            ) : (
+              <SkeletonLine className="w-16 mt-1.5 h-2.5" />
+            )}
           </div>
           <button
             onClick={onClose}
@@ -92,7 +95,9 @@ export default function BatchDetailDialog({ batchId, filename, onClose }) {
           {error && <p className="text-sm text-status-rejected-text">{error}</p>}
 
           {!error && rows === null && (
-            <div className="py-10 text-center text-sm text-text-muted">Loading rows…</div>
+            <div className="py-2">
+              <SkeletonTable columns={4} rows={5} />
+            </div>
           )}
 
           {!error && rows?.length === 0 && (
