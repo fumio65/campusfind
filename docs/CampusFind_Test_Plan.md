@@ -43,13 +43,13 @@ Tick the box when the result matches **Should happen**. If it doesn't, write wha
 | [ ] | 4 | Revin | Open the report, leave tip: "Saw a black wallet near the canteen" | Lhester gets a "New tip" notification | |
 | [ ] | 5 | Lhester | Reply to Revin's tip | Revin gets a "New reply" notification | |
 | [ ] | 6 | Viece | Submit a claim with 1 photo (any photo — this is the wrong claim) | Lhester gets "Someone found your item!" | |
-| [ ] | 7 | Emerson | Open the report | Banner says it's already being claimed; claim button blocked | |
+| [ ] | 7 | Emerson | Home → **Active** tab: the wallet is still listed as **Under review**; open it | Banner says it's under claim review; claim button hidden | |
 | [ ] | 8 | Lhester | Open Viece's claim, check the photo and trust score, **Reject** | Viece is notified; the report reopens | |
 | [ ] | 9 | Emerson | Submit a claim with 2 photos | Lhester is notified | |
 | [ ] | 10 | Lhester | **Approve** Emerson's claim | Emerson is notified; a message thread opens | |
 | [ ] | 11 | Lhester ↔ Emerson | Exchange 3–4 messages to arrange the meetup | Each gets a "New message" notification | |
 | [ ] | 12 | Lhester | Mark the item received and resolve, **crediting Revin's tip** | Report Resolved; **Emerson +5, Revin +2**; both notified | |
-| [ ] | 13 | Any student | Open the report | Shows Resolved; share card says "Reunited!" | |
+| [ ] | 13 | Any student | Home → **Returned** tab → open the report | Card and report say **Returned**; share card says "Reunited!" | |
 
 ---
 
