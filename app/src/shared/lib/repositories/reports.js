@@ -101,7 +101,12 @@ async function doRefreshReports({ search, category, location, status } = {}) {
 
   const { data } = await query
   if (!data) return
-  await db.reports.bulkPut(data)
+  // Merge into the cached rows instead of replacing them: the report page
+  // stores extra fields on the same rows (the reporter's name, whether the
+  // claim state was already checked), and overwriting them made a repeat
+  // visit to a report show its loading placeholders again.
+  const existing = await db.reports.bulkGet(data.map((r) => r.id))
+  await db.reports.bulkPut(data.map((r, i) => ({ ...(existing[i] ?? {}), ...r })))
 
   // Reconcile deletions: bulkPut only ever adds/updates, so a report that
   // dropped out of this result set (deleted server-side, or no longer

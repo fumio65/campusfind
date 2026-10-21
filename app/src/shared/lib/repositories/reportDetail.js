@@ -7,15 +7,28 @@ function publicUrl(storagePath) {
   return data?.publicUrl ?? null
 }
 
-async function signedClaimPhotoUrls(photos) {
-  if (!photos.length) return []
+// Signed URLs for claim photos (private claim-photos bucket), remembered for
+// the session. Re-signing on every visit produced a new URL each time, and
+// since images are cached by URL the same photo was downloaded and faded in
+// again on every repeat visit. Reused until shortly before they expire.
+const SIGNED_URL_TTL_S = 60 * 60
+const signedUrlCache = new Map()
+
+export function cachedClaimPhotoUrl(storagePath) {
+  const hit = signedUrlCache.get(storagePath)
+  return hit && hit.expiresAt > Date.now() + 5 * 60 * 1000 ? hit.url : null
+}
+
+export async function signedClaimPhotoUrl(storagePath) {
+  const cached = cachedClaimPhotoUrl(storagePath)
+  if (cached) return cached
   try {
-    const results = await Promise.all(
-      photos.map((p) => supabase.storage.from('claim-photos').createSignedUrl(p.storage_path, 60 * 60)),
-    )
-    return results.map((r) => r.data?.signedUrl).filter(Boolean)
+    const { data } = await supabase.storage.from('claim-photos').createSignedUrl(storagePath, SIGNED_URL_TTL_S)
+    if (!data?.signedUrl) return null
+    signedUrlCache.set(storagePath, { url: data.signedUrl, expiresAt: Date.now() + SIGNED_URL_TTL_S * 1000 })
+    return data.signedUrl
   } catch {
-    return []
+    return null
   }
 }
 
@@ -103,10 +116,9 @@ export async function getCachedReportDetail(reportId) {
       messages.find((m) => m.sender_role === 'claimant' && !m.body?.startsWith('📍'))?.body ?? null
     claim = {
       ...activeClaim,
-      // Claim photos live in the private claim-photos bucket, so a public
-      // report-photos URL 400s. Sign them (works online); offline, the
-      // signing fails and the photo strip is simply left empty.
-      photoUrls: await signedClaimPhotoUrls(claimPhotos),
+      // Only URLs already signed this session - no network wait here, so
+      // the cached page renders immediately; fetchAll() fills in the rest.
+      photoUrls: claimPhotos.map((p) => cachedClaimPhotoUrl(p.storage_path)).filter(Boolean),
       drop_off_chosen: dropOffChosen,
       claimant_message: claimantMessage,
     }

@@ -39,6 +39,7 @@ import {
   cacheTips,
   getCachedReportDetail,
   getCachedReportPhotos,
+  signedClaimPhotoUrl,
 } from "../../shared/lib/repositories/reportDetail";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
 import { timeAgo } from "../../shared/lib/timeAgo";
@@ -362,7 +363,8 @@ export default function ReportDetailPage() {
       // so leave claimReady false until fetchAll below checks for real.
       setClaimReady(
         Boolean(cached.claim) ||
-          !["claimed", "approved"].includes(cached.report.status),
+          !["claimed", "approved"].includes(cached.report.status) ||
+          cached.report._claimCheckedStatus === cached.report.status,
       );
       // preserveScroll: false - this is the very first load (right after
       // showing cached content), not a background refresh of a page the
@@ -687,12 +689,12 @@ export default function ReportDetailPage() {
         // the blob is still cached for the rest of that session.
         const claimPhotoUrlResults = await Promise.all(
           (claimPhotos ?? []).map((p) =>
-            supabase.storage.from("claim-photos").createSignedUrl(p.storage_path, 60 * 60),
+            signedClaimPhotoUrl(p.storage_path),
           ),
         );
-        const photoUrls = claimPhotoUrlResults
-          .map((r) => r.data?.signedUrl)
-          .filter(Boolean);
+        // Signed URLs are reused for the session (see signedClaimPhotoUrl),
+        // so the image cache key stays the same across repeat visits.
+        const photoUrls = claimPhotoUrlResults.filter(Boolean);
         ensureCachedInOrder(photoUrls.map((u) => ({ src: u, cacheKey: u })));
         await cacheClaimMessages(
           claimData.id,
@@ -756,6 +758,11 @@ export default function ReportDetailPage() {
       }
     }
     setClaimReady(true);
+    // Remember that the claim state was checked for this report at this
+    // status. Students outside the claim can't read it, so nothing else is
+    // cached for them - without this marker every repeat visit showed the
+    // claim banner placeholder again until the fetch finished.
+    db.reports.update(id, { _claimCheckedStatus: data.status }).catch(() => {});
 
     const { data: tipsData } = await supabase
       .from("tips")

@@ -72,7 +72,9 @@ async function doRefreshHistory(userId) {
   }
 
   if (r) {
-    await db.reports.bulkPut(r)
+    // Merge, don't replace - see the same note in repositories/reports.js.
+    const existingReports = await db.reports.bulkGet(r.map((row) => row.id))
+    await db.reports.bulkPut(r.map((row, i) => ({ ...(existingReports[i] ?? {}), ...row })))
     await pruneMissing('reports', r, 'reporter_id', userId, { skipPending: true })
 
     // My Reports (History) reuses Home's ReportCard, which needs a
