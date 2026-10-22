@@ -112,7 +112,7 @@ function ReportDetailDialog({ report, onClose, onEdit, onDelete, onResolve, reso
     <>
       {/* Share card */}
       {shareOpen && (
-        <ShareCardDialog report={report} photoUrl={photos[0] ?? null} onClose={() => setShareOpen(false)} />
+        <ShareCardDialog key={report.id} report={report} photoUrl={photos[0] ?? null} onClose={() => setShareOpen(false)} />
       )}
 
       {/* Lightbox */}
@@ -362,6 +362,15 @@ export default function ReportsPage() {
   const [confirmDelete, setConfirmDelete]   = useState(null)
   const [deletingId, setDeletingId]         = useState(null)
   const [viewReport, setViewReport]         = useState(null)
+  // FIX: without this, the notification-highlight effect below re-ran and
+  // force-reopened/switched viewReport to the highlighted report EVERY time
+  // `reports` changed (any realtime insert/update/delete on the table, not
+  // just this one) - yanking the admin back to that report even if they had
+  // since closed it or opened a different one, mid-interaction (e.g. while
+  // a share card for a different report was still loading its photo, which
+  // produced a visibly broken card mixing both reports' content). This ref
+  // makes the auto-open fire once per highlight id, not once per re-render.
+  const autoOpenedHighlightRef = useRef(null)
   const [shareReport, setShareReport]       = useState(null)
   const [sharePhotoUrl, setSharePhotoUrl]   = useState(null)
   const [editReport, setEditReport]         = useState(null)
@@ -418,9 +427,12 @@ export default function ReportsPage() {
 
   // Auto-open detail dialog when navigating from notification highlight
   useEffect(() => {
-    if (highlightId && reports.length > 0) {
+    if (highlightId && reports.length > 0 && autoOpenedHighlightRef.current !== highlightId) {
       const found = reports.find((r) => r.id === highlightId)
-      if (found) setViewReport(found)
+      if (found) {
+        setViewReport(found)
+        autoOpenedHighlightRef.current = highlightId
+      }
     }
   }, [highlightId, reports])
 
@@ -612,6 +624,7 @@ export default function ReportsPage() {
       {/* Report detail dialog */}
       {viewReport && (
         <ReportDetailDialog
+          key={viewReport.id}
           report={viewReport}
           onClose={() => setViewReport(null)}
           onEdit={(r) => { setEditReport(r); setEditForm({ title: r.title, description: r.description ?? '', category: r.category ?? '', walkin_finder_ref: r.walkin_finder_ref ?? '' }) }}
@@ -624,7 +637,7 @@ export default function ReportsPage() {
 
       {/* Share card (from the row-level Share action) */}
       {shareReport && (
-        <ShareCardDialog report={shareReport} photoUrl={sharePhotoUrl} onClose={() => setShareReport(null)} />
+        <ShareCardDialog key={shareReport.id} report={shareReport} photoUrl={sharePhotoUrl} onClose={() => setShareReport(null)} />
       )}
 
       {/* Edit walk-in report dialog */}

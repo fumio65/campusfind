@@ -16,6 +16,14 @@ function drawShareCard(canvas, report, photoImg) {
   canvas.width = W
   canvas.height = H
   const ctx = canvas.getContext('2d')
+  // Explicit clear before drawing - some browsers skip the implicit
+  // clear-on-resize when width/height are set to the SAME value as before
+  // (W/H are fixed constants, so every draw "resizes" to an unchanged
+  // value). Without this, a card redrawn for a different report could
+  // still have the previous report's pixels showing through underneath.
+  ctx.clearRect(0, 0, W, H)
+  ctx.globalAlpha = 1
+  ctx.globalCompositeOperation = 'source-over'
 
   const isFound = report.type === 'found_walkin'
   const accent = isFound ? BRAND_LIGHT : '#FEF3E2'

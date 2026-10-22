@@ -1199,6 +1199,7 @@ export default function ReportDetailPage() {
       <AnimatePresence>
         {showShareSheet && report && (
           <ShareSheet
+            key={report.id}
             report={report}
             onClose={() => setShowShareSheet(false)}
           />
