@@ -371,27 +371,47 @@ export default function DropoffRequestsPage() {
     }
     if (!silent) setLoading(true)
     setError(null)
-    try {
-      const [res, walkIns] = await Promise.all([
-        fetch(
+    // FIX: these are two independent data sources - app-arranged drop-offs
+    // (dropoff_requests, via the server) and walk-in items brought straight
+    // to the counter (reports, queried directly from here). They were
+    // combined with Promise.all, so if EITHER one failed for any reason
+    // (a network hiccup, the server call erroring), the catch below wiped
+    // the WHOLE list to empty - including whichever source had already
+    // loaded fine. That's exactly how a real "ready for pickup" walk-in
+    // could end up showing "Nothing waiting for pickup": its query never
+    // had to fail itself, the other one just had to. allSettled lets each
+    // source succeed or fail on its own.
+    const [dropoffResult, walkInResult] = await Promise.allSettled([
+      (async () => {
+        const res = await fetch(
           `${SERVER_URL}/dropoff?status=${filterRef.current}`,
           { headers: await authHeaders({ 'Content-Type': 'application/json' }) },
-        ),
-        fetchWalkIns(filterRef.current),
-      ])
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`)
-      const data = await res.json()
-      const list = [...(Array.isArray(data) ? data : []), ...walkIns]
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      setRequests(list)
-      setAdminCache(cacheKey, list)
-    } catch (err) {
-      console.error('fetchRequests error:', err)
+        )
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`)
+        const data = await res.json()
+        return Array.isArray(data) ? data : []
+      })(),
+      fetchWalkIns(filterRef.current),
+    ])
+
+    if (dropoffResult.status === 'rejected') console.error('fetchRequests (dropoff) error:', dropoffResult.reason)
+    if (walkInResult.status === 'rejected') console.error('fetchRequests (walk-ins) error:', walkInResult.reason)
+
+    if (dropoffResult.status === 'rejected' && walkInResult.status === 'rejected') {
       setError('Failed to load requests. Check your connection and try again.')
       setRequests([])
-    } finally {
-      if (!silent) setLoading(false)
+    } else {
+      const list = [
+        ...(dropoffResult.status === 'fulfilled' ? dropoffResult.value : []),
+        ...(walkInResult.status === 'fulfilled' ? walkInResult.value : []),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      setRequests(list)
+      setAdminCache(cacheKey, list)
+      if (dropoffResult.status === 'rejected' || walkInResult.status === 'rejected') {
+        setError('Some requests may be missing - part of the list failed to load. Pull to refresh to retry.')
+      }
     }
+    if (!silent) setLoading(false)
   }, []) // no deps — reads filter via ref
 
   // Re-fetch when filter tab changes.
