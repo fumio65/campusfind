@@ -43,6 +43,19 @@ import {
   removeCachedReport,
 } from "../../shared/lib/repositories/reportDetail";
 import { onSyncTrigger } from "../../shared/lib/appLifecycle";
+import { onOpSynced } from "../../shared/lib/syncEngine";
+
+// True while an edit (or the original creation) of this report is still
+// queued and hasn't reached the server yet - during that window the local
+// cache is newer than anything the server can return.
+async function hasPendingReportChange(reportId) {
+  const pending = await db.sync_queue.where("status").equals("pending").toArray();
+  return pending.some(
+    (op) =>
+      (op.opType === "updateReport" && op.payload?.reportId === reportId) ||
+      (op.opType === "createReport" && op.payload?.report?.id === reportId),
+  );
+}
 import { timeAgo } from "../../shared/lib/timeAgo";
 import { useMessages } from "../../shared/lib/repositories/messages";
 import {
@@ -447,11 +460,18 @@ export default function ReportDetailPage() {
       .subscribe();
 
     const unsubscribeSync = onSyncTrigger(() => fetchAll(true));
+    // Once a queued edit/creation of this report lands, re-read it so the
+    // page shows the saved state without a manual reload.
+    const unsubscribeSynced = onOpSynced((op) => {
+      const reportId = op.payload?.reportId ?? op.payload?.report?.id;
+      if (reportId === id) fetchAll(true);
+    });
 
     return () => {
       cancelled = true;
       supabase.removeChannel(channel);
       unsubscribeSync();
+      unsubscribeSynced();
     };
   }, [id]);
 
@@ -592,7 +612,15 @@ export default function ReportDetailPage() {
     // report that does have photos pending upload. Fall back to whatever's
     // already cached locally instead of trusting the empty read and wiping it.
     let reportPhotoRows = reportPhotos ?? [];
-    if (reportPhotoRows.length === 0) {
+    // FIX: after "Save changes" with a new photo, this page opens before the
+    // background upload finishes, so the server still returns the OLD photo
+    // rows - and caching them below wiped out the new photo already saved
+    // locally, leaving the old image on screen until a reload. While a
+    // change to this report is still queued, the local copy is the newer
+    // one: show it and leave it alone (onOpSynced refreshes once it lands).
+    if (await hasPendingReportChange(id)) {
+      reportPhotoRows = await getCachedReportPhotos(id);
+    } else if (reportPhotoRows.length === 0) {
       const localPhotos = await getCachedReportPhotos(id);
       if (localPhotos.length > 0) {
         reportPhotoRows = localPhotos;

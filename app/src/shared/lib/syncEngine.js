@@ -3,6 +3,17 @@ import { onSyncTrigger } from './appLifecycle'
 
 const handlers = new Map()
 
+// Screens that want to know when a queued change has actually reached the
+// server. Without this, a screen opened right after saving (e.g. the report
+// page after "Save changes") read the server before the background upload
+// finished and had no way to learn it should refresh - so a new photo only
+// appeared after reloading.
+const syncedListeners = new Set()
+export function onOpSynced(listener) {
+  syncedListeners.add(listener)
+  return () => syncedListeners.delete(listener)
+}
+
 // Registers the function that replays a queued operation of this type.
 // The same function should be called directly for the immediate-online path
 // so online and offline behavior can never drift apart.
@@ -69,6 +80,9 @@ export async function flush() {
         await handler(next.payload)
         await db.sync_queue.delete(next.seq)
         await markRowsSyncStatus(next.rows, 'synced')
+        for (const listener of syncedListeners) {
+          try { listener(next) } catch { /* a screen's listener must not stall the queue */ }
+        }
       } catch (error) {
         const message = error?.message ?? String(error)
         if (isTransient(error)) {
