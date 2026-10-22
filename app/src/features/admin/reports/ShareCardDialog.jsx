@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Download, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Download, CheckCircle2, AlertCircle, Link as LinkIcon } from 'lucide-react'
 
 // Mirrors the Android app's share card exactly (app/src/features/reports/ShareSheet.jsx)
 // so admins get the same branded image students see when they share a report -
@@ -239,6 +239,11 @@ export default function ShareCardDialog({ report, photoUrl, onClose }) {
   const [cardReady, setCardReady] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
+  // Same link the student app's own share sheet builds (ShareSheet.jsx) -
+  // admin and the student app are the same Vite project/build, just
+  // different routes, so the same env var and origin fallback apply here.
+  const shareUrl = `${import.meta.env.VITE_PUBLIC_SHARE_URL ?? window.location.origin}/reports/${report.id}`
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -270,6 +275,16 @@ export default function ShareCardDialog({ report, photoUrl, onClose }) {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [report, photoUrl])
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+    } catch {
+      window.prompt('Copy this link:', shareUrl)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
 
   async function handleDownload() {
     const canvas = canvasRef.current
@@ -331,6 +346,24 @@ export default function ShareCardDialog({ report, photoUrl, onClose }) {
               <span>{actionError}</span>
             </div>
           )}
+
+          <button
+            onClick={handleCopyLink}
+            className="flex items-center gap-3 w-full bg-surface-muted rounded-xl px-4 py-3 hover:bg-surface-page transition-colors"
+          >
+            <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center shrink-0">
+              {copied
+                ? <CheckCircle2 size={18} className="text-brand-600" />
+                : <LinkIcon size={18} className="text-brand-600" />
+              }
+            </div>
+            <div className="text-left flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary">
+                {copied ? 'Link copied!' : 'Copy link'}
+              </p>
+              <p className="text-xs text-text-muted truncate">{shareUrl}</p>
+            </div>
+          </button>
 
           <button
             onClick={handleDownload}
