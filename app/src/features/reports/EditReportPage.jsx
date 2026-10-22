@@ -7,6 +7,7 @@ import { scrollFieldIntoView } from '../../shared/lib/scrollFieldIntoView'
 import { db } from '../../shared/lib/db'
 import { cacheReport, cacheReportPhotos } from '../../shared/lib/repositories/reportDetail'
 import { updateReport } from '../../shared/lib/operations/reports'
+import { preparePhoto } from '../../shared/lib/imageThumbnail'
 import ValidationDialog from '../../shared/components/ValidationDialog'
 import ConfirmDialog from '../../shared/components/ConfirmDialog'
 import CategoryPicker from '../../shared/components/CategoryPicker'
@@ -119,6 +120,9 @@ export default function EditReportPage() {
       preview: URL.createObjectURL(file),
     }))
     setNewPhotos((prev) => [...prev, ...toAdd])
+    // Start shrinking the photo now, while the student is still editing,
+    // so "Save changes" doesn't have to wait for it.
+    toAdd.forEach((p) => preparePhoto(p.file))
   }
 
   function removeExisting(photoId) {

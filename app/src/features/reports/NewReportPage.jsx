@@ -5,6 +5,7 @@ import { ArrowLeft, Camera, ImagePlus, X, MapPin, CheckCircle2 } from 'lucide-re
 import { useAuth } from '../../shared/lib/AuthContext'
 import { scrollFieldIntoView } from '../../shared/lib/scrollFieldIntoView'
 import { createReport } from '../../shared/lib/operations/reports'
+import { preparePhoto } from '../../shared/lib/imageThumbnail'
 import ValidationDialog from '../../shared/components/ValidationDialog'
 import ConfirmDialog from '../../shared/components/ConfirmDialog'
 import CategoryPicker from '../../shared/components/CategoryPicker'
@@ -44,6 +45,9 @@ export default function NewReportPage() {
       preview: URL.createObjectURL(file),
     }))
     setPhotos((prev) => [...prev, ...toAdd])
+    // Start shrinking the photo now, while the student is still typing,
+    // so Submit doesn't have to wait for it.
+    toAdd.forEach((p) => preparePhoto(p.file))
     e.target.value = ''
   }
 
