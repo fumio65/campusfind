@@ -212,6 +212,21 @@ Deno.serve(async (req) => {
         if (isWalkIn && !collector) {
           return forbidden(corsHeaders, `No student account matches ${sid}.`, 400)
         }
+        // BUG FIX: nothing stopped the admin from verifying the item's own
+        // finder as the "owner" collecting it - the finder already got
+        // their +5 trust score for turning it in at /reports/walkin, so
+        // entering their ID here let the exact same person both receive
+        // finder credit AND walk out with the item, with no real owner ever
+        // verified. Block it outright; a finder who is also the true owner
+        // (lost their own item, someone else turned it in to them by
+        // mistake) is an edge case the admin can resolve by other means.
+        if (isWalkIn && report.walkin_finder_ref && sid === report.walkin_finder_ref) {
+          return forbidden(
+            corsHeaders,
+            'This is the finder\'s own student ID. The finder already received credit for turning this item in - verify the actual owner\'s student ID to release it.',
+            400,
+          )
+        }
       }
 
       const update: Record<string, unknown> = {

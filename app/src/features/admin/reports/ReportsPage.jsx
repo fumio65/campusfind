@@ -475,6 +475,17 @@ export default function ReportsPage() {
       if (!data) {
         if (field === 'owner') { setIdValidation('not-found'); setVerifiedOwnerName(null) }
         else { setProxyIdValidation('not-found'); setVerifiedProxyName(null) }
+      } else if (
+        field === 'owner'
+        && confirmResolve?.walkinFinderRef
+        && data.student_id === confirmResolve.walkinFinderRef
+      ) {
+        // Same bug as the server-side check this mirrors: without this, the
+        // finder's own ID "verifies" successfully since it's a real student
+        // account, letting them collect the item they themselves turned in
+        // (on top of the +5 they already got for the drop-off).
+        setIdValidation('is-finder')
+        setVerifiedOwnerName(null)
       } else {
         const name = `${data.first_name} ${data.last_name}`
         if (field === 'owner') { setIdValidation('found'); setVerifiedOwnerName(name) }
@@ -604,6 +615,11 @@ export default function ReportsPage() {
       reporterStudentId: report.reporter_student_id,
       hasPreAuthorizedProxy,
       finderStudentId: report.active_claim?.claimant_student_id,
+      // The walk-in finder's own ID - used below to block the admin from
+      // verifying the finder as the "owner" collecting their own drop-off
+      // (they already got +5 trust score for turning it in; see the
+      // matching server-side check in supabase/functions/reports).
+      walkinFinderRef: report.walkin_finder_ref ?? null,
       isWalkIn,
     })
     setConfirmOpen(true)
@@ -739,6 +755,7 @@ export default function ReportsPage() {
                       </div>
                       {idValidation === 'found' && verifiedOwnerName && <p className="text-xs text-status-open-text mt-1 flex items-center gap-1"><CheckCircle2 size={12} /> {verifiedOwnerName}</p>}
                       {idValidation === 'not-found' && <p className="text-xs text-status-rejected-text mt-1">Student ID not found in the system.</p>}
+                      {idValidation === 'is-finder' && <p className="text-xs text-status-rejected-text mt-1">That's the finder's own ID - they already got credit for turning this item in. Verify the actual owner instead.</p>}
                     </div>
                   )}
                   {handoffRecord.isProxy && (
