@@ -1,0 +1,23 @@
+# Normalize line endings for text files so Windows checkouts (CRLF) and
+# this repo's committed LF don't show every line as "changed" on `git
+# status`/`git diff` the moment a file is touched.
+* text=auto eol=lf
+
+# Keep Windows-only scripts in CRLF since that's what they expect.
+*.bat text eol=crlf
+
+# Binary files - never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.docx binary
+*.zip binary
+*.jar binary

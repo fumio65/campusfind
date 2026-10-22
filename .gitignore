@@ -6,3 +6,5 @@ dist
 .DS_Store
 Thumbs.db
 scripts/cleanup/sectest*-ids.json
+.claude/
+.claude/**
