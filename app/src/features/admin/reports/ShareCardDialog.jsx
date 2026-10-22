@@ -331,35 +331,40 @@ export default function ShareCardDialog({ report, photoUrl, onClose }) {
           </button>
         </div>
 
-        {/* Card preview */}
-        <div className="px-5 pt-4 pb-2">
-          <div className="rounded-xl overflow-hidden border border-border relative">
-            <canvas ref={canvasRef} className="w-full block" style={{ aspectRatio: '1080/1350' }} />
-            {!cardReady && (
-              <div className="absolute inset-0 flex items-center justify-center bg-brand-600">
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        {/* Scrollable body - the header above stays put; everything below
+            can be taller than the viewport (e.g. a short browser window),
+            so it needs to scroll instead of being clipped by the panel's
+            own overflow-hidden with nothing inside able to move. */}
+        <div className="overflow-y-auto">
+          {/* Card preview */}
+          <div className="px-5 pt-4 pb-2">
+            <div className="rounded-xl overflow-hidden border border-border relative">
+              <canvas ref={canvasRef} className="w-full block" style={{ aspectRatio: '1080/1350' }} />
+              {!cardReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-brand-600">
+                  <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-text-muted text-center mt-2">
+              {report.type === 'found_walkin' ? 'Found at ISSC' : 'Lost item'} · CampusFind
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="px-5 pt-2 pb-5 flex flex-col gap-2.5">
+            {actionError && (
+              <div className="flex items-center gap-2 bg-status-rejected-bg text-status-rejected-text text-xs rounded-xl px-3 py-2.5">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{actionError}</span>
               </div>
             )}
-          </div>
-          <p className="text-[11px] text-text-muted text-center mt-2">
-            {report.type === 'found_walkin' ? 'Found at ISSC' : 'Lost item'} · CampusFind
-          </p>
-        </div>
 
-        {/* Actions */}
-        <div className="px-5 pt-2 pb-5 flex flex-col gap-2.5 shrink-0">
-          {actionError && (
-            <div className="flex items-center gap-2 bg-status-rejected-bg text-status-rejected-text text-xs rounded-xl px-3 py-2.5">
-              <AlertCircle size={14} className="shrink-0" />
-              <span>{actionError}</span>
-            </div>
-          )}
-
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center gap-3 w-full bg-surface-muted rounded-xl px-4 py-3 hover:bg-surface-page transition-colors"
-          >
-            <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center shrink-0">
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-3 w-full bg-surface-muted rounded-xl px-4 py-3 hover:bg-surface-page transition-colors"
+            >
+              <div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center shrink-0">
               {copied
                 ? <CheckCircle2 size={18} className="text-brand-600" />
                 : <LinkIcon size={18} className="text-brand-600" />
@@ -386,6 +391,7 @@ export default function ShareCardDialog({ report, photoUrl, onClose }) {
               <p className="text-xs text-text-muted">Saves the image to your computer</p>
             </div>
           </button>
+          </div>
         </div>
       </div>
     </div>
