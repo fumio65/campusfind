@@ -123,8 +123,19 @@ function PickupDialog({ request, onClose, onConfirm, actioning, actionError }) {
       const fullName = `${user.first_name} ${user.last_name}`
       if (isWalkIn) {
         // No reporter on a walk-in: any registered student may claim it,
-        // after the admin checks their school ID/COR and their description.
-        setValidation('found'); setVerifiedName(fullName)
+        // after the admin checks their school ID/COR and their description -
+        // EXCEPT the finder's own ID. The finder already got +5 trust score
+        // for turning this item in; letting them also "verify" as the owner
+        // meant the same person could collect credit for finding it and walk
+        // out with it, with no real owner ever checked. The server rejects
+        // this too (reports edge function), but it used to only show up as
+        // a late error after "Release item" - flag it here instead, at the
+        // same moment the checkmark would otherwise falsely say "confirmed".
+        if (request.claimant?.student_id && user.student_id === request.claimant.student_id) {
+          setValidation('is-finder'); setVerifiedName(fullName)
+        } else {
+          setValidation('found'); setVerifiedName(fullName)
+        }
       } else if (!isProxy) {
         if (user.student_id === request.reporter?.student_id) {
           setValidation('found'); setVerifiedName(fullName)
@@ -287,6 +298,12 @@ function PickupDialog({ request, onClose, onConfirm, actioning, actionError }) {
               <div className="flex items-center gap-1.5 mt-2 text-xs text-status-rejected-text">
                 <AlertCircle size={13} className="shrink-0" />
                 <span>{verifiedName} does not match the authorized proxy. Do not release the item.</span>
+              </div>
+            )}
+            {validation === 'is-finder' && verifiedName && (
+              <div className="flex items-center gap-1.5 mt-2 text-xs text-status-rejected-text">
+                <AlertCircle size={13} className="shrink-0" />
+                <span>{verifiedName} is the finder who turned this item in - they already got credit for it. Verify the actual owner instead.</span>
               </div>
             )}
           </div>
