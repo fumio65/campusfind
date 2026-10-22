@@ -1,0 +1,10 @@
+services:
+  web:
+    build: ./app
+    image: campusfind-web
+    container_name: campusfind-web
+    # Must stay 5174: the Supabase Edge Functions only accept browser
+    # requests from approved origins, and http://localhost:5174 is one.
+    ports:
+      - "5174:80"
+    restart: unless-stopped
