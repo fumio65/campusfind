@@ -458,27 +458,36 @@ Deno.serve(async (req) => {
       })
     }
 
-    // POST /reports/admin-notify
+    // POST /reports/admin-notify - called by the reporting student right
+    // after a new report is created, so it needs requireUser (any signed-in
+    // student), not requireAdmin.
+    //
+    // FIX: this route previously called requireAdmin (which a reporting
+    // student fails, so the call 403'd and was never retried) and wrote
+    // through notifyUser() into user_notifications - a per-user, student-
+    // facing table the admin bell never reads. The admin dashboard's bell
+    // (NotificationBell.jsx) reads the shared `notifications` table, the
+    // same one dropoff/claim events already write to, so new reports now go
+    // there too - one row admins all see, not one row per admin.
     if (req.method === 'POST' && id === 'admin-notify') {
-      const caller = await requireAdmin(req, supabaseAdmin)
+      const caller = await requireUser(req, supabaseAdmin)
       if (caller instanceof Response) return caller
 
       const { reportId, reportTitle } = await req.json()
-
-      const { data: admins } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('role', 'admin')
-
-      for (const admin of admins ?? []) {
-        await notifyUser({
-          userId: (admin as any).id,
-          type: 'new_report',
-          title: 'New lost item report',
-          body: `Someone lost a ${reportTitle}. Can you help?`,
-          reportId,
+      if (!reportId) {
+        return new Response(JSON.stringify({ error: 'reportId required' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+
+      const { error: notifyError } = await supabaseAdmin.from('notifications').insert({
+        type: 'new_report',
+        title: 'New lost item report',
+        body: `Someone lost a ${reportTitle ?? 'item'}. Can you help match it to a claim?`,
+        report_id: reportId,
+        read: false,
+      })
+      if (notifyError) console.error('[reports] admin-notify insert failed:', notifyError)
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

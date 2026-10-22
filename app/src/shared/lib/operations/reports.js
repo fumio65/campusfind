@@ -83,6 +83,7 @@ registerHandler('createReport', async (payload) => {
   }
 
   notifyReportServer(report).catch(() => {})
+  notifyAdminsOfReport(report).catch(() => {})
 })
 
 async function notifyReportServer(report) {
@@ -94,6 +95,20 @@ async function notifyReportServer(report) {
       title: report.title,
       location: report.location,
       category: report.category,
+    }),
+  })
+}
+
+// FIX: a new report never reached the admin dashboard's notification bell -
+// nothing ever called this route. notifyReportServer() above only announces
+// the report to other *students*; this is the admin-facing counterpart.
+async function notifyAdminsOfReport(report) {
+  return fetch(`${SERVER_URL}/reports/admin-notify`, {
+    method: 'POST',
+    headers: await authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      reportId: report.id,
+      reportTitle: report.title,
     }),
   })
 }
