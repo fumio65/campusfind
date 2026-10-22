@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
 import { notifyUser } from '../lib/notifyUser.js'
+import { requireUser } from '../middleware/requireUser.js'
 
 const router = Router()
 
@@ -68,11 +69,27 @@ router.get('/:reportId', async (req, res) => {
 })
 
 // PATCH /confirmation/:id — reporter responds (approve or deny)
-router.patch('/:id', async (req, res) => {
+// SECURITY FIX: this handler previously let ANY caller approve a proxy
+// pickup - unauthenticated, no check that the caller was the reporter who
+// actually owns this confirmation request. That meant an attacker could
+// self-authorize releasing a physical item to a proxy of their own
+// choosing. Only the reporter the request was created for may respond.
+router.patch('/:id', requireUser, async (req, res) => {
   const { status } = req.body // 'approved' | 'denied'
 
   if (!['approved', 'denied'].includes(status)) {
     return res.status(400).json({ error: 'status must be approved or denied.' })
+  }
+
+  const { data: existing, error: fetchError } = await supabaseAdmin
+    .from('confirmation_requests')
+    .select('reporter_id')
+    .eq('id', req.params.id)
+    .single()
+
+  if (fetchError || !existing) return res.status(404).json({ error: 'Confirmation request not found' })
+  if (req.callerUser.id !== existing.reporter_id) {
+    return res.status(403).json({ error: 'Only the reporter may respond to this confirmation request.' })
   }
 
   const { data, error } = await supabaseAdmin

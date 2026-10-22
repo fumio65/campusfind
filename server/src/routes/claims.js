@@ -2,11 +2,17 @@ import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
 import { notifyUser } from '../lib/notifyUser.js'
 import { adjustTrustScore, checkRepeatedRejections } from '../lib/trustScore.js'
+import { requireUser } from '../middleware/requireUser.js'
 
 const router = Router()
 
 // PATCH /claims/:id — approve or reject a claim
-router.patch('/:id', async (req, res) => {
+// SECURITY FIX: this handler previously approved/rejected claims for ANY
+// caller, unauthenticated - there was no login check and no verification
+// that the caller actually owned the underlying report, so anyone could
+// self-approve their own claim. Only the reporter who owns the report may
+// approve or reject a claim against it.
+router.patch('/:id', requireUser, async (req, res) => {
   const { action } = req.body
   if (!['approve', 'reject'].includes(action)) {
     return res.status(400).json({ error: 'action must be approve or reject' })
@@ -19,6 +25,11 @@ router.patch('/:id', async (req, res) => {
     .single()
 
   if (claimErr || !claim) return res.status(404).json({ error: 'Claim not found' })
+
+  const reporterId = claim.reports?.reporter_id
+  if (req.callerUser.id !== reporterId) {
+    return res.status(403).json({ error: 'Only the reporter may approve or reject this claim.' })
+  }
 
   const reportTitle = claim.reports?.title ?? 'your item'
   const claimantId = claim.claimant_id
